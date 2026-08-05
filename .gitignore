@@ -3,7 +3,9 @@
 .env.local
 .env.*.local
 
-docs/
+plan-docs/
+.agents/
+.skills/
 
 # Node/npm
 node_modules/

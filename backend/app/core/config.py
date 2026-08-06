@@ -19,4 +19,8 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
 
+    # Auth
+    neon_auth_url: str = ""
+    neon_auth_jwks_url: str = ""
+
 settings = Settings()

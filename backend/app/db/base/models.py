@@ -5,6 +5,6 @@ class Base(DeclarativeBase):
 
 # Every module's models must be imported here so Alembic autogenerate sees them.
 # Add imports here as you build each phase:
-# from app.modules.auth.models.user import User
+from app.modules.auth.models.user import User  # noqa: F401
 # from app.modules.repository.models.repo import Repository, ...
 # etc.

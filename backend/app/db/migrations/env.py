@@ -26,6 +26,7 @@ if config.config_file_name is not None:
 from app.db.base.models import Base
 from app.modules.auth.models.user import User
 from app.modules.repository.models.repo import Repository, RepositorySnapshot
+from app.modules.indexing.models.index_models import RepositoryFile, CodeSymbol, CodeChunk, CodeEmbedding, CodeDependency
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

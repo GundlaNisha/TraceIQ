@@ -77,3 +77,32 @@ async def trigger_sync(repo_id: str, current_user: User = Depends(get_current_us
         
     sync_repository.delay(repo_id, str(current_user.id))
     return {"job": "queued"}
+
+@router.post("/{repo_id}/index", status_code=202)
+async def trigger_index(repo_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.workers.repo_index import index_repository
+    from app.modules.repository.models.repo import RepositorySnapshot
+    
+    try:
+        repo_uuid = uuid.UUID(repo_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid repo UUID")
+        
+    repo = await db.get(Repository, repo_uuid)
+    if not repo or repo.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Repository not found")
+        
+    # Get latest snapshot
+    result = await db.execute(
+        select(RepositorySnapshot)
+        .where(RepositorySnapshot.repository_id == repo_uuid)
+        .order_by(RepositorySnapshot.created_at.desc())
+        .limit(1)
+    )
+    snapshot = result.scalar_one_or_none()
+    
+    if not snapshot:
+        raise HTTPException(status_code=400, detail="Repository has not been synced yet")
+        
+    index_repository.delay(str(repo_uuid), str(snapshot.id))
+    return {"job": "indexing_queued"}

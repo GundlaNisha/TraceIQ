@@ -14,7 +14,7 @@ class SyncStatus(str, enum.Enum):
 class Repository(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "repositories"
 
-    user_id: Mapped[str] = mapped_column(ForeignKey("neon_auth.user.id"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("neon_auth.user.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     repo_url: Mapped[str] = mapped_column(String(512), nullable=False)
     default_branch: Mapped[str] = mapped_column(String(100), default="main")

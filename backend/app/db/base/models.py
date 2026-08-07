@@ -3,8 +3,4 @@ from sqlalchemy.orm import DeclarativeBase
 class Base(DeclarativeBase):
     pass
 
-# Every module's models must be imported here so Alembic autogenerate sees them.
-# Add imports here as you build each phase:
-from app.modules.auth.models.user import User  # noqa: F401
-from app.modules.repository.models.repo import Repository, RepositorySnapshot  # noqa: F401
-# etc.
+# Models are imported in env.py instead of here to prevent circular imports.

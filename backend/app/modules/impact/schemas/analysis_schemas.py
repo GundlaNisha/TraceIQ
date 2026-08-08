@@ -1,6 +1,8 @@
-from pydantic import BaseModel
 import uuid
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
+
 
 class AnalysisJobResponse(BaseModel):
     id: uuid.UUID
@@ -10,8 +12,7 @@ class AnalysisJobResponse(BaseModel):
     repository_id: uuid.UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ImpactResultResponse(BaseModel):
     id: uuid.UUID
@@ -19,5 +20,4 @@ class ImpactResultResponse(BaseModel):
     impacted_files: dict
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

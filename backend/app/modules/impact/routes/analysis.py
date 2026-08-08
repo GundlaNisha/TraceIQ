@@ -1,13 +1,17 @@
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.db.session import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.deps import get_current_user
-from app.core.exceptions import NotFoundError, ForbiddenError
+from app.core.exceptions import ForbiddenError, NotFoundError
+from app.db.session import get_db
 from app.modules.auth.models.user import User
+from app.modules.impact.models.impact import AnalysisJob, ImpactResult, JobStatus
+from app.modules.impact.schemas.analysis_schemas import (
+    AnalysisJobResponse,
+    ImpactResultResponse,
+)
 from app.modules.requirement.models.req import Requirement
-from app.modules.impact.models.impact import AnalysisJob, JobStatus, ImpactResult
-from app.modules.impact.schemas.analysis_schemas import AnalysisJobResponse, ImpactResultResponse
 from app.workers.impact_analysis import run_impact_analysis
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])

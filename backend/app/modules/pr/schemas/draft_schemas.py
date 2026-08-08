@@ -1,10 +1,11 @@
-from pydantic import BaseModel
 import uuid
-from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
 
 class PRDraftCreate(BaseModel):
-    requirement_id: Optional[uuid.UUID] = None
-    commit_event_id: Optional[uuid.UUID] = None
+    requirement_id: uuid.UUID | None = None
+    commit_event_id: uuid.UUID | None = None
 
 class PRDraftUpdate(BaseModel):
     description_markdown: str
@@ -15,5 +16,4 @@ class PRDraftResponse(BaseModel):
     description_markdown: str
     status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

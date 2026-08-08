@@ -1,9 +1,13 @@
-import uuid
-from sqlalchemy import String, Integer, ForeignKey, JSON, Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column
-from app.db.base.models import Base
-from app.db.base.mixins import UUIDPrimaryKeyMixin, TimestampMixin
 import enum
+import uuid
+
+from sqlalchemy import JSON, ForeignKey, Integer
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base.mixins import TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.base.models import Base
+
 
 class JobStatus(str, enum.Enum):
     queued = "queued"

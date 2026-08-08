@@ -1,16 +1,24 @@
+import asyncio
 import os
 import tarfile
 import tempfile
 import uuid
-import asyncio
+
 from celery import shared_task
 from sqlalchemy import select, update
+
 from app.db.session import AsyncSessionLocal
-from app.modules.repository.models.repo import Repository, RepositorySnapshot
-from app.modules.indexing.models.index_models import RepositoryFile, CodeSymbol, CodeChunk, CodeEmbedding
-from app.modules.indexing.services.parsers import parse_file
+from app.modules.indexing.models.index_models import (
+    CodeChunk,
+    CodeEmbedding,
+    CodeSymbol,
+    RepositoryFile,
+)
 from app.modules.indexing.services.chunker import chunk_file
 from app.modules.indexing.services.embedder import embed_chunks
+from app.modules.indexing.services.parsers import parse_file
+from app.modules.repository.models.repo import Repository, RepositorySnapshot
+
 
 @shared_task(name="app.workers.repo_index.index_repository")
 def index_repository(repository_id: str, snapshot_id: str):

@@ -1,6 +1,7 @@
-from sentence_transformers import SentenceTransformer
-import warnings
 import os
+import warnings
+
+from sentence_transformers import SentenceTransformer
 
 # Suppress huggingface warnings in the worker log
 os.environ["TOKENIZERS_PARALLELISM"] = "false"

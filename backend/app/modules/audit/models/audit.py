@@ -1,8 +1,11 @@
+from datetime import datetime
+
 from sqlalchemy import ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
-from datetime import datetime
-from app.db.base.models import Base
+
 from app.db.base.mixins import UUIDPrimaryKeyMixin
+from app.db.base.models import Base
+
 
 class AuditLog(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "audit_logs"

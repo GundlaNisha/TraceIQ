@@ -1,8 +1,11 @@
 import uuid
-from sqlalchemy import String, ForeignKey, Text
+
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 from app.db.base.models import Base
-from app.db.base.mixins import UUIDPrimaryKeyMixin, TimestampMixin
+
 
 class PRDraft(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "pr_drafts"

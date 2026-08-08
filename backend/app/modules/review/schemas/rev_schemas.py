@@ -1,18 +1,18 @@
-from pydantic import BaseModel
 import uuid
-from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict
+
 
 class ReviewCreate(BaseModel):
     commit_hash: str
     repository_id: uuid.UUID
-    requirement_id: Optional[uuid.UUID] = None
+    requirement_id: uuid.UUID | None = None
 
 class CommitEventResponse(BaseModel):
     id: uuid.UUID
     status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CommitDiffResponse(BaseModel):
     id: uuid.UUID
@@ -21,15 +21,13 @@ class CommitDiffResponse(BaseModel):
     additions: int
     deletions: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReviewFindingResponse(BaseModel):
     id: uuid.UUID
     file_path: str
-    line_number: Optional[int]
+    line_number: int | None
     severity: str
     message: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

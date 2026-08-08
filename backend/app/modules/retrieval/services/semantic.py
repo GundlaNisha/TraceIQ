@@ -1,8 +1,15 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.modules.indexing.models.index_models import CodeChunk, CodeEmbedding, RepositoryFile
-from app.modules.indexing.services.embedder import embed_chunks
 import uuid
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.indexing.models.index_models import (
+    CodeChunk,
+    CodeEmbedding,
+    RepositoryFile,
+)
+from app.modules.indexing.services.embedder import embed_chunks
+
 
 async def semantic_search(db: AsyncSession, query: str, repository_id: uuid.UUID, top_k: int = 10) -> list[dict]:
     # 1. Convert user's question into a mathematical vector

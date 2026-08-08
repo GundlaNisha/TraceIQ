@@ -1,12 +1,13 @@
-import pytest
-from httpx import AsyncClient
-from app.main import app
-from app.core.deps import get_current_user
-from app.modules.auth.models.user import User
-from app.core.exceptions import UnauthorizedError
-
 import uuid
+
+import pytest
 from fastapi import HTTPException
+from httpx import AsyncClient
+
+from app.core.deps import get_current_user
+from app.main import app
+from app.modules.auth.models.user import User
+
 
 @pytest.fixture
 def mock_user():

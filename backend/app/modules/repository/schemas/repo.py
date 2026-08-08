@@ -1,8 +1,10 @@
-from pydantic import BaseModel, HttpUrl, ConfigDict
-from typing import Optional
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, HttpUrl
+
 from app.modules.repository.models.repo import SyncStatus
+
 
 class RepoCreate(BaseModel):
     repo_url: HttpUrl

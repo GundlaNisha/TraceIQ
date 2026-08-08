@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from urllib.parse import urlparse
-from app.db.session import get_db
-from app.core.deps import get_current_user
-from app.modules.auth.models.user import User
-from app.modules.repository.schemas.repo import RepoCreate, RepoResponse
-from app.modules.repository.models.repo import Repository
-from app.workers.repo_sync import sync_repository
 import uuid
+from urllib.parse import urlparse
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.deps import get_current_user
+from app.db.session import get_db
+from app.modules.auth.models.user import User
+from app.modules.repository.models.repo import Repository
+from app.modules.repository.schemas.repo import RepoCreate, RepoResponse
+from app.workers.repo_sync import sync_repository
 
 router = APIRouter(prefix="/api/v1/repositories", tags=["repositories"])
 
@@ -22,8 +24,7 @@ async def add_repository(body: RepoCreate, current_user: User = Depends(get_curr
     url_str = str(body.repo_url)
     parsed = urlparse(url_str)
     name = parsed.path.strip("/").split("/")[-1]
-    if name.endswith(".git"):
-        name = name[:-4]
+    name = name.removesuffix(".git")
         
     repo = Repository(
         user_id=current_user.id,
@@ -62,7 +63,6 @@ async def delete_repository(repo_id: str, current_user: User = Depends(get_curre
         
     await db.delete(repo)
     await db.commit()
-    return None
 
 @router.post("/{repo_id}/sync", status_code=202)
 async def trigger_sync(repo_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -90,8 +90,8 @@ async def trigger_sync(repo_id: str, current_user: User = Depends(get_current_us
 
 @router.post("/{repo_id}/index", status_code=202)
 async def trigger_index(repo_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    from app.workers.repo_index import index_repository
     from app.modules.repository.models.repo import RepositorySnapshot
+    from app.workers.repo_index import index_repository
     
     try:
         repo_uuid = uuid.UUID(repo_id)

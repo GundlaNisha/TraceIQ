@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import text, func
-from sqlalchemy.orm import Mapped, mapped_column
+
+from sqlalchemy import func, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 
 class UUIDPrimaryKeyMixin:
     id: Mapped[uuid.UUID] = mapped_column(

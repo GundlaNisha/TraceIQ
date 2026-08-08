@@ -13,6 +13,7 @@ _adapter = LiteLLMAdapter()
 
 from typing import cast
 
+
 async def dispatch_impact_analysis(requirement_text: str, chunks: list[dict]) -> ImpactAnalysisOutput:
     context = build_context(chunks)
     system = impact_prompts.IMPACT_SYSTEM

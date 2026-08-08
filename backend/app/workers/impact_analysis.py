@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 
 from sqlalchemy import select
 
@@ -61,7 +60,7 @@ async def _run_impact_analysis_async(job_id: str):
             job.progress = 100
             await db.commit()
             
-        except Exception as e:
+        except Exception:
             await db.rollback()
             # On exception, try to mark as failed
             stmt = select(AnalysisJob).where(AnalysisJob.id == job_id)

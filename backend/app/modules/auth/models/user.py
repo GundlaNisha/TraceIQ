@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy.orm import Mapped, mapped_column
+
 from sqlalchemy import Boolean, Text, Uuid
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.base.models import Base
+
 
 class User(Base):
     __tablename__ = "user"

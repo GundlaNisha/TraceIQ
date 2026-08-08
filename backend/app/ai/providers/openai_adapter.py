@@ -1,8 +1,9 @@
 import instructor
 from litellm import acompletion
 from pydantic import BaseModel
+
 from app.ai.providers.base import ProviderAdapter
-from app.core.config import settings
+
 
 class LiteLLMAdapter(ProviderAdapter):
     def __init__(self):

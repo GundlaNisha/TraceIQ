@@ -1,9 +1,13 @@
-import uuid
-from sqlalchemy import String, ForeignKey, Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column
-from app.db.base.models import Base
-from app.db.base.mixins import UUIDPrimaryKeyMixin, TimestampMixin
 import enum
+import uuid
+
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base.mixins import TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.base.models import Base
+
 
 class SyncStatus(str, enum.Enum):
     pending = "pending"

@@ -1,6 +1,7 @@
-import pytest
 import tiktoken
-from app.ai.context.builder import build_context, MAX_CONTEXT_TOKENS
+
+from app.ai.context.builder import MAX_CONTEXT_TOKENS, build_context
+
 
 def test_build_context_truncates():
     # 1. Create a massive list of chunks

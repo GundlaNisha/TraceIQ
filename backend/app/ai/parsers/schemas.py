@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+
 class ImpactedFile(BaseModel):
     file_path: str
     confidence: float  # 0.0 to 1.0

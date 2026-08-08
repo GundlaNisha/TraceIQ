@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import patch
-from app.ai.router.dispatcher import dispatch_impact_analysis
+
+import pytest
+
 from app.ai.parsers.schemas import ImpactAnalysisOutput
+from app.ai.router.dispatcher import dispatch_impact_analysis
+
 
 @pytest.mark.asyncio
 @patch('app.ai.router.dispatcher._adapter.complete')

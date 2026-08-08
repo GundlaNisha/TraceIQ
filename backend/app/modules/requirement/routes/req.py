@@ -1,14 +1,24 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from app.db.session import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.deps import get_current_user
+from app.db.session import get_db
 from app.modules.auth.models.user import User
-from app.modules.requirement.models.req import Requirement, RequirementVersion
-from app.modules.requirement.schemas.req_schemas import ReqCreate, ReqUpdate, ReqResponse, VersionResponse
-from app.modules.requirement.services.req_service import create_requirement, update_requirement
 from app.modules.repository.models.repo import Repository
+from app.modules.requirement.models.req import Requirement, RequirementVersion
+from app.modules.requirement.schemas.req_schemas import (
+    ReqCreate,
+    ReqResponse,
+    ReqUpdate,
+    VersionResponse,
+)
+from app.modules.requirement.services.req_service import (
+    create_requirement,
+    update_requirement,
+)
 
 router = APIRouter(prefix="/api/v1/requirements", tags=["requirements"])
 
@@ -69,7 +79,6 @@ async def delete_requirement(req_id: str, current_user: User = Depends(get_curre
         
     await db.delete(req)
     await db.commit()
-    return None
 
 @router.get("/{req_id}/versions", response_model=list[VersionResponse])
 async def list_requirement_versions(req_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):

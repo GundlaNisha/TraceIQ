@@ -1,14 +1,14 @@
 import asyncio
+
 from celery.utils.log import get_task_logger
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.workers.celery_app import celery_app
+from app.ai.router.dispatcher import dispatch_pr_generation
 from app.db.session import AsyncSessionLocal
 from app.modules.pr.models.draft import PRDraft
 from app.modules.requirement.models.req import Requirement
 from app.modules.review.models.rev_models import CommitDiff, ReviewFinding
-from app.ai.router.dispatcher import dispatch_pr_generation
+from app.workers.celery_app import celery_app
 
 logger = get_task_logger(__name__)
 
@@ -69,7 +69,7 @@ async def _process_pr_draft(draft_id: str):
             await session.commit()
             
         except Exception as e:
-            logger.error(f"PR draft generation failed for {draft_id}: {str(e)}")
+            logger.error(f"PR draft generation failed for {draft_id}: {e!s}")
             await session.rollback()
             # Attempt to set status to failed
             stmt = select(PRDraft).where(PRDraft.id == draft_id)

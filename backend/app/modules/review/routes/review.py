@@ -1,15 +1,20 @@
-from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import List
 
-from app.db.session import get_db
+from fastapi import APIRouter, Depends, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.deps import get_current_user
-from app.core.exceptions import NotFoundError, ForbiddenError
+from app.core.exceptions import ForbiddenError, NotFoundError
+from app.db.session import get_db
 from app.modules.auth.models.user import User
 from app.modules.repository.models.repo import Repository
-from app.modules.review.models.rev_models import CommitEvent, CommitDiff, ReviewFinding
-from app.modules.review.schemas.rev_schemas import ReviewCreate, CommitEventResponse, CommitDiffResponse, ReviewFindingResponse
+from app.modules.review.models.rev_models import CommitDiff, CommitEvent, ReviewFinding
+from app.modules.review.schemas.rev_schemas import (
+    CommitDiffResponse,
+    CommitEventResponse,
+    ReviewCreate,
+    ReviewFindingResponse,
+)
 from app.workers.commit_review import run_commit_review
 
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
@@ -55,7 +60,7 @@ async def get_review_status(review_id: str, current_user: User = Depends(get_cur
         
     return commit_event
 
-@router.get("/{review_id}/diff", response_model=List[CommitDiffResponse])
+@router.get("/{review_id}/diff", response_model=list[CommitDiffResponse])
 async def get_review_diff(review_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     # Check ownership
     await get_review_status(review_id, current_user, db)
@@ -64,7 +69,7 @@ async def get_review_diff(review_id: str, current_user: User = Depends(get_curre
     result = await db.execute(stmt)
     return result.scalars().all()
 
-@router.get("/{review_id}/findings", response_model=List[ReviewFindingResponse])
+@router.get("/{review_id}/findings", response_model=list[ReviewFindingResponse])
 async def get_review_findings(review_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     # Check ownership
     await get_review_status(review_id, current_user, db)

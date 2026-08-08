@@ -1,6 +1,7 @@
-import subprocess
 import json
 import os
+import subprocess
+
 
 def ripgrep_search(query: str, snapshot_dir: str) -> list[dict]:
     """

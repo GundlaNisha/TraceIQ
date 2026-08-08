@@ -1,7 +1,6 @@
 import asyncio
 import os
 import shutil
-from app.core.config import settings
 
 # In production, this would be a cloud path. Locally, we store in backend/data/snapshots
 STORAGE_DIR = os.path.join(os.getcwd(), "data", "snapshots")

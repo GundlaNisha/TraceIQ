@@ -1,19 +1,24 @@
+import asyncio
 import os
 import shutil
-import tempfile
-import tarfile
-import asyncio
-import uuid
 import socket
+import tarfile
+import tempfile
+import uuid
 from urllib.parse import urlparse
-from celery.utils.log import get_task_logger
-import git
 
-from app.workers.celery_app import celery_app
-from app.integrations.storage.local_client import upload_tarball
-from app.db.session import AsyncSessionLocal
-from app.modules.repository.models.repo import Repository, RepositorySnapshot, SyncStatus
+import git
+from celery.utils.log import get_task_logger
 from sqlalchemy import update
+
+from app.db.session import AsyncSessionLocal
+from app.integrations.storage.local_client import upload_tarball
+from app.modules.repository.models.repo import (
+    Repository,
+    RepositorySnapshot,
+    SyncStatus,
+)
+from app.workers.celery_app import celery_app
 
 logger = get_task_logger(__name__)
 
@@ -79,5 +84,5 @@ def sync_repository(repository_id: str, user_id: str):
     try:
         asyncio.run(_process_sync(repository_id))
     except Exception as e:
-        logger.error(f"Sync failed for repo {repository_id}: {str(e)}")
+        logger.error(f"Sync failed for repo {repository_id}: {e!s}")
         asyncio.run(_update_status(repository_id, SyncStatus.failed))

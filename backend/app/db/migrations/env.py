@@ -30,6 +30,7 @@ from app.modules.indexing.models.index_models import RepositoryFile, CodeSymbol,
 from app.modules.requirement.models.req import Requirement, RequirementVersion
 from app.modules.impact.models.impact import AnalysisJob, ImpactResult
 from app.modules.review.models.rev_models import CommitEvent, CommitDiff, ReviewFinding
+from app.modules.pr.models.draft import PRDraft
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

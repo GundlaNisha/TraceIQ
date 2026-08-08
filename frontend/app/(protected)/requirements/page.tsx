@@ -7,7 +7,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { RequirementList } from "@/features/requirements/components/RequirementList";
 import { RequirementForm } from "@/features/requirements/components/RequirementForm";
 
@@ -24,8 +23,8 @@ export default function RequirementsPage() {
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>New Requirement</Button>
+          <DialogTrigger className="inline-flex items-center justify-center rounded-lg bg-black text-white px-4 py-2 text-sm font-medium hover:bg-gray-800 transition-colors">
+            New Requirement
           </DialogTrigger>
           <DialogContent className="sm:max-w-lg bg-white p-6 rounded-lg">
             <DialogHeader>

@@ -1,6 +1,7 @@
 "use client";
 import { useRepositories, useDeleteRepository } from "../api/queries";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { type Repository } from "@/lib/mock-data/repositories";
 import { Button } from "@/components/ui/button";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -58,7 +59,7 @@ export function RepositoryList() {
           </tr>
         </thead>
         <tbody>
-          {repos.map((repo) => {
+          {repos.map((repo: Repository) => {
             const badge = STATUS_BADGE[repo.sync_status] ?? STATUS_BADGE.pending;
             const isActive = repo.id === activeRepositoryId;
             return (

@@ -59,7 +59,7 @@ async def get_analysis_result(analysis_id: str, current_user: User = Depends(get
     stmt = (
         select(ImpactResult)
         .join(AnalysisJob, ImpactResult.job_id == AnalysisJob.id)
-        .where(ImpactResult.id == analysis_id, AnalysisJob.user_id == current_user.id)
+        .where(ImpactResult.job_id == analysis_id, AnalysisJob.user_id == current_user.id)
     )
     result = await db.execute(stmt)
     impact_result = result.scalar_one_or_none()

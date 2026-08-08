@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.workers.celery_app import celery_app
 from app.db.session import AsyncSessionLocal
+from app.modules.auth.models.user import User
 from app.modules.impact.models.impact import AnalysisJob, JobStatus, ImpactResult
 from app.modules.requirement.models.req import Requirement
 from app.modules.retrieval.services.semantic import semantic_search

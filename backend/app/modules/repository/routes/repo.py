@@ -66,6 +66,7 @@ async def delete_repository(repo_id: str, current_user: User = Depends(get_curre
 
 @router.post("/{repo_id}/sync", status_code=202)
 async def trigger_sync(repo_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.modules.audit.models.audit import AuditLog
     try:
         repo_uuid = uuid.UUID(repo_id)
     except ValueError:
@@ -75,6 +76,15 @@ async def trigger_sync(repo_id: str, current_user: User = Depends(get_current_us
     if not repo or repo.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Repository not found")
         
+    audit = AuditLog(
+        user_id=str(current_user.id),
+        action="repo.sync",
+        resource_type="repository",
+        resource_id=repo_id
+    )
+    db.add(audit)
+    await db.commit()
+    
     sync_repository.delay(repo_id, str(current_user.id))
     return {"job": "queued"}
 

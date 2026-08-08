@@ -8,7 +8,15 @@ async def create_requirement(db: AsyncSession, user_id: uuid.UUID, repository_id
     await db.flush()  # get ID before inserting version
     
     v1 = RequirementVersion(requirement_id=req.id, version_number=1, title=title, text=text)
+    from app.modules.audit.models.audit import AuditLog
+    audit = AuditLog(
+        user_id=str(user_id),
+        action="requirement.create",
+        resource_type="requirement",
+        resource_id=str(req.id)
+    )
     db.add(v1)
+    db.add(audit)
     await db.commit()
     await db.refresh(req)
     return req
@@ -25,7 +33,15 @@ async def update_requirement(db: AsyncSession, req: Requirement, title: str, tex
         title=title, 
         text=text
     )
+    from app.modules.audit.models.audit import AuditLog
+    audit = AuditLog(
+        user_id=str(req.user_id),
+        action="requirement.update",
+        resource_type="requirement",
+        resource_id=str(req.id)
+    )
     db.add(new_version)
+    db.add(audit)
     await db.commit()
     await db.refresh(req)
     return req

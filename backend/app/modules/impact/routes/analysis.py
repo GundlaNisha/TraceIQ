@@ -25,15 +25,27 @@ async def trigger_analysis(req_id: str, current_user: User = Depends(get_current
         raise ForbiddenError("Not authorized to analyze this requirement")
         
     # Create AnalysisJob with status="queued"
+    from app.modules.audit.models.audit import AuditLog
     job = AnalysisJob(
         user_id=current_user.id,
         requirement_id=req.id,
         repository_id=req.repository_id,
         status=JobStatus.queued
     )
+    
+    audit = AuditLog(
+        user_id=str(current_user.id),
+        action="analysis.create",
+        resource_type="analysis_job",
+        resource_id=""
+    )
     db.add(job)
+    db.add(audit)
     await db.commit()
     await db.refresh(job)
+    
+    audit.resource_id = str(job.id)
+    await db.commit()
     
     # Trigger Celery task
     run_impact_analysis.delay(str(job.id))

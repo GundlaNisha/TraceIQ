@@ -1,19 +1,18 @@
 import asyncio
-import os
 import tempfile
+
 import git
 from celery.utils.log import get_task_logger
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from app.workers.celery_app import celery_app
+from app.ai.router.dispatcher import dispatch_commit_review
 from app.db.session import AsyncSessionLocal
-from app.modules.review.models.rev_models import CommitEvent, CommitDiff, ReviewFinding
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
-from app.modules.review.services.diff_extractor import extract_diff
 from app.modules.retrieval.services.semantic import semantic_search
-from app.ai.router.dispatcher import dispatch_commit_review
+from app.modules.review.models.rev_models import CommitDiff, CommitEvent, ReviewFinding
+from app.modules.review.services.diff_extractor import extract_diff
+from app.workers.celery_app import celery_app
 
 logger = get_task_logger(__name__)
 
@@ -73,7 +72,7 @@ async def _process_commit_review(commit_event_id: str):
                 chunks = []
                 if diffs:
                     query = " ".join([d["file_path"] for d in diffs])
-                    search_results = await semantic_search(session, query, str(repository.id), top_k=10)
+                    search_results = await semantic_search(session, query, repository.id, top_k=10)
                     chunks = [{"file_path": item["file_path"], "chunk_text": item["snippet"]} for item in search_results]
                 
                 # 6. Dispatch the LLM
@@ -95,7 +94,7 @@ async def _process_commit_review(commit_event_id: str):
                 await session.commit()
                 
         except Exception as e:
-            logger.error(f"Commit review failed for {commit_event_id}: {str(e)}")
+            logger.error(f"Commit review failed for {commit_event_id}: {e!s}")
             await session.rollback()
             stmt = select(CommitEvent).where(CommitEvent.id == commit_event_id)
             result = await session.execute(stmt)

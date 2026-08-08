@@ -1,10 +1,10 @@
-import git
 import logging
-from typing import List, Dict
+
+import git
 
 logger = logging.getLogger(__name__)
 
-def extract_diff(repo_local_path: str, commit_hash: str) -> List[Dict]:
+def extract_diff(repo_local_path: str, commit_hash: str) -> list[dict]:
     """
     Use GitPython to run git diff <hash>^ <hash>.
     Parse output into list of {file_path, diff_text, additions, deletions}.
@@ -15,9 +15,11 @@ def extract_diff(repo_local_path: str, commit_hash: str) -> List[Dict]:
     commit = repo.commit(commit_hash)
     
     # Handle the case where the commit has no parents (initial commit)
-    parent = commit.parents[0] if commit.parents else git.NULL_TREE
-    
-    diffs = parent.diff(commit, create_patch=True)
+    if commit.parents:
+        parent = commit.parents[0]
+        diffs = parent.diff(commit, create_patch=True)
+    else:
+        diffs = commit.diff(git.NULL_TREE, create_patch=True)
     
     extracted_diffs = []
     total_lines = 0

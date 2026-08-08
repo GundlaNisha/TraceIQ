@@ -5,18 +5,17 @@ Revises: b1c25e73daa6
 Create Date: 2026-08-07 22:25:54.725914
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
-import sqlalchemy as sa
 import pgvector
-
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '7a0568631963'
-down_revision: Union[str, Sequence[str], None] = 'b1c25e73daa6'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'b1c25e73daa6'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -73,7 +72,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_code_symbols_symbol_name'), 'code_symbols', ['symbol_name'], unique=False)
     op.create_table('code_embeddings',
     sa.Column('chunk_id', sa.UUID(), nullable=False),
-    sa.Column('embedding', pgvector.sqlalchemy.vector.VECTOR(dim=384), nullable=False),
+    sa.Column('embedding', pgvector.sqlalchemy.Vector(dim=384), nullable=False),  # type: ignore
     sa.Column('id', sa.UUID(), server_default=sa.text('gen_random_uuid()'), nullable=False),
     sa.ForeignKeyConstraint(['chunk_id'], ['code_chunks.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')

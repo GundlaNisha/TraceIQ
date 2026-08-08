@@ -1,10 +1,11 @@
-from tree_sitter import Language, Parser
-import tree_sitter_python
-import tree_sitter_typescript
 import os
+from typing import Any
 
 # Initialize languages safely
-import tree_sitter
+import tree_sitter_python
+import tree_sitter_typescript
+from tree_sitter import Language, Parser
+
 try:
     # Modern tree-sitter bindings (>= 0.22)
     PY_LANGUAGE = Language(tree_sitter_python.language())
@@ -69,7 +70,7 @@ def parse_file(file_path: str, source_text: str) -> list[dict]:
     try:
         source_bytes = source_text.encode('utf8')
         tree = parser.parse(source_bytes)
-        symbols = []
+        symbols: list[dict[str, Any]] = []
         extract_symbols(tree.root_node, source_bytes, symbols)
         return symbols
     except Exception:

@@ -1,13 +1,15 @@
 import asyncio
+import uuid
+
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.workers.celery_app import celery_app
+
+from app.ai.router.dispatcher import dispatch_impact_analysis
 from app.db.session import AsyncSessionLocal
-from app.modules.auth.models.user import User
-from app.modules.impact.models.impact import AnalysisJob, JobStatus, ImpactResult
+from app.modules.impact.models.impact import AnalysisJob, ImpactResult, JobStatus
 from app.modules.requirement.models.req import Requirement
 from app.modules.retrieval.services.semantic import semantic_search
-from app.ai.router.dispatcher import dispatch_impact_analysis
+from app.workers.celery_app import celery_app
+
 
 async def _run_impact_analysis_async(job_id: str):
     async with AsyncSessionLocal() as db:
@@ -31,7 +33,7 @@ async def _run_impact_analysis_async(job_id: str):
             
             # 4. Call semantic_search
             # returns list of dicts: {"file_path": str, "match_type": str, "snippet": str, "score": float}
-            search_results = await semantic_search(db, req.text, str(job.repository_id), top_k=15)
+            search_results = await semantic_search(db, req.text, job.repository_id, top_k=15)
             
             # Map search_results to chunks format expected by dispatcher: {"file_path": str, "chunk_text": str}
             chunks = [{"file_path": item["file_path"], "chunk_text": item["snippet"]} for item in search_results]
@@ -68,7 +70,7 @@ async def _run_impact_analysis_async(job_id: str):
             if job:
                 job.status = JobStatus.failed
                 await db.commit()
-            raise e
+            raise
 
 @celery_app.task
 def run_impact_analysis(job_id: str):

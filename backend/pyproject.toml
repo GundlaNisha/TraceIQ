@@ -34,6 +34,12 @@ dependencies = [
 [project.scripts]
 backend = "backend:main"
 
+[tool.ruff.lint]
+ignore = ["B008", "BLE001", "SIM103", "RUF012", "S112", "TRY201", "ASYNC230", "E722", "PIE810"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]
 build-backend = "uv_build"
@@ -41,7 +47,9 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "httpx>=0.27.0",
+    "mypy>=2.3.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=7.1.0",
+    "ruff>=0.16.2",
 ]

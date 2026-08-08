@@ -10,7 +10,7 @@ export function SearchResults({ results, query }: Props) {
   if (!results.length)
     return (
       <div className="text-sm text-gray-400 py-8 text-center">
-        No results for "{query}"
+        No results for &quot;{query}&quot;
       </div>
     );
 

@@ -1,22 +1,78 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #08090a;
+  --card: #ffffff;
+  --card-foreground: #08090a;
+  --popover: #ffffff;
+  --popover-foreground: #08090a;
+  --primary: #5e6ad2;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f8f8;
+  --secondary-foreground: #08090a;
+  --muted: #f7f8f8;
+  --muted-foreground: #8a8f98;
+  --accent: #f7f8f8;
+  --accent-foreground: #08090a;
+  --destructive: #f97316;
+  --destructive-foreground: #ffffff;
+  --border: #08090a1a;
+  --input: #08090a1a;
+  --ring: #5e6ad2;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: #08090a;
+  --foreground: #f7f8f8;
+  --card: #08090a;
+  --card-foreground: #f7f8f8;
+  --popover: #08090a;
+  --popover-foreground: #f7f8f8;
+  --primary: #5e6ad2;
+  --primary-foreground: #ffffff;
+  --secondary: #1a1d24;
+  --secondary-foreground: #f7f8f8;
+  --muted: #1a1d24;
+  --muted-foreground: #8a8f98;
+  --accent: #1a1d24;
+  --accent-foreground: #f7f8f8;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #f97316;
+  --border: #ffffff1a;
+  --input: #ffffff1a;
+  --ring: #5e6ad2;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

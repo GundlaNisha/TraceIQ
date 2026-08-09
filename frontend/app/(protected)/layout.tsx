@@ -8,9 +8,9 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Repositories", href: "/repositories" },
   { label: "Requirements", href: "/requirements" },
-  { label: "Reviews", href: "/reviews" }, // Charan's feature
-  { label: "Analysis", href: "/analysis" }, // Nisha's feature — link only
-  { label: "PR Drafts", href: "/pr-drafts" }, // Nisha's feature — link only
+  { label: "Reviews", href: "/reviews" },
+  { label: "Analysis", href: "/analysis/job_1" }, // Point to mock job to prevent 404
+  { label: "PR Drafts", href: "/pr-drafts/draft_1" }, // Point to mock draft to prevent 404
 ];
 
 export default function ProtectedLayout({

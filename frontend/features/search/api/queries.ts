@@ -1,8 +1,11 @@
+import { useApiClient } from "@/lib/api/client";
 import { useQuery } from "@tanstack/react-query";
 import { USE_MOCK, API_BASE_URL } from "@/lib/api/config";
 import { mockSearch } from "@/lib/mock-data/search";
 
 export function useSearch(query: string, repositoryId: string | null) {
+  const { fetchApi } = useApiClient();
+
   return useQuery({
     queryKey: ["search", query, repositoryId],
     enabled: query.trim().length > 1 && !!repositoryId,
@@ -15,8 +18,7 @@ export function useSearch(query: string, repositoryId: string | null) {
         q: query,
         repository_id: repositoryId!,
       });
-      const res = await fetch(`${API_BASE_URL}/api/v1/search/code?${params}`, {
-        credentials: "include",
+      const res = await fetchApi(`/api/v1/search/code?${params}`, {
       });
       if (!res.ok) throw new Error("Search failed");
       return res.json();

@@ -21,7 +21,8 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
 
     # Auth
-    neon_auth_url: str = ""
-    neon_auth_jwks_url: str = ""
+    clerk_secret_key: str = ""
+    clerk_publishable_key: str = ""
+    clerk_jwks_url: str = ""
 
 settings = Settings()

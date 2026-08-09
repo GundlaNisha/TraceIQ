@@ -9,7 +9,7 @@ from app.db.base.models import Base
 
 class PRDraft(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "pr_drafts"
-    user_id: Mapped[str] = mapped_column(ForeignKey("neon_auth.user.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     requirement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("requirements.id"), nullable=True)
     commit_event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("commit_events.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(512))

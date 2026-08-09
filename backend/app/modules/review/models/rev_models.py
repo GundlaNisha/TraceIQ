@@ -10,7 +10,7 @@ from app.db.base.models import Base
 class CommitEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "commit_events"
     repository_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repositories.id"))
-    user_id: Mapped[str] = mapped_column(ForeignKey("neon_auth.user.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     commit_hash: Mapped[str] = mapped_column(String(40))
     status: Mapped[str] = mapped_column(String(50), default="queued")
     requirement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("requirements.id"), nullable=True) # Adding this so we know what requirement we're reviewing against!

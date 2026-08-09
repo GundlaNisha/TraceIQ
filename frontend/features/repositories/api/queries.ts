@@ -1,3 +1,4 @@
+import { useApiClient } from "@/lib/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { USE_MOCK, API_BASE_URL } from "@/lib/api/config";
 import {
@@ -10,6 +11,8 @@ import {
 
 // LIST
 export function useRepositories() {
+  const { fetchApi } = useApiClient();
+
   return useQuery({
     queryKey: ["repositories"],
     queryFn: async () => {
@@ -17,8 +20,7 @@ export function useRepositories() {
         await delay(300);
         return getMockRepos();
       }
-      const res = await fetch(`${API_BASE_URL}/api/v1/repositories`, {
-        credentials: "include",
+      const res = await fetchApi(`/api/v1/repositories`, {
       });
       if (!res.ok) throw new Error("Failed to fetch repositories");
       return res.json();
@@ -28,6 +30,8 @@ export function useRepositories() {
 
 // SINGLE (used for polling sync status)
 export function useRepository(id: string | null) {
+  const { fetchApi } = useApiClient();
+
   return useQuery({
     queryKey: ["repositories", id],
     enabled: !!id,
@@ -36,8 +40,7 @@ export function useRepository(id: string | null) {
         await delay(200);
         return getMockRepo(id!);
       }
-      const res = await fetch(`${API_BASE_URL}/api/v1/repositories/${id}`, {
-        credentials: "include",
+      const res = await fetchApi(`/api/v1/repositories/${id}`, {
       });
       if (!res.ok) throw new Error("Failed to fetch repository");
       return res.json();
@@ -52,6 +55,8 @@ export function useRepository(id: string | null) {
 
 // ADD
 export function useAddRepository() {
+  const { fetchApi } = useApiClient();
+
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (repo_url: string) => {
@@ -69,10 +74,9 @@ export function useAddRepository() {
         }, 5000);
         return newRepo;
       }
-      const res = await fetch(`${API_BASE_URL}/api/v1/repositories`, {
+      const res = await fetchApi(`/api/v1/repositories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ repo_url }),
       });
       if (!res.ok) throw new Error("Failed to add repository");
@@ -84,6 +88,8 @@ export function useAddRepository() {
 
 // DELETE
 export function useDeleteRepository() {
+  const { fetchApi } = useApiClient();
+
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
@@ -92,9 +98,8 @@ export function useDeleteRepository() {
         deleteMockRepo(id);
         return;
       }
-      const res = await fetch(`${API_BASE_URL}/api/v1/repositories/${id}`, {
+      const res = await fetchApi(`/api/v1/repositories/${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to delete repository");
     },

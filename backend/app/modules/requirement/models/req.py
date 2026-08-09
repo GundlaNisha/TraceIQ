@@ -10,7 +10,7 @@ from app.db.base.models import Base
 class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "requirements"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("neon_auth.user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     repository_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)

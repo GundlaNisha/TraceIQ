@@ -25,6 +25,15 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 from app.db.base.models import Base
 
+from app.modules.auth.models.user import User
+from app.modules.audit.models.audit import AuditLog
+from app.modules.impact.models.impact import AnalysisJob, ImpactResult
+from app.modules.indexing.models.index_models import CodeDependency, CodeSymbol, CodeChunk, CodeEmbedding, RepositoryFile
+from app.modules.pr.models.draft import PRDraft
+from app.modules.repository.models.repo import Repository, RepositorySnapshot
+from app.modules.requirement.models.req import Requirement, RequirementVersion
+from app.modules.review.models.rev_models import CommitEvent, ReviewFinding
+
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

@@ -167,7 +167,7 @@ export function ImpactDashboard({ jobId }: Props) {
                 {selected.related_symbols.length > 0 && (
                   <Section title="Related Symbols">
                     <div className="flex flex-wrap gap-2">
-                      {selected.related_symbols.map((s) => (
+                      {selected.related_symbols.map((s: string) => (
                         <code
                           key={s}
                           className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded font-mono"
@@ -182,7 +182,7 @@ export function ImpactDashboard({ jobId }: Props) {
                 {selected.related_tests.length > 0 && (
                   <Section title="Related Tests">
                     <div className="flex flex-col gap-1">
-                      {selected.related_tests.map((t) => (
+                      {selected.related_tests.map((t: string) => (
                         <div
                           key={t}
                           className="text-xs font-mono text-blue-600"

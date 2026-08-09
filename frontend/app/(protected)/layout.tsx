@@ -3,6 +3,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GlobalSearchBar } from "@/features/search/components/GlobalSearchBar";
 import { USE_MOCK } from "@/lib/api/config";
+import { UserButton } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
@@ -19,6 +21,7 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { user } = useUser();
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -45,9 +48,12 @@ export default function ProtectedLayout({
         {/* Header */}
         <header className="bg-white border-b px-6 py-3 flex items-center justify-between">
           <GlobalSearchBar />
-          <span className="text-sm text-gray-500">
-            {USE_MOCK ? "Mock mode" : "demo@traceiq.dev"}
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-500">
+              {USE_MOCK ? "Mock mode" : user?.emailAddresses[0]?.emailAddress}
+            </span>
+            <UserButton />
+          </div>
         </header>
 
         {/* Page content */}

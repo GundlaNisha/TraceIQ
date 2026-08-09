@@ -17,7 +17,7 @@ class JobStatus(str, enum.Enum):
 
 class AnalysisJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "analysis_jobs"
-    user_id: Mapped[str] = mapped_column(ForeignKey("neon_auth.user.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     requirement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("requirements.id"), nullable=False)
     repository_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repositories.id"), nullable=False)
     status: Mapped[JobStatus] = mapped_column(SAEnum(JobStatus), default=JobStatus.queued)

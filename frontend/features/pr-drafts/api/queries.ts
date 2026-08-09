@@ -1,7 +1,6 @@
 import { useApiClient } from "@/lib/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { USE_MOCK, API_BASE_URL } from "@/lib/api/config";
-import { getMockDraft, updateMockDraft } from "@/lib/mock-data/pr-drafts";
+import { API_BASE_URL } from "@/lib/api/config";
 
 // Fetch a draft by ID
 export function usePRDraft(draftId: string | null) {
@@ -11,10 +10,7 @@ export function usePRDraft(draftId: string | null) {
     queryKey: ["pr-drafts", draftId],
     enabled: !!draftId,
     queryFn: async () => {
-      if (USE_MOCK) {
-        await new Promise((r) => setTimeout(r, 300));
-        return getMockDraft(draftId!);
-      }
+      
       const res = await fetchApi(`/api/v1/pr-drafts/${draftId}`, {
       });
       if (!res.ok) throw new Error("Failed to fetch PR draft");
@@ -33,11 +29,7 @@ export function useCreatePRDraft() {
       requirement_id?: string;
       commit_event_id?: string;
     }) => {
-      if (USE_MOCK) {
-        await new Promise((r) => setTimeout(r, 500));
-        // In mock mode: skip the job-poll cycle, just return the draft ID directly
-        return { draft_id: "draft_1" };
-      }
+      
       const res = await fetchApi(`/api/v1/pr-drafts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -57,10 +49,7 @@ export function useUpdatePRDraft() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (data: { id: string; description_markdown: string }) => {
-      if (USE_MOCK) {
-        await new Promise((r) => setTimeout(r, 400));
-        return updateMockDraft(data.id, data.description_markdown);
-      }
+      
       const res = await fetchApi(`/api/v1/pr-drafts/${data.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

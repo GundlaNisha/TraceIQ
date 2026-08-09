@@ -1,13 +1,6 @@
 import { useApiClient } from "@/lib/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { USE_MOCK, API_BASE_URL } from "@/lib/api/config";
-import {
-  getMockRepos,
-  getMockRepo,
-  addMockRepo,
-  deleteMockRepo,
-  updateMockRepoStatus,
-} from "@/lib/mock-data/repositories";
+import { API_BASE_URL } from "@/lib/api/config";
 
 // LIST
 export function useRepositories() {
@@ -16,10 +9,7 @@ export function useRepositories() {
   return useQuery({
     queryKey: ["repositories"],
     queryFn: async () => {
-      if (USE_MOCK) {
-        await delay(300);
-        return getMockRepos();
-      }
+      
       const res = await fetchApi(`/api/v1/repositories`, {
       });
       if (!res.ok) throw new Error("Failed to fetch repositories");
@@ -36,10 +26,7 @@ export function useRepository(id: string | null) {
     queryKey: ["repositories", id],
     enabled: !!id,
     queryFn: async () => {
-      if (USE_MOCK) {
-        await delay(200);
-        return getMockRepo(id!);
-      }
+      
       const res = await fetchApi(`/api/v1/repositories/${id}`, {
       });
       if (!res.ok) throw new Error("Failed to fetch repository");
@@ -60,20 +47,7 @@ export function useAddRepository() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (repo_url: string) => {
-      if (USE_MOCK) {
-        await delay(400);
-        const newRepo = addMockRepo(repo_url);
-        // Simulate the status progression: pending → syncing → completed
-        setTimeout(() => {
-          updateMockRepoStatus(newRepo.id, "syncing");
-          qc.invalidateQueries({ queryKey: ["repositories"] });
-        }, 1500);
-        setTimeout(() => {
-          updateMockRepoStatus(newRepo.id, "completed");
-          qc.invalidateQueries({ queryKey: ["repositories"] });
-        }, 5000);
-        return newRepo;
-      }
+      
       const res = await fetchApi(`/api/v1/repositories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -93,11 +67,7 @@ export function useDeleteRepository() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      if (USE_MOCK) {
-        await delay(300);
-        deleteMockRepo(id);
-        return;
-      }
+      
       const res = await fetchApi(`/api/v1/repositories/${id}`, {
         method: "DELETE",
       });
@@ -107,6 +77,3 @@ export function useDeleteRepository() {
   });
 }
 
-function delay(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}

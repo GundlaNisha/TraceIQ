@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { USE_MOCK, API_BASE_URL } from "@/lib/api/config";
-import { getMockJob } from "@/lib/mock-data/analysis";
+import { useApiClient } from "@/lib/api/client";
 
 export type JobPollData = {
   id: string;
@@ -12,6 +11,8 @@ export type JobPollData = {
 };
 
 export function useJobPoll(jobId: string | null) {
+  const { fetchApi } = useApiClient();
+
   return useQuery<JobPollData>({
     queryKey: ["job", jobId],
     enabled: !!jobId,
@@ -24,14 +25,7 @@ export function useJobPoll(jobId: string | null) {
     },
 
     queryFn: async () => {
-      if (USE_MOCK) {
-        // getMockJob() internally advances progress on each call
-        // so the polling hook naturally simulates a job progressing
-        return getMockJob(jobId!);
-      }
-      const res = await fetch(`${API_BASE_URL}/api/v1/analysis/jobs/${jobId}`, {
-        credentials: "include",
-      });
+      const res = await fetchApi(`/api/v1/analysis/jobs/${jobId}`);
       if (res.status === 401) {
         // Session expired — in a full impl, redirect to /login
         throw new Error("Unauthorized");

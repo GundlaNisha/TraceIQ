@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
-import { mockDashboardSummary } from "@/lib/mock-data/dashboard";
-import { USE_MOCK } from "@/lib/api/config";
+import { useDashboardSummary } from "@/features/dashboard/api/queries";
 
 const STATUS_COLORS: Record<string, string> = {
   completed: "text-green-600",
@@ -19,17 +18,20 @@ const JOB_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const data = mockDashboardSummary;
+  const { data, isLoading } = useDashboardSummary();
+
+  if (isLoading) {
+    return <div>Loading dashboard...</div>;
+  }
+
+  if (!data) {
+    return <div>Failed to load dashboard</div>;
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-        {USE_MOCK && (
-          <p className="text-xs text-amber-600 mt-0.5 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
-            Mock mode — showing sample data
-          </p>
-        )}
       </div>
 
       {/* Repository summary */}

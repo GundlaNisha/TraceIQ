@@ -1,15 +1,43 @@
+import os
+
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+from sqlalchemy.engine.url import make_url
 
 from app.core.config import settings
 from app.db.base.models import Base
 from app.db.session import get_db
 from app.main import app
 
-# Use a test database
-TEST_DATABASE_URL = settings.database_url.replace("traceiq", "traceiq_test")
+
+def _derive_test_database_url() -> str:
+    """Resolve the database URL tests should connect to.
+
+    Resolution order:
+      1. ``TEST_DATABASE_URL`` env var, if set — used as-is.
+      2. ``DATABASE_URL`` from settings — used as-is. CI already points this at a
+         throwaway DB (``traceiq_test``); appending ``_test`` would yield the
+         non-existent ``traceiq_test_test``.
+      3. Local dev fallback — append ``_test`` to the database name so the test
+         suite never tramples the dev database.
+    """
+    explicit = os.getenv("TEST_DATABASE_URL")
+    if explicit:
+        return explicit
+
+    url = make_url(settings.database_url)
+    db_name = url.database or ""
+    if db_name.endswith("_test") or db_name.endswith("_test_test"):
+        # Already a test database (typical CI case) — keep it.
+        return url.render_as_string(hide_password=False)
+
+    url = url.set(database=f"{db_name}_test")
+    return url.render_as_string(hide_password=False)
+
+
+TEST_DATABASE_URL = _derive_test_database_url()
 
 test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
 TestingSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)

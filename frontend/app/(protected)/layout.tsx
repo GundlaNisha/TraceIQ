@@ -1,16 +1,58 @@
 "use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { GlobalSearchBar } from "@/features/search/components/GlobalSearchBar";
+import { USE_MOCK } from "@/lib/api/config";
 
-import { QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "@/lib/query-client";
+const NAV_ITEMS = [
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Repositories", href: "/repositories" },
+  { label: "Requirements", href: "/requirements" },
+  { label: "Reviews", href: "/reviews" }, // Charan's feature
+  { label: "Analysis", href: "/analysis" }, // Nisha's feature — link only
+  { label: "PR Drafts", href: "/pr-drafts" }, // Nisha's feature — link only
+];
 
 export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-gray-50 p-6">{children}</div>
-    </QueryClientProvider>
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <aside className="w-56 bg-white border-r flex flex-col p-4 gap-1">
+        <div className="text-lg font-bold text-gray-900 mb-6 px-2">TraceIQ</div>
+        {NAV_ITEMS.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              pathname.startsWith(item.href)
+                ? "bg-gray-100 text-gray-900"
+                : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-white border-b px-6 py-3 flex items-center justify-between">
+          <GlobalSearchBar />
+          <span className="text-sm text-gray-500">
+            {USE_MOCK ? "Mock mode" : "demo@traceiq.dev"}
+          </span>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 p-6">{children}</main>
+      </div>
+    </div>
   );
 }

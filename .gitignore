@@ -93,3 +93,4 @@ playwright-report/
 # Misc
 .cache/
 *.bak
+backend/data/

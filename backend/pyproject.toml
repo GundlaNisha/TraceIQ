@@ -8,14 +8,48 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",
+    "boto3>=1.34.0",
+    "celery[redis]>=5.3.0",
     "fastapi>=0.111.0",
+    "gitpython>=3.1.40",
+    "httpx>=0.27.0",
+    "instructor>=1.0.0",
+    "litellm>=1.95.0",
+    "networkx>=3.0",
+    "pgvector>=0.3.0",
+    "psycopg[binary]>=3.1.0",
     "pydantic-settings>=2.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "sentence-transformers>=5.7.0",
+    "sqlalchemy>=2.0.0",
+    "tiktoken>=0.7.0",
+    "tree-sitter>=0.20.0",
+    "tree-sitter-python>=0.25.0",
+    "tree-sitter-typescript>=0.23.2",
     "uvicorn[standard]>=0.29.0",
 ]
 
 [project.scripts]
 backend = "backend:main"
 
+[tool.ruff.lint]
+ignore = ["B008", "BLE001", "SIM103", "RUF012", "S112", "TRY201", "ASYNC230", "E722", "PIE810"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27.0",
+    "mypy>=2.3.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.2",
+]

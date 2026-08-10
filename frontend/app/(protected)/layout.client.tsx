@@ -11,9 +11,9 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Repositories", href: "/repositories" },
   { label: "Requirements", href: "/requirements" },
+  { label: "Analysis", href: "/analysis" },
+  { label: "PR Drafts", href: "/pr-drafts" },
   { label: "Reviews", href: "/reviews" },
-  { label: "Analysis", href: "/analysis/job_1" }, // Point to mock job to prevent 404
-  { label: "PR Drafts", href: "/pr-drafts/draft_1" }, // Point to mock draft to prevent 404
 ];
 
 export default function ProtectedLayoutClient({

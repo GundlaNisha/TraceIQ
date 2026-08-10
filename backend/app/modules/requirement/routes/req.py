@@ -22,12 +22,12 @@ from app.modules.requirement.services.req_service import (
 
 router = APIRouter(prefix="/api/v1/requirements", tags=["requirements"])
 
-@router.get("/", response_model=list[ReqResponse])
+@router.get("", response_model=list[ReqResponse])
 async def list_requirements(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Requirement).where(Requirement.user_id == current_user.id))
     return result.scalars().all()
 
-@router.post("/", response_model=ReqResponse, status_code=201)
+@router.post("", response_model=ReqResponse, status_code=201)
 async def add_requirement(body: ReqCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     try:
         repo_uuid = uuid.UUID(body.repository_id)

@@ -1,5 +1,5 @@
 "use client";
-import { type SearchResultItem } from "@/lib/mock-data/search";
+import { type SearchResultItem } from "@/lib/types/api";
 
 interface Props {
   results: SearchResultItem[];
@@ -38,8 +38,11 @@ export function SearchResults({ results, query }: Props) {
                 <pre className="text-xs text-gray-700 font-mono whitespace-pre-wrap bg-gray-50 rounded p-2">
                   {item.snippet}
                 </pre>
-                <div className="text-xs text-gray-400 mt-2">
-                  Score: {(item.score * 100).toFixed(0)}%
+                <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
+                  <span className="capitalize">{item.match_type || 'exact'} match</span>
+                  {item.score !== undefined && (
+                    <span>Score: {Math.round(item.score * 100)}%</span>
+                  )}
                 </div>
               </div>
             ))}

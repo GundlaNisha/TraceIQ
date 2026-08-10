@@ -14,12 +14,12 @@ from app.workers.repo_sync import sync_repository
 
 router = APIRouter(prefix="/api/v1/repositories", tags=["repositories"])
 
-@router.get("/", response_model=list[RepoResponse])
+@router.get("", response_model=list[RepoResponse])
 async def list_repositories(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Repository).where(Repository.user_id == current_user.id))
     return result.scalars().all()
 
-@router.post("/", response_model=RepoResponse, status_code=201)
+@router.post("", response_model=RepoResponse, status_code=201)
 async def add_repository(body: RepoCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     url_str = str(body.repo_url)
     parsed = urlparse(url_str)

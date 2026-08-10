@@ -25,7 +25,7 @@ class VersionResponse(ReqBase):
 
 class ReqResponse(ReqBase):
     id: uuid.UUID
-    user_id: uuid.UUID
+    user_id: str
     repository_id: uuid.UUID
     version_number: int
     created_at: datetime

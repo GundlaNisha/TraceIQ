@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSearch } from "../api/queries";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { type SearchResultItem } from "@/lib/mock-data/search";
+import { type SearchResultItem } from "@/lib/types/api";
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);

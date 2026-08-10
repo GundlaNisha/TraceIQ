@@ -19,7 +19,7 @@ from app.workers.commit_review import run_commit_review
 
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
 
-@router.post("/", status_code=status.HTTP_202_ACCEPTED)
+@router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def create_review(body: ReviewCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     # Verify repository ownership
     stmt = select(Repository).where(Repository.id == body.repository_id)

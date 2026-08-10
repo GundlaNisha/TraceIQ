@@ -1,7 +1,7 @@
 "use client";
 import ReactDiffViewer from "react-diff-viewer-continued";
 import { useReviewDiff, useReviewFindings } from "../api/queries";
-import { type ReviewFinding } from "@/lib/mock-data/reviews";
+import { type ReviewFinding } from "@/lib/types/api";
 
 const SEVERITY_STYLE = {
   high: "bg-red-100 text-red-700 border-red-200",

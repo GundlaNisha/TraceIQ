@@ -65,7 +65,7 @@ export default function DashboardPage() {
       {/* Recent jobs */}
       <SectionCard title="Recent Jobs">
         <div className="flex flex-col gap-2">
-          {data.recentJobs.map((job) => (
+          {data.recentJobs.map((job: any) => (
             <div
               key={job.id}
               className="flex items-center justify-between py-1.5 border-b last:border-0"
@@ -90,7 +90,7 @@ export default function DashboardPage() {
         {/* Recent analyses */}
         <SectionCard title="Recent Analyses">
           <div className="flex flex-col gap-2">
-            {data.recentAnalyses.map((a) => (
+            {data.recentAnalyses.map((a: any) => (
               <Link
                 key={a.id}
                 href={`/analysis/${a.id}`}
@@ -111,7 +111,7 @@ export default function DashboardPage() {
         {/* Recent PR drafts */}
         <SectionCard title="Recent PR Drafts">
           <div className="flex flex-col gap-2">
-            {data.recentPRDrafts.map((d) => (
+            {data.recentPRDrafts.map((d: any) => (
               <Link
                 key={d.id}
                 href={`/pr-drafts/${d.id}`}

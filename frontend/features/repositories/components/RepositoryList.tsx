@@ -1,7 +1,7 @@
 "use client";
 import { useRepositories, useDeleteRepository } from "../api/queries";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { type Repository } from "@/lib/mock-data/repositories";
+import { type Repository } from "@/lib/types/api";
 import { Button } from "@/components/ui/button";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {

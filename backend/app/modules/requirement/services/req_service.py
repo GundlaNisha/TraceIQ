@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.requirement.models.req import Requirement, RequirementVersion
 
 
-async def create_requirement(db: AsyncSession, user_id: uuid.UUID, repository_id: uuid.UUID, title: str, text: str) -> Requirement:
+async def create_requirement(db: AsyncSession, user_id: str, repository_id: uuid.UUID, title: str, text: str) -> Requirement:
     req = Requirement(user_id=user_id, repository_id=repository_id, title=title, text=text, version_number=1)
     db.add(req)
     await db.flush()  # get ID before inserting version

@@ -2,13 +2,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRequirements, useRequirementVersions } from "../api/queries";
-import { type Requirement, type RequirementVersion } from "@/lib/mock-data/requirements";
+import { useTriggerAnalysis } from "@/features/analysis/api/queries";
+import { type Requirement, type RequirementVersion } from "@/lib/types/api";
 import { Button } from "@/components/ui/button";
 
 export function RequirementList() {
   const { data: requirements, isLoading } = useRequirements();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: versions } = useRequirementVersions(selectedId);
+  const { mutate: triggerAnalysis, isPending: isAnalyzing } = useTriggerAnalysis();
   const router = useRouter();
 
   if (isLoading)
@@ -59,16 +61,22 @@ export function RequirementList() {
                   v{req.version_number}
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs">
-                  {new Date(req.updated_at).toLocaleDateString()}
+                  {req.updated_at ? new Date(req.updated_at).toLocaleDateString() : 'Never'}
                 </td>
                 <td className="px-4 py-3">
-                  {/* This button navigates to the Analysis page — Nisha's page renders there */}
                   <Button
                     size="sm"
+                    disabled={isAnalyzing}
                     onClick={(e) => {
                       e.stopPropagation();
-                      // In mock mode: navigate to a fake analysis ID
-                      router.push(`/analysis/job_1`);
+                      triggerAnalysis(req.id, {
+                        onSuccess: (data) => {
+                          router.push(`/analysis/${data.job_id}`);
+                        },
+                        onError: (error) => {
+                          console.error("Failed to trigger analysis", error);
+                        }
+                      });
                     }}
                   >
                     Analyze
@@ -96,7 +104,7 @@ export function RequirementList() {
                 {new Date(v.created_at).toLocaleString()}
               </div>
               <div className="text-xs text-gray-600 mt-1 line-clamp-2">
-                {v.text}
+                {v.content}
               </div>
             </div>
           ))}

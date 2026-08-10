@@ -24,5 +24,6 @@ class Settings(BaseSettings):
     clerk_secret_key: str = ""
     clerk_publishable_key: str = ""
     clerk_jwks_url: str = ""
+    clerk_webhook_secret: str = ""
 
 settings = Settings()

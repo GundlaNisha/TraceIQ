@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GlobalSearchBar } from "@/features/search/components/GlobalSearchBar";
+import { useEnsureBackendUser } from "@/features/auth/api/queries";
 
 import { UserButton } from "@clerk/nextjs";
 import { useUser } from "@clerk/nextjs";
@@ -22,10 +23,11 @@ export default function ProtectedLayoutClient({
 }) {
   const pathname = usePathname();
   const { user } = useUser();
+  const { data: backendUser, isLoading: backendUserLoading, isError: backendUserError } =
+    useEnsureBackendUser();
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
       <aside className="w-56 bg-white border-r flex flex-col p-4 gap-1">
         <div className="text-lg font-bold text-gray-900 mb-6 px-2">TraceIQ</div>
         {NAV_ITEMS.map((item) => (
@@ -52,6 +54,12 @@ export default function ProtectedLayoutClient({
             <span className="text-sm text-gray-500">
               {user?.emailAddresses[0]?.emailAddress}
             </span>
+            {/* Backend sync status pill — confirms the JWT → DB round-trip. */}
+            <BackendSyncPill
+              loading={backendUserLoading}
+              error={backendUserError}
+              userId={backendUser?.id}
+            />
             <UserButton />
           </div>
         </header>
@@ -60,5 +68,44 @@ export default function ProtectedLayoutClient({
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
+  );
+}
+
+function BackendSyncPill({
+  loading,
+  error,
+  userId,
+}: {
+  loading: boolean;
+  error: boolean;
+  userId?: string;
+}) {
+  if (loading) {
+    return (
+      <span
+        title="Syncing user with backend…"
+        className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full"
+      >
+        syncing…
+      </span>
+    );
+  }
+  if (error || !userId) {
+    return (
+      <span
+        title="Backend user sync failed — check the API is reachable"
+        className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-full"
+      >
+        sync failed
+      </span>
+    );
+  }
+  return (
+    <span
+      title={`Backend user id: ${userId}`}
+      className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full"
+    >
+      synced
+    </span>
   );
 }

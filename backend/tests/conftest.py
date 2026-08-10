@@ -48,17 +48,25 @@ from sqlalchemy import text
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_test_db():
     async with test_engine.begin() as conn:
-        await conn.execute(text("DROP SCHEMA IF EXISTS neon_auth CASCADE;"))
-        await conn.execute(text("CREATE SCHEMA neon_auth;"))
-        
+        # Recreate all schema from the current model metadata. The ``users``
+        # table (PK on string Clerk IDs) is created by Base.metadata; the old
+        # ``neon_auth.user`` table was removed in migration
+        # ``51d6d6227432_migrate_to_clerk``.
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
-        
-        # Insert mock user IDs used in tests so foreign keys are satisfied
-        await conn.execute(text("INSERT INTO neon_auth.user (id, name, email, \"emailVerified\") VALUES ('11111111-1111-1111-1111-111111111111', 'Mock A', 'a@example.com', true);"))
-        await conn.execute(text("INSERT INTO neon_auth.user (id, name, email, \"emailVerified\") VALUES ('22222222-2222-2222-2222-222222222222', 'Mock B', 'b@example.com', true);"))
-        await conn.execute(text("INSERT INTO neon_auth.user (id, name, email, \"emailVerified\") VALUES ('12345678-1234-5678-1234-567812345678', 'Mock C', 'test@example.com', true);"))
-        await conn.execute(text("INSERT INTO neon_auth.user (id, name, email, \"emailVerified\") VALUES ('00000000-0000-0000-0000-000000000000', 'Mock D', 'dummy@example.com', true);"))
+
+        # Seed the ``users`` table with Clerk-shaped IDs (string PKs, not UUIDs)
+        # so tests that bypass ``dependency_overrides[get_current_user]`` and hit
+        # the real DB still find rows.
+        await conn.execute(
+            text(
+                "INSERT INTO users (id, name, email, \"emailVerified\", image) "
+                "VALUES ('user_test_a', 'Mock A', 'a@example.com', true, NULL),"
+                "       ('user_test_b', 'Mock B', 'b@example.com', true, NULL),"
+                "       ('user_test_c', 'Mock C', 'test@example.com', true, NULL),"
+                "       ('user_test_d', 'Mock D', 'dummy@example.com', true, NULL)"
+            )
+        )
     yield
     await test_engine.dispose()
 

@@ -1,10 +1,13 @@
-from fastapi import Request, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+import jwt
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
 from app.db.session import get_db
 from app.modules.auth.models.user import User
-from app.core.config import settings
-import jwt
+from app.modules.auth.services.user_sync import upsert_user_from_jwt
+
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     auth_header = request.headers.get("Authorization")
@@ -13,9 +16,9 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid Authorization header",
         )
-    
+
     token = auth_header.split(" ")[1]
-    
+
     try:
         # Fetch the JWKS from Clerk
         if not settings.clerk_jwks_url:
@@ -25,30 +28,38 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
 
         jwks_client = jwt.PyJWKClient(settings.clerk_jwks_url)
         signing_key = jwks_client.get_signing_key_from_jwt(token)
-        
+
         # Verify the token
         payload = jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
         )
-        
+
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token: missing subject")
-            
+
         # Fetch user from database
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
-        
-        if not user:
-            # Upsert or just return a dummy for now. 
-            # In a real Clerk setup, you'd use a webhook to sync users.
-            user = User(id=user_id, email="unknown@clerk.dev", name="Unknown")
-            
+
+        if not user or user.name == user.id:
+            # First-authenticated-request safety net: the Clerk webhook will
+            # eventually upsert this row, but for the very first request we
+            # populate it from the JWT claims ourselves.
+            # We also run this if the user name is stuck on the placeholder (user_id).
+            user = await upsert_user_from_jwt(db, payload)
+
         return user
-        
-    except jwt.PyJWKClientError as e:
+
+    except jwt.PyJWKClientError:
         raise HTTPException(status_code=401, detail="Unable to fetch JWKS")
     except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e!s}")
+    except (ValueError, AttributeError, KeyError) as e:
+        # PyJWKClient.get_signing_key_from_jwt can raise plain Python errors
+        # when the token is malformed (fewer than 3 segments, missing fields).
+        # Treat any of those as a 401 — never a 500 — so a bad token from
+        # the client doesn't take the API down.
+        raise HTTPException(status_code=401, detail=f"Malformed token: {e!s}")

@@ -84,3 +84,9 @@ async def get_analysis_result(analysis_id: str, current_user: User = Depends(get
         raise NotFoundError("Impact result not found")
         
     return impact_result
+
+@router.get("/analysis", response_model=list[AnalysisJobResponse])
+async def list_analysis_jobs(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    stmt = select(AnalysisJob).where(AnalysisJob.user_id == current_user.id).order_by(AnalysisJob.created_at.desc())
+    result = await db.execute(stmt)
+    return result.scalars().all()

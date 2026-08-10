@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { useJobPoll } from "@/hooks/useJobPoll";
-import { resetMockJob } from "@/lib/mock-data/analysis";
 
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -12,8 +11,6 @@ function makeWrapper() {
 }
 
 describe("useJobPoll", () => {
-  beforeEach(() => resetMockJob("job_1"));
-
   it("starts at queued and advances to running", async () => {
     const { result } = renderHook(() => useJobPoll("job_1"), {
       wrapper: makeWrapper(),

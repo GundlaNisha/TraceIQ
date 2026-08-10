@@ -1,6 +1,20 @@
 import { useApiClient } from "@/lib/api/client";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/lib/api/config";
+import { AnalysisJob } from "@/lib/types/api";
+
+export function useAnalysisJobs() {
+  const { fetchApi } = useApiClient();
+
+  return useQuery({
+    queryKey: ["analysis"],
+    queryFn: async () => {
+      const res = await fetchApi(`/api/v1/analysis`);
+      if (!res.ok) throw new Error("Failed to fetch analysis jobs");
+      return res.json() as Promise<AnalysisJob[]>;
+    },
+  });
+}
 
 // Fetch the full impact result once the job is complete
 export function useImpactResult(analysisId: string | null) {

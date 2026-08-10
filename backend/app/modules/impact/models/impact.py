@@ -8,6 +8,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 from app.db.base.models import Base
 
+# Import related models for SQLAlchemy metadata
+from app.modules.auth.models.user import User
+from app.modules.requirement.models.req import Requirement
+from app.modules.repository.models.repo import Repository
+
 
 class JobStatus(str, enum.Enum):
     queued = "queued"

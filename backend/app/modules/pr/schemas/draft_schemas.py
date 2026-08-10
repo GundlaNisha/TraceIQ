@@ -10,10 +10,13 @@ class PRDraftCreate(BaseModel):
 class PRDraftUpdate(BaseModel):
     description_markdown: str
 
+from datetime import datetime
+
 class PRDraftResponse(BaseModel):
     id: uuid.UUID
     title: str
     description_markdown: str
     status: str
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

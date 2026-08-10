@@ -1,6 +1,20 @@
 import { useApiClient } from "@/lib/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/lib/api/config";
+import { PRDraft } from "@/lib/types/api";
+
+export function usePRDrafts() {
+  const { fetchApi } = useApiClient();
+
+  return useQuery({
+    queryKey: ["pr-drafts"],
+    queryFn: async () => {
+      const res = await fetchApi(`/api/v1/pr-drafts`);
+      if (!res.ok) throw new Error("Failed to fetch PR drafts");
+      return res.json() as Promise<PRDraft[]>;
+    },
+  });
+}
 
 // Fetch a draft by ID
 export function usePRDraft(draftId: string | null) {
@@ -9,6 +23,11 @@ export function usePRDraft(draftId: string | null) {
   return useQuery({
     queryKey: ["pr-drafts", draftId],
     enabled: !!draftId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "queued" || status === "generating") return 2000;
+      return false;
+    },
     queryFn: async () => {
       
       const res = await fetchApi(`/api/v1/pr-drafts/${draftId}`, {

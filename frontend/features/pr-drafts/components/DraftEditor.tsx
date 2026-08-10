@@ -41,6 +41,16 @@ export function DraftEditor({ draftId }: Props) {
         Draft not found.
       </div>
     );
+    
+  if (draft.status === "queued")
+    return (
+      <div className="flex flex-col items-center gap-6 py-16 max-w-md mx-auto">
+        <div className="text-gray-700 font-medium">Generating PR Draft...</div>
+        <p className="text-xs text-gray-400 text-center">
+          TraceIQ is writing a comprehensive PR description based on the impact analysis. This usually takes 15–30 seconds.
+        </p>
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-3 h-[calc(100vh-10rem)]">

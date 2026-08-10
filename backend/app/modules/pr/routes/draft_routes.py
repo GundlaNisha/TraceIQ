@@ -16,7 +16,7 @@ from app.workers.pr_draft import run_pr_draft_generation
 
 router = APIRouter(prefix="/api/v1/pr-drafts", tags=["pr-drafts"])
 
-@router.post("/", status_code=status.HTTP_202_ACCEPTED)
+@router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def create_pr_draft(body: PRDraftCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     draft = PRDraft(
         user_id=current_user.id,
@@ -34,6 +34,12 @@ async def create_pr_draft(body: PRDraftCreate, current_user: User = Depends(get_
     run_pr_draft_generation.delay(str(draft.id))
     
     return {"job_id": str(draft.id)}
+
+@router.get("", response_model=list[PRDraftResponse])
+async def list_pr_drafts(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    stmt = select(PRDraft).where(PRDraft.user_id == current_user.id).order_by(PRDraft.created_at.desc())
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 @router.get("/{draft_id}", response_model=PRDraftResponse)
 async def get_pr_draft(draft_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):

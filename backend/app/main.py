@@ -23,6 +23,7 @@ from app.modules.repository.routes.repo import router as repo_router
 from app.modules.requirement.routes.req import router as req_router
 from app.modules.retrieval.routes.search import router as search_router
 from app.modules.review.routes.review import router as review_router
+from app.modules.dashboard.routes.dashboard import router as dashboard_router
 
 app.include_router(auth_router)
 app.include_router(webhook_router)
@@ -32,3 +33,4 @@ app.include_router(req_router)
 app.include_router(analysis_router)
 app.include_router(review_router)
 app.include_router(pr_router)
+app.include_router(dashboard_router)

@@ -20,10 +20,12 @@ async def dispatch_impact_analysis(requirement_text: str, chunks: list[dict]) ->
     user = impact_prompts.build_impact_prompt(requirement_text, context)
     return cast(ImpactAnalysisOutput, await _adapter.complete(system, user, ImpactAnalysisOutput))
 
-async def dispatch_commit_review(diff_text: str, requirement_text: str, chunks: list[dict]) -> CommitReviewOutput:
+async def dispatch_commit_review(diff_text: str, requirement_text: str, chunks: list[dict], linter_output: str = "", missing_tests: list[str] | None = None) -> CommitReviewOutput:
+    if missing_tests is None:
+        missing_tests = []
     context = build_context(chunks)
     system = review_prompts.REVIEW_SYSTEM
-    user = review_prompts.build_review_prompt(diff_text, requirement_text, context)
+    user = review_prompts.build_review_prompt(diff_text, requirement_text, context, linter_output, missing_tests)
     return cast(CommitReviewOutput, await _adapter.complete(system, user, CommitReviewOutput))
 
 async def dispatch_pr_generation(requirement_text: str, diff_summary: str, findings: list[dict]) -> PRDraftOutput:

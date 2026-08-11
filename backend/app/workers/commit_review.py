@@ -2,6 +2,8 @@ import asyncio
 import tempfile
 
 import git
+import os
+import subprocess
 from celery.utils.log import get_task_logger
 from sqlalchemy import select
 
@@ -13,6 +15,37 @@ from app.modules.retrieval.services.semantic import semantic_search
 from app.modules.review.models.rev_models import CommitDiff, CommitEvent, ReviewFinding
 from app.modules.review.services.diff_extractor import extract_diff
 from app.workers.celery_app import celery_app
+
+def check_missing_tests(diffs: list[dict]) -> list[str]:
+    missing = []
+    diff_files = {d["file_path"] for d in diffs}
+    for d in diffs:
+        fp = d["file_path"]
+        if "test_" in fp or "_test" in fp or ".spec." in fp or ".test." in fp:
+            continue
+        
+        basename = os.path.basename(fp)
+        name, ext = os.path.splitext(basename)
+        
+        test_names = [f"test_{name}{ext}", f"{name}_test{ext}", f"{name}.spec{ext}", f"{name}.test{ext}"]
+        
+        found_test = any(any(test_name in df for df in diff_files) for test_name in test_names)
+                
+        if not found_test and ext in [".py", ".js", ".ts", ".jsx", ".tsx"]:
+            missing.append(f"Missing test for {fp}")
+            
+    return missing
+
+def run_linter(temp_dir: str, diffs: list[dict]) -> str:
+    py_files = [os.path.join(temp_dir, d["file_path"]) for d in diffs if d["file_path"].endswith(".py")]
+    existing_files = [f for f in py_files if os.path.exists(f)]
+    if not existing_files:
+        return ""
+    try:
+        result = subprocess.run(["ruff", "check"] + existing_files, cwd=temp_dir, capture_output=True, text=True)
+        return (result.stdout + "\n" + result.stderr).strip()
+    except Exception as e:
+        return f"Linter execution failed: {e}"
 
 logger = get_task_logger(__name__)
 
@@ -51,6 +84,10 @@ async def _process_commit_review(commit_event_id: str):
                 # 3. Extract diff
                 diffs = extract_diff(temp_dir, commit_event.commit_hash)
                 
+                # 3.5 Check tests and run linter
+                missing_tests = check_missing_tests(diffs)
+                linter_output = run_linter(temp_dir, diffs)
+                
                 # 4. Truncate handled in diff_extractor. Now bulk insert CommitDiff rows
                 for diff_data in diffs:
                     commit_diff = CommitDiff(
@@ -76,7 +113,7 @@ async def _process_commit_review(commit_event_id: str):
                     chunks = [{"file_path": item["file_path"], "chunk_text": item["snippet"]} for item in search_results]
                 
                 # 6. Dispatch the LLM
-                ai_result = await dispatch_commit_review(full_diff_text, req_text, chunks)
+                ai_result = await dispatch_commit_review(full_diff_text, req_text, chunks, linter_output, missing_tests)
                 
                 # 7. Bulk insert ReviewFinding rows from AI output
                 for finding in ai_result.findings:

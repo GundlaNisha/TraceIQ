@@ -2,6 +2,19 @@ import { useApiClient } from "@/lib/api/client";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/lib/api/config";
 
+export function useReviews() {
+  const { fetchApi } = useApiClient();
+
+  return useQuery({
+    queryKey: ["reviews"],
+    queryFn: async () => {
+      const res = await fetchApi(`/api/v1/reviews`);
+      if (!res.ok) throw new Error("Failed to fetch reviews");
+      return res.json();
+    },
+  });
+}
+
 export function useReview(id: string) {
   const { fetchApi } = useApiClient();
 
@@ -54,6 +67,7 @@ export function useCreateReview() {
     mutationFn: async (data: {
       commit_hash: string;
       repository_id: string;
+      requirement_id?: string;
     }) => {
       
       const res = await fetchApi(`/api/v1/reviews`, {

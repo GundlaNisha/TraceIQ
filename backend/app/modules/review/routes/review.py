@@ -1,6 +1,6 @@
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -18,6 +18,12 @@ from app.modules.review.schemas.rev_schemas import (
 from app.workers.commit_review import run_commit_review
 
 router = APIRouter(prefix="/api/v1/reviews", tags=["reviews"])
+
+@router.get("", response_model=list[CommitEventResponse])
+async def get_reviews(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    stmt = select(CommitEvent).where(CommitEvent.user_id == current_user.id).order_by(desc(CommitEvent.created_at))
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def create_review(body: ReviewCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):

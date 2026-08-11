@@ -3,9 +3,6 @@ import { useState } from "react";
 import { useJobPoll } from "@/hooks/useJobPoll";
 import { useImpactResult } from "../api/queries";
 import { DependencyGraph } from "./DependencyGraph";
-import { Button } from "@/components/ui/button";
-import { useCreatePRDraft } from "@/features/pr-drafts/api/queries";
-import { useRouter } from "next/navigation";
 
 interface Props {
   jobId: string;
@@ -15,10 +12,6 @@ export function ImpactDashboard({ jobId }: Props) {
   const { data: job } = useJobPoll(jobId);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"files" | "graph">("files");
-  
-  const { mutate: createDraft, isPending: isDrafting } = useCreatePRDraft();
-  const router = useRouter();
-
   // Only fetch the full result once the job is done
   const { data: result, isLoading: resultLoading } = useImpactResult(
     job?.status === "completed" ? jobId : null, // use job_id as analysis_id in mock; real API may differ
@@ -103,25 +96,8 @@ export function ImpactDashboard({ jobId }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Header */}
       <div className="flex justify-between items-center border-b pb-2">
         <h2 className="text-lg font-semibold text-gray-900">Analysis Results</h2>
-        <Button 
-          disabled={isDrafting}
-          size="sm"
-          onClick={() => {
-            if (job?.requirement_id) {
-              createDraft(
-                { requirement_id: job.requirement_id },
-                {
-                  onSuccess: (data) => router.push(`/pr-drafts/${data.job_id}`)
-                }
-              );
-            }
-          }}
-        >
-          {isDrafting ? "Generating..." : "Generate PR Draft"}
-        </Button>
       </div>
 
       {/* Tab switcher */}

@@ -1,4 +1,5 @@
 import uuid
+import datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -11,6 +12,9 @@ class ReviewCreate(BaseModel):
 class CommitEventResponse(BaseModel):
     id: uuid.UUID
     status: str
+    requirement_id: uuid.UUID | None = None
+    commit_hash: str
+    created_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
 

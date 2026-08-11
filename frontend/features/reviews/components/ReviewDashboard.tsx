@@ -1,7 +1,10 @@
 "use client";
 import ReactDiffViewer from "react-diff-viewer-continued";
-import { useReviewDiff, useReviewFindings } from "../api/queries";
+import { useReview, useReviewDiff, useReviewFindings } from "../api/queries";
 import { type ReviewFinding } from "@/lib/types/api";
+import { Button } from "@/components/ui/button";
+import { useCreatePRDraft } from "@/features/pr-drafts/api/queries";
+import { useRouter } from "next/navigation";
 
 const SEVERITY_STYLE = {
   high: "bg-red-100 text-red-700 border-red-200",
@@ -14,9 +17,12 @@ interface Props {
 }
 
 export function ReviewDashboard({ reviewId }: Props) {
+  const { data: review } = useReview(reviewId);
   const { data: diff, isLoading: diffLoading } = useReviewDiff(reviewId);
-  const { data: findings, isLoading: findingsLoading } =
-    useReviewFindings(reviewId);
+  const { data: findings, isLoading: findingsLoading } = useReviewFindings(reviewId);
+  
+  const { mutate: createDraft, isPending: isDrafting } = useCreatePRDraft();
+  const router = useRouter();
 
   // Sort findings: high → medium → low
   const sortedFindings = [...(findings ?? [])].sort((a: ReviewFinding, b: ReviewFinding) => {
@@ -42,9 +48,25 @@ export function ReviewDashboard({ reviewId }: Props) {
 
       {/* Right: Findings */}
       <div className="w-80 flex flex-col gap-3 overflow-auto">
-        <h2 className="text-sm font-semibold text-gray-700">
-          AI Findings {findings ? `(${findings.length})` : ""}
-        </h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-sm font-semibold text-gray-700">
+            AI Findings {findings ? `(${findings.length})` : ""}
+          </h2>
+          <Button
+            size="sm"
+            disabled={isDrafting || !review?.requirement_id}
+            onClick={() => {
+              if (review?.requirement_id) {
+                createDraft(
+                  { requirement_id: review.requirement_id, commit_event_id: review.id },
+                  { onSuccess: (data) => router.push(`/pr-drafts/${data.job_id}`) }
+                );
+              }
+            }}
+          >
+            {isDrafting ? "Generating..." : "Generate PR Draft"}
+          </Button>
+        </div>
         {findingsLoading && (
           <div className="text-sm text-gray-400">Loading findings...</div>
         )}

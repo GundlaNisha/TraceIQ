@@ -10,6 +10,7 @@ import { RequirementForm } from "./RequirementForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDeleteRequirement } from "../api/queries";
 import { Trash2, Edit2 } from "lucide-react";
+import { parseUTCDate } from "@/lib/utils";
 
 export function RequirementList() {
   const { data: requirements, isLoading } = useRequirements();
@@ -74,7 +75,7 @@ export function RequirementList() {
                   v{req.version_number}
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs">
-                  {req.updated_at ? new Date(req.updated_at).toLocaleDateString() : 'Never'}
+                  {req.updated_at ? parseUTCDate(req.updated_at).toLocaleDateString() : 'Never'}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
@@ -134,7 +135,7 @@ export function RequirementList() {
                 v{v.version_number}
               </div>
               <div className="text-xs text-gray-400">
-                {new Date(v.created_at).toLocaleString()}
+                {parseUTCDate(v.created_at).toLocaleString()}
               </div>
               <div className="text-xs text-gray-600 mt-1 line-clamp-2">
                 {v.content}

@@ -5,6 +5,7 @@ import { CreateReviewModal } from "./CreateReviewModal";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
+import { parseUTCDate } from "@/lib/utils";
 
 export function ReviewList() {
   const { data: reviews, isLoading } = useReviews();
@@ -58,7 +59,7 @@ export function ReviewList() {
                   </span>
                 </div>
                 <div className="text-xs text-gray-400">
-                  {formatDistanceToNow(new Date(review.created_at), { addSuffix: true })}
+                  {formatDistanceToNow(parseUTCDate(review.created_at), { addSuffix: true })}
                 </div>
               </div>
             </Link>

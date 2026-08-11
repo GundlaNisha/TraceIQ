@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { parseUTCDate } from "@/lib/utils";
 import { type AnalysisJob } from "@/lib/types/api";
 import { useRouter } from "next/navigation";
 
@@ -62,7 +63,7 @@ function AnalysisJobCard({ job }: { job: AnalysisJob }) {
             Analysis Job
           </h3>
           <div className="flex items-center gap-3 text-xs text-gray-500">
-            <span>{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</span>
+            <span>{formatDistanceToNow(parseUTCDate(job.created_at), { addSuffix: true })}</span>
             <span className="w-1 h-1 rounded-full bg-gray-300" />
             <span className={`px-2 py-0.5 rounded-full font-medium ${
               job.status === "completed" ? "bg-green-50 text-green-700" :

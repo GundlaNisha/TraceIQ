@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { usePRDrafts } from "../api/queries";
+import { usePRDrafts, useDeletePRDraft } from "../api/queries";
+import { parseUTCDate } from "@/lib/utils";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,6 @@ export function PRDraftList() {
 
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
-import { useDeletePRDraft } from "../api/queries";
 import { type PRDraft } from "@/lib/types/api";
 
 function DraftCard({ draft }: { draft: PRDraft }) {
@@ -68,7 +68,7 @@ function DraftCard({ draft }: { draft: PRDraft }) {
           </h3>
           <div className="flex items-center gap-3 text-xs text-gray-500">
             <span>
-              {formatDistanceToNow(new Date(draft.created_at), {
+              {formatDistanceToNow(parseUTCDate(draft.created_at), {
                 addSuffix: true,
               })}
             </span>

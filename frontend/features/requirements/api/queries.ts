@@ -84,3 +84,20 @@ export function useUpdateRequirement() {
   });
 }
 
+export function useDeleteRequirement() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchApi(`/api/v1/requirements/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete requirement");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["requirements"] });
+    },
+  });
+}
+

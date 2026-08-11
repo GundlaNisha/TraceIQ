@@ -77,6 +77,19 @@ async def delete_requirement(req_id: str, current_user: User = Depends(get_curre
     if not req or req.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Requirement not found")
         
+    from sqlalchemy import delete, select
+    from app.modules.impact.models.impact import AnalysisJob, ImpactResult
+    from app.modules.pr.models.draft import PRDraft
+    
+    # Cascade to ImpactResult first
+    subq = select(AnalysisJob.id).where(AnalysisJob.requirement_id == req_uuid)
+    await db.execute(delete(ImpactResult).where(ImpactResult.job_id.in_(subq)))
+    
+    # Then delete dependent tables
+    await db.execute(delete(AnalysisJob).where(AnalysisJob.requirement_id == req_uuid))
+    await db.execute(delete(PRDraft).where(PRDraft.requirement_id == req_uuid))
+    await db.execute(delete(RequirementVersion).where(RequirementVersion.requirement_id == req_uuid))
+        
     await db.delete(req)
     await db.commit()
 

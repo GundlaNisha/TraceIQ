@@ -4,10 +4,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useRepositories } from "@/features/repositories/api/queries";
-import { useCreateRequirement } from "../api/queries";
+import { useCreateRequirement, useUpdateRequirement } from "../api/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { type Requirement } from "@/lib/types/api";
 
 const schema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -18,13 +19,18 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 interface Props {
+  initialData?: Requirement;
   onSuccess?: () => void;
 }
 
-export function RequirementForm({ onSuccess }: Props) {
+export function RequirementForm({ initialData, onSuccess }: Props) {
   const { activeRepositoryId } = useWorkspaceStore();
   const { data: repos } = useRepositories();
-  const { mutateAsync, isPending } = useCreateRequirement();
+  const { mutateAsync: createReq, isPending: isCreating } = useCreateRequirement();
+  const { mutateAsync: updateReq, isPending: isUpdating } = useUpdateRequirement();
+  
+  const isPending = isCreating || isUpdating;
+
   const {
     register,
     handleSubmit,
@@ -32,11 +38,19 @@ export function RequirementForm({ onSuccess }: Props) {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { repository_id: activeRepositoryId ?? "" },
+    defaultValues: { 
+      repository_id: initialData?.repository_id ?? activeRepositoryId ?? "",
+      title: initialData?.title ?? "",
+      text: initialData?.text ?? "",
+    },
   });
 
   async function onSubmit(data: FormData) {
-    await mutateAsync(data);
+    if (initialData) {
+      await updateReq({ id: initialData.id, title: data.title, text: data.text });
+    } else {
+      await createReq(data);
+    }
     reset();
     onSuccess?.();
   }
@@ -86,7 +100,7 @@ export function RequirementForm({ onSuccess }: Props) {
         )}
       </div>
       <Button type="submit" disabled={isPending}>
-        {isPending ? "Saving..." : "Create Requirement"}
+        {isPending ? "Saving..." : initialData ? "Update Requirement" : "Create Requirement"}
       </Button>
     </form>
   );

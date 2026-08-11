@@ -6,11 +6,19 @@ import { useTriggerAnalysis } from "@/features/analysis/api/queries";
 import { type Requirement, type RequirementVersion } from "@/lib/types/api";
 import { Button } from "@/components/ui/button";
 
+import { RequirementForm } from "./RequirementForm";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useDeleteRequirement } from "../api/queries";
+import { Trash2, Edit2 } from "lucide-react";
+
 export function RequirementList() {
   const { data: requirements, isLoading } = useRequirements();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingReq, setEditingReq] = useState<Requirement | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { data: versions } = useRequirementVersions(selectedId);
   const { mutate: triggerAnalysis, isPending: isAnalyzing } = useTriggerAnalysis();
+  const { mutate: deleteRequirement, isPending: isDeleting } = useDeleteRequirement();
   const router = useRouter();
 
   if (isLoading)
@@ -25,6 +33,11 @@ export function RequirementList() {
         No requirements yet.
       </div>
     );
+
+  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setDeleteConfirmId(id);
+  };
 
   return (
     <div className="flex gap-6">
@@ -42,7 +55,7 @@ export function RequirementList() {
               <th className="text-left px-4 py-3 font-medium text-gray-600">
                 Updated
               </th>
-              <th className="px-4 py-3" />
+              <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -63,24 +76,44 @@ export function RequirementList() {
                 <td className="px-4 py-3 text-gray-500 text-xs">
                   {req.updated_at ? new Date(req.updated_at).toLocaleDateString() : 'Never'}
                 </td>
-                <td className="px-4 py-3">
-                  <Button
-                    size="sm"
-                    disabled={isAnalyzing}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerAnalysis(req.id, {
-                        onSuccess: (data) => {
-                          router.push(`/analysis/${data.job_id}`);
-                        },
-                        onError: (error) => {
-                          console.error("Failed to trigger analysis", error);
-                        }
-                      });
-                    }}
-                  >
-                    Analyze
-                  </Button>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      disabled={isAnalyzing}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerAnalysis(req.id, {
+                          onSuccess: (data) => {
+                            router.push(`/analysis/${data.job_id}`);
+                          },
+                          onError: (error) => {
+                            console.error("Failed to trigger analysis", error);
+                          }
+                        });
+                      }}
+                    >
+                      Analyze
+                    </Button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingReq(req);
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Edit Requirement"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteClick(e, req.id)}
+                      disabled={isDeleting}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                      title="Delete Requirement"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -110,6 +143,54 @@ export function RequirementList() {
           ))}
         </div>
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingReq} onOpenChange={(open) => !open && setEditingReq(null)}>
+        <DialogContent className="sm:max-w-lg bg-white p-6 rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Requirement</DialogTitle>
+          </DialogHeader>
+          {editingReq && (
+            <RequirementForm 
+              initialData={editingReq} 
+              onSuccess={() => setEditingReq(null)} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <DialogContent className="sm:max-w-md bg-white p-6 rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600">Are you sure you want to delete this requirement? This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              disabled={isDeleting}
+              onClick={() => {
+                if (deleteConfirmId) {
+                  deleteRequirement(deleteConfirmId, {
+                    onSuccess: () => {
+                      if (selectedId === deleteConfirmId) setSelectedId(null);
+                      setDeleteConfirmId(null);
+                    }
+                  });
+                }
+              }}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -67,13 +67,14 @@ export function useUpdatePRDraft() {
 
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { id: string; description_markdown: string }) => {
+    mutationFn: async (data: { id: string; title?: string; description_markdown?: string }) => {
       
       const res = await fetchApi(`/api/v1/pr-drafts/${data.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          description_markdown: data.description_markdown,
+          ...(data.title !== undefined && { title: data.title }),
+          ...(data.description_markdown !== undefined && { description_markdown: data.description_markdown }),
         }),
       });
       if (!res.ok) throw new Error("Failed to save draft");
@@ -81,6 +82,25 @@ export function useUpdatePRDraft() {
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["pr-drafts", vars.id] });
+      qc.invalidateQueries({ queryKey: ["pr-drafts"] });
+    },
+  });
+}
+
+// Delete a draft
+export function useDeletePRDraft() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchApi(`/api/v1/pr-drafts/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete PR draft");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pr-drafts"] });
     },
   });
 }

@@ -12,6 +12,7 @@ export function DraftEditor({ draftId }: Props) {
   const { data: draft, isLoading } = usePRDraft(draftId);
   const { mutateAsync: saveDraft, isPending: isSaving } = useUpdatePRDraft();
   const [content, setContent] = useState("");
+  const [title, setTitle] = useState("");
   const [savedStatus, setSavedStatus] = useState<"saved" | "unsaved" | null>(
     null,
   );
@@ -21,10 +22,13 @@ export function DraftEditor({ draftId }: Props) {
     if (draft?.description_markdown) {
       setContent(draft.description_markdown);
     }
-  }, [draft?.description_markdown]);
+    if (draft?.title) {
+      setTitle(draft.title);
+    }
+  }, [draft?.description_markdown, draft?.title]);
 
   async function handleSave() {
-    await saveDraft({ id: draftId, description_markdown: content });
+    await saveDraft({ id: draftId, title, description_markdown: content });
     setSavedStatus("saved");
     setTimeout(() => setSavedStatus(null), 3000);
   }
@@ -57,9 +61,12 @@ export function DraftEditor({ draftId }: Props) {
       {/* Header bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-gray-700 truncate max-w-lg">
-            {draft.title}
-          </h2>
+          <input
+            className="text-sm font-semibold text-gray-700 truncate max-w-lg bg-transparent hover:bg-gray-50 focus:bg-white border border-transparent focus:border-gray-200 focus:outline-none rounded px-2 py-1 transition-colors w-64"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="PR Draft Title"
+          />
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-medium ${
               draft.status === "edited"

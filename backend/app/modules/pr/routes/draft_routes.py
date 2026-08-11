@@ -65,10 +65,28 @@ async def update_pr_draft(draft_id: str, body: PRDraftUpdate, current_user: User
     if draft.user_id != current_user.id:
         raise ForbiddenError("Not authorized to edit this PR draft")
         
-    draft.description_markdown = body.description_markdown
+    if body.title is not None:
+        draft.title = body.title
+    if body.description_markdown is not None:
+        draft.description_markdown = body.description_markdown
+        
     draft.status = "edited"
     
     await db.commit()
     await db.refresh(draft)
     
     return draft
+
+@router.delete("/{draft_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pr_draft(draft_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    stmt = select(PRDraft).where(PRDraft.id == draft_id)
+    result = await db.execute(stmt)
+    draft = result.scalar_one_or_none()
+    
+    if not draft:
+        raise NotFoundError("PR draft not found")
+    if draft.user_id != current_user.id:
+        raise ForbiddenError("Not authorized to delete this PR draft")
+        
+    await db.delete(draft)
+    await db.commit()

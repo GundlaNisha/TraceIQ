@@ -16,12 +16,13 @@ export interface RequirementVersion {
 
 export interface Requirement {
   id: string;
+  user_id: string;
+  repository_id: string;
   title: string;
-  description: string;
-  status: "draft" | "active" | "archived";
-  version_number?: number;
-  updated_at?: string;
+  text: string;
+  version_number: number;
   created_at: string;
+  updated_at: string;
 }
 
 export interface AnalysisJob {
@@ -35,6 +36,7 @@ export interface AnalysisJob {
 export interface PRDraft {
   id: string;
   title: string;
+  description_markdown: string;
   status: "queued" | "generated" | "edited" | "published";
   created_at: string;
 }

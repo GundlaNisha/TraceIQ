@@ -8,7 +8,8 @@ class PRDraftCreate(BaseModel):
     commit_event_id: uuid.UUID | None = None
 
 class PRDraftUpdate(BaseModel):
-    description_markdown: str
+    title: str | None = None
+    description_markdown: str | None = None
 
 from datetime import datetime
 

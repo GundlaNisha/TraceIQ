@@ -1,5 +1,5 @@
 import { useApiClient } from "@/lib/api/client";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/lib/api/config";
 import { AnalysisJob } from "@/lib/types/api";
 
@@ -48,6 +48,23 @@ export function useTriggerAnalysis() {
       );
       if (res.status !== 202) throw new Error("Failed to trigger analysis");
       return res.json(); // { job_id: "..." }
+    },
+  });
+}
+
+export function useDeleteAnalysisJob() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      const res = await fetchApi(`/api/v1/analysis/jobs/${jobId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete analysis job");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["analysis"] });
     },
   });
 }

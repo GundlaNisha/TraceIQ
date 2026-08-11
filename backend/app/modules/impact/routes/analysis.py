@@ -90,3 +90,28 @@ async def list_analysis_jobs(current_user: User = Depends(get_current_user), db:
     stmt = select(AnalysisJob).where(AnalysisJob.user_id == current_user.id).order_by(AnalysisJob.created_at.desc())
     result = await db.execute(stmt)
     return result.scalars().all()
+
+@router.delete("/analysis/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_analysis_job(job_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    import uuid
+    from fastapi import HTTPException
+    
+    try:
+        job_uuid = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job UUID")
+        
+    stmt = select(AnalysisJob).where(AnalysisJob.id == job_uuid)
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise NotFoundError("Analysis job not found")
+    if job.user_id != current_user.id:
+        raise ForbiddenError("Not authorized to delete this job")
+        
+    from sqlalchemy import delete
+    
+    await db.execute(delete(ImpactResult).where(ImpactResult.job_id == job_uuid))
+    await db.delete(job)
+    await db.commit()

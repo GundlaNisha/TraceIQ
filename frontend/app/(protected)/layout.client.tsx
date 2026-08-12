@@ -27,45 +27,54 @@ export default function ProtectedLayoutClient({
     useEnsureBackendUser();
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <aside className="w-56 bg-white border-r flex flex-col p-4 gap-1">
-        <div className="text-lg font-bold text-gray-900 mb-6 px-2">TraceIQ</div>
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              pathname.startsWith(item.href)
-                ? "bg-gray-100 text-gray-900"
-                : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-            }`}
-          >
-            {item.label}
-          </Link>
-        ))}
+    <div className="flex min-h-screen bg-background text-foreground">
+      <aside className="w-64 bg-slate-50/30 border-r border-border/50 flex flex-col py-6 px-4 gap-2 shrink-0">
+        <div className="text-2xl font-bold font-serif text-foreground mb-8 px-3 tracking-tight">TraceIQ</div>
+        {NAV_ITEMS.map((item) => {
+          const isActive = pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                isActive
+                  ? "bg-white shadow-sm text-accent border border-border/50"
+                  : "text-muted hover:text-foreground hover:bg-black/5 border border-transparent"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="bg-white border-b px-6 py-3 flex items-center justify-between">
-          <GlobalSearchBar />
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">
-              {user?.emailAddresses[0]?.emailAddress}
-            </span>
-            {/* Backend sync status pill — confirms the JWT → DB round-trip. */}
-            <BackendSyncPill
-              loading={backendUserLoading}
-              error={backendUserError}
-              userId={backendUser?.id}
-            />
-            <UserButton />
+        <header className="bg-background/80 backdrop-blur-xl border-b border-border/40 sticky top-0 z-20">
+          <div className="w-full max-w-7xl mx-auto px-8 md:px-12 py-3 flex items-center justify-between">
+            <GlobalSearchBar />
+            <div className="flex items-center gap-5">
+              <span className="text-sm font-medium text-muted">
+                {user?.emailAddresses[0]?.emailAddress}
+              </span>
+              <BackendSyncPill
+                loading={backendUserLoading}
+                error={backendUserError}
+                userId={backendUser?.id}
+              />
+              <div className="h-4 w-px bg-border/60"></div>
+              <UserButton />
+            </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto">
+          <div className="w-full max-w-7xl mx-auto px-8 md:px-12 py-10 md:py-12">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );

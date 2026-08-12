@@ -21,112 +21,134 @@ export default function DashboardPage() {
   const { data, isLoading } = useDashboardSummary();
 
   if (isLoading) {
-    return <div>Loading dashboard...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-muted">
+        <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin mb-4" />
+        <p className="text-sm">Loading your workspace...</p>
+      </div>
+    );
   }
 
   if (!data) {
-    return <div>Failed to load dashboard</div>;
+    return <div className="text-sm text-red-500 py-12">Failed to load workspace data.</div>;
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-      </div>
+    <div className="flex flex-col gap-10 pb-12">
+      {/* Header */}
+      <header className="mb-4">
+        <h1 className="text-4xl font-semibold font-serif text-foreground tracking-tight">Overview</h1>
+        <p className="text-muted mt-2 text-lg">Welcome back. Here is what&apos;s happening across your repositories.</p>
+      </header>
 
       {/* Repository summary */}
-      <SectionCard title="Repositories">
-        <div className="grid grid-cols-4 gap-4">
-          <StatCard label="Total" value={data.repositories.total} />
+      <SectionCard title="Infrastructure">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <StatCard label="Connected Repos" value={data.repositories.total} />
           <StatCard
-            label="Ready"
+            label="Ready & Synced"
             value={data.repositories.completed}
-            color="text-green-600"
+            color="text-emerald-600"
           />
           <StatCard
-            label="Syncing"
+            label="Syncing Now"
             value={data.repositories.syncing}
-            color="text-blue-600"
+            color="text-accent"
           />
           <StatCard
-            label="Failed"
+            label="Failed Syncs"
             value={data.repositories.failed}
-            color="text-red-600"
+            color="text-rose-600"
           />
         </div>
-        <Link
-          href="/repositories"
-          className="text-xs text-blue-600 hover:underline mt-3 inline-block"
-        >
-          Manage repositories →
-        </Link>
-      </SectionCard>
-
-      {/* Recent jobs */}
-      <SectionCard title="Recent Jobs">
-        <div className="flex flex-col gap-2">
-          {data.recentJobs.map((job: any) => (
-            <div
-              key={job.id}
-              className="flex items-center justify-between py-1.5 border-b last:border-0"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">
-                  {JOB_TYPE_LABELS[job.type]}
-                </span>
-                <span className="text-sm text-gray-700">{job.label}</span>
-              </div>
-              <span
-                className={`text-xs font-medium ${STATUS_COLORS[job.status]}`}
-              >
-                {job.status}
-              </span>
-            </div>
-          ))}
+        <div className="mt-6 pt-4 border-t border-border/40">
+          <Link
+            href="/repositories"
+            className="text-sm font-medium text-accent hover:text-accent/80 transition-colors inline-flex items-center gap-1"
+          >
+            Manage repositories <span>&rarr;</span>
+          </Link>
         </div>
       </SectionCard>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* Recent analyses */}
-        <SectionCard title="Recent Analyses">
-          <div className="flex flex-col gap-2">
-            {data.recentAnalyses.map((a: any) => (
-              <Link
-                key={a.id}
-                href={`/analysis/${a.id}`}
-                className="block hover:bg-gray-50 rounded-lg p-2 -mx-2 transition-colors"
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        {/* Recent Jobs */}
+        <SectionCard title="Recent Activity">
+          <div className="flex flex-col gap-3">
+            {data.recentJobs.length === 0 && (
+              <div className="text-sm text-muted py-4 text-center">No recent activity.</div>
+            )}
+            {data.recentJobs.map((job: any) => (
+              <div
+                key={job.id}
+                className="flex items-center justify-between py-3 px-4 rounded-xl bg-slate-50/50 hover:bg-slate-50 border border-transparent transition-colors"
               >
-                <div className="text-sm text-gray-800 font-medium truncate">
-                  {a.requirement_title}
+                <div className="flex items-center gap-4">
+                  <span className="text-xs bg-white border shadow-sm text-foreground px-2.5 py-1 rounded-md font-medium tracking-wide">
+                    {JOB_TYPE_LABELS[job.type]}
+                  </span>
+                  <span className="text-sm font-medium text-foreground truncate max-w-[200px]">{job.label}</span>
                 </div>
-                <div className="text-xs text-gray-400 mt-0.5">
-                  {a.repository} · {a.impacted_files_count} file
-                  {a.impacted_files_count !== 1 ? "s" : ""}
+                <div className="flex items-center gap-2">
+                  {job.status === "running" && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
+                  <span
+                    className={`text-xs font-semibold capitalize ${STATUS_COLORS[job.status] || "text-muted"}`}
+                  >
+                    {job.status}
+                  </span>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         </SectionCard>
 
-        {/* Recent PR drafts */}
-        <SectionCard title="Recent PR Drafts">
-          <div className="flex flex-col gap-2">
-            {data.recentPRDrafts.map((d: any) => (
-              <Link
-                key={d.id}
-                href={`/pr-drafts/${d.id}`}
-                className="block hover:bg-gray-50 rounded-lg p-2 -mx-2 transition-colors"
-              >
-                <div className="text-sm text-gray-800 font-medium truncate">
-                  {d.title}
-                </div>
-                <div className={`text-xs mt-0.5 ${STATUS_COLORS[d.status]}`}>
-                  {d.status}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </SectionCard>
+        {/* Recent Analyses & Drafts */}
+        <div className="flex flex-col gap-8">
+          <SectionCard title="Recent Analyses">
+            <div className="flex flex-col gap-2">
+              {data.recentAnalyses.length === 0 && (
+                <div className="text-sm text-muted py-4 text-center">No recent analyses.</div>
+              )}
+              {data.recentAnalyses.map((a: any) => (
+                <Link
+                  key={a.id}
+                  href={`/analysis/${a.id}`}
+                  className="group flex flex-col p-3 rounded-xl hover:bg-white hover:shadow-sm border border-transparent hover:border-border/40 transition-all"
+                >
+                  <div className="text-sm text-foreground font-semibold truncate group-hover:text-accent transition-colors">
+                    {a.requirement_title}
+                  </div>
+                  <div className="text-xs text-muted mt-1 font-medium">
+                    {a.repository} &middot; {a.impacted_files_count} file{a.impacted_files_count !== 1 ? "s" : ""}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Recent PR Drafts">
+            <div className="flex flex-col gap-2">
+              {data.recentPRDrafts.length === 0 && (
+                <div className="text-sm text-muted py-4 text-center">No recent drafts.</div>
+              )}
+              {data.recentPRDrafts.map((d: any) => (
+                <Link
+                  key={d.id}
+                  href={`/pr-drafts/${d.id}`}
+                  className="group flex flex-col p-3 rounded-xl hover:bg-white hover:shadow-sm border border-transparent hover:border-border/40 transition-all"
+                >
+                  <div className="text-sm text-foreground font-semibold truncate group-hover:text-accent transition-colors">
+                    {d.title || "Untitled Draft"}
+                  </div>
+                  <div className={`text-xs font-medium capitalize mt-1 ${STATUS_COLORS[d.status] || "text-muted"}`}>
+                    {d.status}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
       </div>
     </div>
   );
@@ -140,8 +162,8 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-lg border p-5">
-      <h2 className="text-sm font-semibold text-gray-700 mb-4">{title}</h2>
+    <div className="bg-white/60 backdrop-blur-md rounded-2xl border border-border/60 shadow-sm p-6">
+      <h2 className="text-xl font-bold font-serif text-foreground mb-5 tracking-tight">{title}</h2>
       {children}
     </div>
   );
@@ -150,16 +172,16 @@ function SectionCard({
 function StatCard({
   label,
   value,
-  color = "text-gray-900",
+  color = "text-foreground",
 }: {
   label: string;
   value: number;
   color?: string;
 }) {
   return (
-    <div className="text-center">
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+    <div className="flex flex-col items-center justify-center py-5 px-2 bg-white/40 rounded-xl border border-border/60 shadow-sm">
+      <div className={`text-5xl font-bold font-serif mb-2 tracking-tight ${color}`}>{value}</div>
+      <div className="text-[11px] font-bold tracking-widest text-muted uppercase">{label}</div>
     </div>
   );
 }

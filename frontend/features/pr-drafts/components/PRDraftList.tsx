@@ -11,29 +11,38 @@ export function PRDraftList() {
   const { data: drafts, isLoading, isError } = usePRDrafts();
 
   if (isLoading) {
-    return <div className="text-sm text-gray-500 py-8">Loading drafts...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-muted">
+        <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin mb-4" />
+        <p className="text-sm font-medium">Loading PR drafts...</p>
+      </div>
+    );
   }
 
   if (isError) {
     return (
-      <div className="text-sm text-red-500 py-8">Failed to load drafts.</div>
+      <div className="text-sm text-rose-500 py-12 text-center">Failed to load drafts.</div>
     );
   }
 
   if (!drafts?.length) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg bg-gray-50/50">
-        <h3 className="text-sm font-medium text-gray-900 mb-1">No PR drafts</h3>
-        <p className="text-xs text-gray-500 text-center max-w-sm mb-4">
-          You haven&rsquo;t generated any PR drafts yet. Go to an Analysis job
-          and click &rdquo;Generate PR Draft&rdquo; to create one.
+      <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl bg-white/50 border border-border/40 shadow-sm backdrop-blur-sm">
+        <div className="w-12 h-12 bg-accent/5 rounded-full flex items-center justify-center text-accent mb-4">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold font-serif text-foreground mb-1">No PR drafts</h3>
+        <p className="text-muted text-sm max-w-sm">
+          You haven&rsquo;t generated any PR drafts yet. Go to an Analysis job and click &rdquo;Generate PR Draft&rdquo; to create one.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {drafts.map((draft) => (
         <DraftCard key={draft.id} draft={draft} />
       ))}
@@ -60,33 +69,35 @@ function DraftCard({ draft }: { draft: PRDraft }) {
     <>
       <div
         onClick={() => router.push(`/pr-drafts/${draft.id}`)}
-        className="flex items-start justify-between p-4 bg-white border rounded-xl hover:shadow-sm transition-shadow group cursor-pointer"
+        className="group flex flex-col bg-white/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 hover:shadow-md hover:-translate-y-0.5 hover:border-accent/30 transition-all duration-200 cursor-pointer relative"
       >
-        <div className="flex flex-col gap-1.5">
-          <h3 className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-            {draft.title || "Untitled Draft"}
-          </h3>
-          <div className="flex items-center gap-3 text-xs text-gray-500">
-            <span>
-              {formatDistanceToNow(parseUTCDate(draft.created_at), {
-                addSuffix: true,
-              })}
-            </span>
-            <span className="w-1 h-1 rounded-full bg-gray-300" />
-            <span
-              className={`px-2 py-0.5 rounded-full font-medium ${draft.status === "edited" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"}`}
-            >
-              {draft.status === "edited" ? "Edited" : "Generated"}
-            </span>
-          </div>
-        </div>
         <button 
           onClick={handleDeleteClick}
           disabled={isDeleting}
-          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+          className="absolute top-4 right-4 p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
         >
           <Trash2 className="w-4 h-4" />
         </button>
+
+        <div className="flex flex-col gap-3 mb-6 pr-8">
+          <span
+            className={`inline-flex w-max items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${
+              draft.status === "edited" ? "bg-accent/10 text-accent" : "bg-slate-100 text-muted"
+            }`}
+          >
+            {draft.status === "edited" ? "Edited" : "Generated"}
+          </span>
+          <h3 className="text-lg font-semibold font-serif text-foreground group-hover:text-accent transition-colors line-clamp-2">
+            {draft.title || "Untitled Draft"}
+          </h3>
+        </div>
+        
+        <div className="mt-auto pt-4 border-t border-border/40 flex justify-between items-center text-xs font-medium text-muted">
+          <span>{formatDistanceToNow(parseUTCDate(draft.created_at), { addSuffix: true })}</span>
+          <span className="text-accent opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+            View Draft <span>&rarr;</span>
+          </span>
+        </div>
       </div>
 
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>

@@ -47,15 +47,15 @@ export function CreateReviewModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Run AI Pre-Review</DialogTitle>
+      <DialogContent className="bg-white/95 backdrop-blur-xl border border-border/40 shadow-2xl sm:rounded-2xl p-6 sm:max-w-md">
+        <DialogHeader className="mb-2">
+          <DialogTitle className="text-xl font-semibold font-serif tracking-tight">Run AI Pre-Review</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Repository</Label>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2.5">
+            <Label className="text-sm font-semibold text-foreground">Repository</Label>
             <Select value={repoId} onValueChange={(v) => setRepoId(v ?? "")}>
-              <SelectTrigger>
+              <SelectTrigger className="bg-white border-border/60 shadow-sm focus:ring-accent/20 h-10">
                 <SelectValue placeholder="Select a repository" />
               </SelectTrigger>
               <SelectContent>
@@ -68,10 +68,10 @@ export function CreateReviewModal({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Linked Requirement (Optional)</Label>
+          <div className="space-y-2.5">
+            <Label className="text-sm font-semibold text-foreground">Linked Requirement (Optional)</Label>
             <Select value={reqId} onValueChange={(v) => setReqId(v ?? "")}>
-              <SelectTrigger>
+              <SelectTrigger className="bg-white border-border/60 shadow-sm focus:ring-accent/20 h-10">
                 <SelectValue placeholder="Select a requirement" />
               </SelectTrigger>
               <SelectContent>
@@ -85,21 +85,22 @@ export function CreateReviewModal({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Commit Hash</Label>
+          <div className="space-y-2.5">
+            <Label className="text-sm font-semibold text-foreground">Commit Hash</Label>
             <Input
               placeholder="e.g. 3a7b9c1..."
               value={commitHash}
               onChange={(e) => setCommitHash(e.target.value)}
               required
+              className="bg-white border-border/60 shadow-sm focus-visible:ring-accent/20 h-10"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+          <div className="flex justify-end gap-3 pt-6 border-t border-border/40 mt-6">
+            <Button type="button" variant="outline" onClick={onClose} className="border-border/60">
               Cancel
             </Button>
-            <Button type="submit" disabled={isPending || !repoId || !commitHash}>
+            <Button type="submit" disabled={isPending || !repoId || !commitHash} className="shadow-sm">
               {isPending ? "Starting..." : "Start Review"}
             </Button>
           </div>

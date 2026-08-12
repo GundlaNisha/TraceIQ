@@ -41,46 +41,48 @@ export function RequirementList() {
   };
 
   return (
-    <div className="flex gap-6">
+    <div className="flex gap-8">
       {/* Main table */}
-      <div className="flex-1 rounded-lg border bg-white overflow-hidden">
+      <div className="flex-1 rounded-2xl border border-border/40 bg-white/80 backdrop-blur-md shadow-sm overflow-hidden h-max">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-slate-50/50 border-b border-border/40">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">
+              <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
                 Title
               </th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">
+              <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
                 Version
               </th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">
+              <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
                 Updated
               </th>
-              <th className="px-4 py-3 text-right">Actions</th>
+              <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {requirements.map((req: Requirement) => (
               <tr
                 key={req.id}
-                className={`border-b last:border-0 hover:bg-gray-50 cursor-pointer ${selectedId === req.id ? "bg-blue-50" : ""}`}
+                className={`border-b border-border/40 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors group ${selectedId === req.id ? "bg-accent/5" : ""}`}
                 onClick={() =>
                   setSelectedId(req.id === selectedId ? null : req.id)
                 }
               >
-                <td className="px-4 py-3 font-medium text-gray-900">
+                <td className="px-6 py-4 font-semibold text-foreground">
                   {req.title}
+                  {selectedId === req.id && <span className="ml-3 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-white uppercase tracking-wider">Viewing</span>}
                 </td>
-                <td className="px-4 py-3 text-gray-500">
-                  v{req.version_number}
+                <td className="px-6 py-4">
+                  <span className="px-2 py-1 bg-slate-100 text-muted rounded-md text-xs font-mono font-medium">v{req.version_number}</span>
                 </td>
-                <td className="px-4 py-3 text-gray-500 text-xs">
+                <td className="px-6 py-4 text-muted text-xs font-medium">
                   {req.updated_at ? parseUTCDate(req.updated_at).toLocaleDateString() : 'Never'}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-2">
+                <td className="px-6 py-4 text-right">
+                  <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
                       size="sm"
+                      variant="outline"
                       disabled={isAnalyzing}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -101,7 +103,7 @@ export function RequirementList() {
                         e.stopPropagation();
                         setEditingReq(req);
                       }}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      className="p-2 text-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-colors"
                       title="Edit Requirement"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -109,7 +111,7 @@ export function RequirementList() {
                     <button
                       onClick={(e) => handleDeleteClick(e, req.id)}
                       disabled={isDeleting}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                      className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
                       title="Delete Requirement"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -124,24 +126,29 @@ export function RequirementList() {
 
       {/* Version history panel */}
       {selectedId && versions && (
-        <div className="w-72 rounded-lg border bg-white p-4 flex flex-col gap-3 self-start">
-          <h3 className="font-medium text-gray-900 text-sm">Version History</h3>
-          {versions.map((v: RequirementVersion) => (
-            <div
-              key={v.version_number}
-              className="border-l-2 border-gray-200 pl-3"
-            >
-              <div className="text-xs font-medium text-gray-700">
-                v{v.version_number}
+        <div className="w-80 rounded-2xl border border-border/40 bg-white/80 backdrop-blur-md shadow-sm p-6 flex flex-col gap-4 self-start">
+          <h3 className="font-semibold font-serif text-foreground text-lg tracking-tight">Version History</h3>
+          <div className="flex flex-col gap-4 mt-2">
+            {versions.map((v: RequirementVersion, index: number) => (
+              <div
+                key={v.version_number}
+                className={`border-l-2 pl-4 pb-4 ${index !== versions.length - 1 ? 'border-accent/20' : 'border-transparent'}`}
+              >
+                <div className="flex items-center gap-2 mb-1 -ml-[21px]">
+                  <div className="w-2.5 h-2.5 rounded-full bg-accent border-2 border-white ring-2 ring-accent/20" />
+                  <div className="text-sm font-semibold text-foreground">
+                    v{v.version_number}
+                  </div>
+                </div>
+                <div className="text-xs font-medium text-muted mb-2">
+                  {parseUTCDate(v.created_at).toLocaleString()}
+                </div>
+                <div className="text-sm text-foreground/80 leading-relaxed bg-slate-50/50 p-3 rounded-xl border border-border/40">
+                  {v.content}
+                </div>
               </div>
-              <div className="text-xs text-gray-400">
-                {parseUTCDate(v.created_at).toLocaleString()}
-              </div>
-              <div className="text-xs text-gray-600 mt-1 line-clamp-2">
-                {v.content}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 

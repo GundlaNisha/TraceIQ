@@ -5,13 +5,13 @@ import { type Repository } from "@/lib/types/api";
 import { Button } from "@/components/ui/button";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
-  pending: { label: "Pending", className: "bg-gray-100 text-gray-600" },
+  pending: { label: "Pending", className: "bg-slate-100 text-muted" },
   syncing: {
     label: "Syncing",
-    className: "bg-blue-100 text-blue-700 animate-pulse",
+    className: "bg-blue-50 text-blue-700",
   },
-  completed: { label: "Ready", className: "bg-green-100 text-green-700" },
-  failed: { label: "Failed", className: "bg-red-100 text-red-700" },
+  completed: { label: "Ready", className: "bg-emerald-50 text-emerald-700" },
+  failed: { label: "Failed", className: "bg-rose-50 text-rose-700" },
 };
 
 export function RepositoryList() {
@@ -39,23 +39,23 @@ export function RepositoryList() {
     );
 
   return (
-    <div className="rounded-lg border bg-white overflow-hidden">
+    <div className="rounded-2xl border border-border/40 bg-white/80 backdrop-blur-md shadow-sm overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 border-b">
+        <thead className="bg-slate-50/50 border-b border-border/40">
           <tr>
-            <th className="text-left px-4 py-3 font-medium text-gray-600">
+            <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
               Name
             </th>
-            <th className="text-left px-4 py-3 font-medium text-gray-600">
+            <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
               URL
             </th>
-            <th className="text-left px-4 py-3 font-medium text-gray-600">
+            <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
               Status
             </th>
-            <th className="text-left px-4 py-3 font-medium text-gray-600">
+            <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
               Branch
             </th>
-            <th className="px-4 py-3" />
+            <th className="px-6 py-4" />
           </tr>
         </thead>
         <tbody>
@@ -65,30 +65,32 @@ export function RepositoryList() {
             return (
               <tr
                 key={repo.id}
-                className={`border-b last:border-0 hover:bg-gray-50 cursor-pointer transition-colors ${isActive ? "bg-blue-50" : ""}`}
+                className={`border-b border-border/40 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors ${isActive ? "bg-accent/5" : ""}`}
                 onClick={() => setActiveRepositoryId(repo.id)}
               >
-                <td className="px-4 py-3 font-medium text-gray-900">
+                <td className="px-6 py-4 font-semibold text-foreground">
                   {repo.name}
+                  {isActive && <span className="ml-3 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-white uppercase tracking-wider">Active</span>}
                 </td>
-                <td className="px-4 py-3 text-gray-500 font-mono text-xs truncate max-w-xs">
+                <td className="px-6 py-4 text-muted font-mono text-xs truncate max-w-xs">
                   {repo.repo_url}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-6 py-4">
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${badge.className}`}
                   >
+                    {repo.sync_status === "syncing" && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
                     {badge.label}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-gray-500">
+                <td className="px-6 py-4 text-muted font-medium">
                   {repo.default_branch}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-6 py-4 text-right">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteRepo(repo.id);

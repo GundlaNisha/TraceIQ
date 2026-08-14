@@ -1,60 +1,45 @@
 # TraceIQ 🧠💡
 
-TraceIQ is an advanced AI-powered requirement-to-code impact analysis tool. It bridges the gap between product requirements and technical implementation by analyzing your Git repositories, structurally indexing the code, and utilizing large language models (LLMs) to accurately map product requirements directly to the impacted source code files.
+## 1️⃣ Project Overview
+TraceIQ is an advanced AI-powered requirement-to-code impact analysis tool. It solves the developer's "where do I make this change?" dilemma by analyzing your Git repositories and mapping product requirements directly to the impacted source code files, accelerating development and ensuring comprehensive requirement coverage.
 
-By automating the heavy lifting of figuring out *"where do I make this change?"*, TraceIQ accelerates the development lifecycle, ensures comprehensive requirement coverage, and generates high-quality initial Pull Request drafts.
-
----
-
-## 🎯 Key Features
-
-- **Automated Impact Analysis:** Input a product requirement (or user story), and TraceIQ semantically searches your codebase to identify exactly which files and modules need to be modified.
-- **AI-Powered PR Draft Generation:** Automatically generate comprehensive Pull Request titles and Markdown descriptions based on the impact analysis results and the original requirement.
-- **Semantic Code Search & Indexing:** Codebases are ingested and indexed structurally and semantically (using pgvector embeddings), allowing for deep contextual understanding of your architecture.
+## 2️⃣ Features
+- **Automated Impact Analysis:** Input a user story or requirement and instantly find which files and modules need modification.
+- **AI-Powered PR Draft Generation:** Automatically generate comprehensive Pull Request titles and Markdown descriptions based on the impact analysis.
 - **Dependency Graph Visualization:** Visually map out impacted files and their relationships within the codebase through an interactive dependency graph.
-- **Asynchronous Processing:** Long-running AI analysis jobs and PR generations are offloaded to background Celery workers, ensuring a fast and responsive user interface.
-- **Secure Authentication:** Integrated with Clerk for seamless, secure user authentication and session management.
+- **Secure Repository Indexing:** Seamlessly ingest and index repositories with semantic search capabilities to understand your code structure.
 
----
+## 3️⃣ Tech Stack
+- **Frontend (Next.js 16 App Router):** React framework for building a fast, SEO-friendly, and decoupled user interface.
+- **Styling (Tailwind CSS v4 & shadcn/ui):** For highly customizable, utility-first modern UI components.
+- **State Management (Zustand & TanStack Query):** Efficient client-side state handling and asynchronous data fetching.
+- **Backend (FastAPI):** High-performance Python framework for building RESTful APIs.
+- **Database (PostgreSQL with `pgvector`):** Relational database extended for robust vector embedding storage and semantic code search.
+- **Task Queue (Celery + Redis):** Offloads long-running AI analysis and repository indexing jobs to background workers for a responsive UI.
+- **AI Integration (LiteLLM):** Connects to models like DeepSeek and OpenAI for requirement analysis and generation tasks.
+- **Authentication (Clerk):** Provides seamless and secure user authentication and session management.
 
-## 🏗️ Architecture & Tech Stack
+## 4️⃣ Architecture 🔥
+```mermaid
+graph TD
+    User([User]) --> |Interacts with| Frontend[Next.js Frontend]
+    Frontend --> |Authenticates via| Clerk[Clerk Auth]
+    Frontend --> |REST API Calls| Backend[FastAPI Backend]
+    Backend --> |Validates Session| Clerk
+    Backend --> |Syncs Data| DB[(PostgreSQL + pgvector)]
+    Backend --> |Enqueues Tasks| Redis[Redis Broker]
+    Redis --> |Triggers| Celery[Celery Workers]
+    Celery --> |Reads/Writes Data| DB
+    Celery --> |LLM Inference| LLM[LLM APIs (LiteLLM)]
+    Frontend --> |Visualizes| ReactFlow[React Flow Graph]
+```
 
-TraceIQ is structured as a monorepo containing a modern, decoupled frontend and backend.
+## 5️⃣ Project Structure
+- `backend/`: Contains the FastAPI application, Alembic database migrations, Celery worker configurations, and API route definitions (`app/main.py`, `app/modules/`).
+- `frontend/`: Contains the Next.js application, React components (`components/`), Next.js pages/routes (`app/`), and Zustand state stores (`stores/`).
+- `docs/` & `plan-docs/`: Project documentation and architecture plans.
 
-### Frontend
-- **Framework:** Next.js 16 (App Router)
-- **Styling:** Tailwind CSS v4, shadcn/ui
-- **State Management & Data Fetching:** Zustand, TanStack React Query
-- **Authentication:** Clerk
-- **Visualizations:** React Flow (for dependency graphs), React Markdown
-
-### Backend
-- **Framework:** FastAPI (Python)
-- **Database:** PostgreSQL (with `pgvector` for embedding storage)
-- **ORM:** SQLAlchemy (Async)
-- **Task Queue & Workers:** Celery + Redis
-- **AI Integration:** LiteLLM (supporting models like DeepSeek, OpenAI, etc.)
-- **Package Management:** `uv`
-
----
-
-## ⚙️ How It Works (The Workflow)
-
-1. **Onboarding & Auth:** Users log in securely via Clerk. The frontend syncs the user session with the backend database.
-2. **Repository Linking:** Users connect their Git repositories to TraceIQ. The backend ingests the repository, generates vector embeddings for the source code, and stores them in PostgreSQL.
-3. **Requirement Definition:** Users define a new feature, bug fix, or product requirement.
-4. **Impact Analysis:** 
-   - TraceIQ triggers an asynchronous Celery job.
-   - The AI engine performs a semantic search against the vector database to find relevant code chunks.
-   - An LLM analyzes the requirement against the codebase and outputs a structured list of impacted files.
-5. **Review & Visualization:** The user views the impacted files and their confidence scores via an interactive dashboard and dependency graph.
-6. **PR Draft Generation:** With a single click, TraceIQ compiles the analysis results and requirement details to generate a polished PR description ready for GitHub.
-
----
-
-## 🚀 Getting Started
-
-This project is a monorepo containing both the frontend and backend applications.
+## 6️⃣ Installation & Setup
 
 ### Prerequisites
 - Node.js (v18+)
@@ -62,59 +47,86 @@ This project is a monorepo containing both the frontend and backend applications
 - PostgreSQL (with `pgvector` extension)
 - Redis (for Celery)
 
-### 1. Backend Setup
+### Backend Setup
+1. Navigate to the backend directory and set up the Python environment using `uv`:
+   ```bash
+   cd backend
+   uv sync
+   source .venv/bin/activate
+   ```
+2. Configure your environment variables:
+   ```bash
+   cp .env.example .env
+   # Add your PostgreSQL URL, Redis URL, Clerk Webhook secrets, and LLM API keys.
+   ```
+3. Run database migrations:
+   ```bash
+   alembic upgrade head
+   ```
+4. Start the FastAPI server and Celery worker (in separate terminal windows):
+   ```bash
+   # Start FastAPI Server
+   fastapi dev app/main.py
 
-Navigate to the backend directory and set up the Python environment using `uv`:
+   # Start Celery Worker
+   celery -A app.workers.celery_app worker --loglevel=info
+   ```
 
-```bash
-cd backend
-uv sync
-source .venv/bin/activate
-```
+### Frontend Setup
+1. Navigate to the frontend directory and install dependencies:
+   ```bash
+   cd frontend
+   npm install
+   ```
+2. Configure your environment variables:
+   ```bash
+   cp .env.example .env
+   # Add your Clerk Publishable Key, Clerk Secret Key, and backend API URL.
+   ```
+3. Start the Next.js development server:
+   ```bash
+   npm run dev
+   ```
 
-Copy the example environment file and configure your database and API keys:
+## 7️⃣ Usage
+1. **Login:** Authenticate securely using Clerk.
+2. **Connect Repository:** Link your Git repository. TraceIQ will automatically index and generate vector embeddings for your codebase.
+3. **Analyze Requirement:** Enter a feature description or bug fix requirement into the dashboard.
+4. **Review Impact:** Wait for the asynchronous analysis to complete and review the identified files and their relationships on the interactive dependency graph.
+5. **Generate PR:** With one click, generate a highly detailed Pull Request draft ready for submission.
 
-```bash
-cp .env.example .env
-# Edit .env with your PostgreSQL URL, Redis URL, Clerk Webhook secrets, and LLM API keys.
-```
+## 8️⃣ Screenshots / Demo
+*(Placeholder for actual application screenshots or GIF walkthroughs)*
+- **Dashboard View:** `![Dashboard](./docs/dashboard-preview.png)`
+- **Dependency Graph:** `![Graph](./docs/graph-preview.png)`
 
-Run database migrations to initialize the schema:
+## 9️⃣ API Documentation
+TraceIQ's backend provides a RESTful API built with FastAPI. The interactive OpenAPI (Swagger) documentation is automatically generated and can be accessed locally when the backend is running at:
+`http://localhost:8000/docs`
 
-```bash
-alembic upgrade head
-```
+### Core Endpoints Include:
+- `POST /api/repos/` - Connect and index a new repository.
+- `POST /api/impact/analyze` - Trigger an AI impact analysis job for a requirement.
+- `GET /api/pr/draft/{analysis_id}` - Fetch a generated PR draft based on analysis results.
 
-Start the FastAPI server and Celery worker (in separate terminal windows):
+## 🔟 Engineering Decisions
+- **Monorepo Architecture:** Next.js and FastAPI are decoupled but kept in a single repository for easier full-stack version control and context sharing.
+- **Asynchronous Task Queue (Celery & Redis):** Repository indexing and LLM calls are highly resource-intensive and time-consuming. Offloading them to Celery prevents API blocking and keeps the Next.js frontend extremely responsive.
+- **Vector Database (pgvector):** Chosen over dedicated vector DBs (like Pinecone) to keep architectural simplicity while effectively handling semantic code search alongside relational user data in PostgreSQL.
+- **Component Styling:** Transitioned to Tailwind CSS v4 and `shadcn/ui` for rapid, headless UI component development without writing custom CSS from scratch.
 
-```bash
-# Start FastAPI Server
-fastapi dev app/main.py
+## 1️⃣1️⃣ Testing
+- **Backend Testing (Pytest):** Tests API endpoints, database interactions, and authentication logic.
+  - *Run tests:* `cd backend && pytest`
+- **Frontend Testing (Vitest & Playwright):** Vitest is configured for unit testing components, and Playwright is set up for End-to-End (E2E) workflow validation.
+  - *Run unit tests:* `cd frontend && npm run test`
+  - *Run E2E tests:* `cd frontend && npm run e2e`
 
-# Start Celery Worker
-celery -A app.workers.celery_app worker --loglevel=info
-```
-
-### 2. Frontend Setup
-
-Navigate to the frontend directory and install dependencies:
-
-```bash
-cd frontend
-npm install
-```
-
-Configure your environment variables:
-
-```bash
-cp .env.example .env
-# Edit .env with your Clerk Publishable Key, Clerk Secret Key, and backend API URL.
-```
-
-Start the Next.js development server:
-
-```bash
-npm run dev
-```
-
-Visit `http://localhost:3000` in your browser to start using TraceIQ!
+## 1️⃣2️⃣ Limitations & Future Improvements
+- **Current Limitations:**
+  - Initial repository indexing can be slow for massive codebases, taking several minutes.
+  - Relies heavily on external LLM rate limits which can cause queuing delays for impact analysis.
+- **Future Improvements:**
+  - Support for more Git providers (GitLab, Bitbucket) beyond GitHub.
+  - IDE integrations (VS Code / JetBrains plugins) to pull analysis directly into the editor.
+  - Deeper AST-level (Abstract Syntax Tree) code chunking for even more accurate semantic search.

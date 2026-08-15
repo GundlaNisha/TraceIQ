@@ -24,3 +24,16 @@ class CommitReviewOutput(BaseModel):
 class PRDraftOutput(BaseModel):
     title: str
     description_markdown: str
+
+
+class PRReviewFindingOutput(BaseModel):
+    file_path: str
+    line_number: int | None
+    severity: str  # high | medium | low
+    message: str
+    requirement_gap: str | None  # How this finding violates the stated requirement (if any)
+
+
+class PRReviewOutput(BaseModel):
+    findings: list[PRReviewFindingOutput]
+    summary: str  # Overall AI summary of the PR review

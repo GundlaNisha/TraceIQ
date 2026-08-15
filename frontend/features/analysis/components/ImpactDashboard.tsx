@@ -96,8 +96,21 @@ export function ImpactDashboard({ jobId }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-between items-center border-b pb-2">
-        <h2 className="text-lg font-semibold text-gray-900">Analysis Results</h2>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b pb-4">
+        <div>
+          <h2 className="text-xl font-semibold font-serif text-foreground">
+            {job.requirement_title || "Impact Analysis Results"}
+          </h2>
+          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+            {job.repository_name && (
+              <span className="px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700">
+                {job.repository_name}
+              </span>
+            )}
+            <span>•</span>
+            <span>{sortedFiles.length} impacted files identified</span>
+          </div>
+        </div>
       </div>
 
       {/* Tab switcher */}

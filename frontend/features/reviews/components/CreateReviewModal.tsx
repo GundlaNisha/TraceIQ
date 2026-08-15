@@ -45,6 +45,21 @@ export function CreateReviewModal({
     );
   };
 
+  type SelectOption = { label: string; value: string };
+
+  const repoItems: SelectOption[] = (repos || []).map((repo: any) => ({
+    label: repo.name,
+    value: repo.id,
+  }));
+
+  const reqItems: SelectOption[] = [
+    { label: "None", value: "none" },
+    ...(reqs || []).map((req: any) => ({
+      label: req.title,
+      value: req.id,
+    })),
+  ];
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-white/95 backdrop-blur-xl border border-border/40 shadow-2xl sm:rounded-2xl p-6 sm:max-w-md">
@@ -54,14 +69,18 @@ export function CreateReviewModal({
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2.5">
             <Label className="text-sm font-semibold text-foreground">Repository</Label>
-            <Select value={repoId} onValueChange={(v) => setRepoId(v ?? "")}>
-              <SelectTrigger className="bg-white border-border/60 shadow-sm focus:ring-accent/20 h-10">
+            <Select
+              items={repoItems}
+              value={repoId}
+              onValueChange={(v) => setRepoId(v ?? "")}
+            >
+              <SelectTrigger className="bg-white border-border/60 shadow-sm focus:ring-accent/20 h-10 w-full">
                 <SelectValue placeholder="Select a repository" />
               </SelectTrigger>
               <SelectContent>
-                {repos?.map((repo: any) => (
-                  <SelectItem key={repo.id} value={repo.id}>
-                    {repo.name}
+                {repoItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value} label={item.label}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -70,15 +89,18 @@ export function CreateReviewModal({
 
           <div className="space-y-2.5">
             <Label className="text-sm font-semibold text-foreground">Linked Requirement (Optional)</Label>
-            <Select value={reqId} onValueChange={(v) => setReqId(v ?? "")}>
-              <SelectTrigger className="bg-white border-border/60 shadow-sm focus:ring-accent/20 h-10">
+            <Select
+              items={reqItems}
+              value={reqId}
+              onValueChange={(v) => setReqId(v ?? "")}
+            >
+              <SelectTrigger className="bg-white border-border/60 shadow-sm focus:ring-accent/20 h-10 w-full">
                 <SelectValue placeholder="Select a requirement" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {reqs?.map((req: any) => (
-                  <SelectItem key={req.id} value={req.id}>
-                    {req.title}
+                {reqItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value} label={item.label}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>

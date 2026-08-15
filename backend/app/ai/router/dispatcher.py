@@ -3,9 +3,11 @@ from app.ai.parsers.schemas import (
     CommitReviewOutput,
     ImpactAnalysisOutput,
     PRDraftOutput,
+    PRReviewOutput,
 )
 from app.ai.prompts import impact as impact_prompts
 from app.ai.prompts import pr_draft as pr_draft_prompts
+from app.ai.prompts import pr_review as pr_review_prompts
 from app.ai.prompts import review as review_prompts
 from app.ai.providers.openai_adapter import LiteLLMAdapter
 
@@ -32,3 +34,9 @@ async def dispatch_pr_generation(requirement_text: str, diff_summary: str, findi
     system = pr_draft_prompts.PR_DRAFT_SYSTEM
     user = pr_draft_prompts.build_pr_draft_prompt(requirement_text, diff_summary, findings)
     return cast(PRDraftOutput, await _adapter.complete(system, user, PRDraftOutput))
+
+
+async def dispatch_pr_review(pr_title: str, pr_diff: str, requirement_text: str = "") -> PRReviewOutput:
+    system = pr_review_prompts.PR_REVIEW_SYSTEM
+    user = pr_review_prompts.build_pr_review_prompt(pr_title, pr_diff, requirement_text)
+    return cast(PRReviewOutput, await _adapter.complete(system, user, PRReviewOutput))

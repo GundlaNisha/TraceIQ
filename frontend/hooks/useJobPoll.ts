@@ -7,6 +7,8 @@ export type JobPollData = {
   progress: number;
   requirement_id?: string;
   repository_id?: string;
+  requirement_title?: string | null;
+  repository_name?: string | null;
   created_at: string;
 };
 

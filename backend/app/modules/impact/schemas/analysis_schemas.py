@@ -11,6 +11,8 @@ class AnalysisJobResponse(BaseModel):
     requirement_id: uuid.UUID
     repository_id: uuid.UUID
     created_at: datetime
+    requirement_title: str | None = None
+    repository_name: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

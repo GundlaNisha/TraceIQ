@@ -12,6 +12,8 @@ const NAV_ITEMS = [
   { label: "Repositories", href: "/repositories" },
   { label: "Requirements", href: "/requirements" },
   { label: "Analysis", href: "/analysis" },
+  { label: "Pull Requests", href: "/pull-requests" },
+  { label: "PR Reviews", href: "/pr-reviews" },
   { label: "PR Drafts", href: "/pr-drafts" },
   { label: "Reviews", href: "/reviews" },
 ];

@@ -4,6 +4,8 @@ export interface Repository {
   name: string;
   sync_status: "pending" | "syncing" | "completed" | "failed";
   default_branch: string;
+  github_installation_id?: number | null;
+  is_private?: boolean;
   created_at: string;
 }
 
@@ -27,8 +29,12 @@ export interface Requirement {
 
 export interface AnalysisJob {
   id: string;
-  status: "pending" | "running" | "completed" | "failed";
+  status: "pending" | "queued" | "running" | "completed" | "failed";
   progress: number;
+  requirement_id?: string;
+  repository_id?: string;
+  requirement_title?: string | null;
+  repository_name?: string | null;
   result?: any;
   created_at: string;
 }

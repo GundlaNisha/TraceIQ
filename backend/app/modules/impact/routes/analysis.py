@@ -1,16 +1,20 @@
-from fastapi import APIRouter, Depends, status
-from sqlalchemy import select
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.db.session import get_db
+from app.modules.audit.models.audit import AuditLog
 from app.modules.auth.models.user import User
 from app.modules.impact.models.impact import AnalysisJob, ImpactResult, JobStatus
 from app.modules.impact.schemas.analysis_schemas import (
     AnalysisJobResponse,
     ImpactResultResponse,
 )
+from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
 from app.workers.impact_analysis import run_impact_analysis
 
@@ -18,8 +22,13 @@ router = APIRouter(prefix="/api/v1", tags=["analysis"])
 
 @router.post("/requirements/{req_id}/analyze", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_analysis(req_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    try:
+        req_uuid = uuid.UUID(req_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid requirement UUID")
+
     # Verify req belongs to current_user
-    stmt = select(Requirement).where(Requirement.id == req_id)
+    stmt = select(Requirement).where(Requirement.id == req_uuid)
     result = await db.execute(stmt)
     req = result.scalar_one_or_none()
     
@@ -29,7 +38,6 @@ async def trigger_analysis(req_id: str, current_user: User = Depends(get_current
         raise ForbiddenError("Not authorized to analyze this requirement")
         
     # Create AnalysisJob with status="queued"
-    from app.modules.audit.models.audit import AuditLog
     job = AnalysisJob(
         user_id=current_user.id,
         requirement_id=req.id,
@@ -58,24 +66,53 @@ async def trigger_analysis(req_id: str, current_user: User = Depends(get_current
 
 @router.get("/analysis/jobs/{job_id}", response_model=AnalysisJobResponse)
 async def get_job_status(job_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    stmt = select(AnalysisJob).where(AnalysisJob.id == job_id)
+    try:
+        job_uuid = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job UUID")
+
+    stmt = (
+        select(
+            AnalysisJob,
+            Requirement.title.label("requirement_title"),
+            Repository.name.label("repository_name"),
+        )
+        .outerjoin(Requirement, AnalysisJob.requirement_id == Requirement.id)
+        .outerjoin(Repository, AnalysisJob.repository_id == Repository.id)
+        .where(AnalysisJob.id == job_uuid)
+    )
     result = await db.execute(stmt)
-    job = result.scalar_one_or_none()
+    row = result.first()
     
-    if not job:
+    if not row:
         raise NotFoundError("Analysis job not found")
+    job, req_title, repo_name = row
     if job.user_id != current_user.id:
         raise ForbiddenError("Not authorized to view this job")
         
-    return job
+    return {
+        "id": job.id,
+        "status": job.status,
+        "progress": job.progress,
+        "requirement_id": job.requirement_id,
+        "repository_id": job.repository_id,
+        "created_at": job.created_at,
+        "requirement_title": req_title,
+        "repository_name": repo_name,
+    }
 
 @router.get("/analysis/{analysis_id}", response_model=ImpactResultResponse)
 async def get_analysis_result(analysis_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    # Returns ImpactResult — verify ownership via job → requirement → user_id
+    try:
+        analysis_uuid = uuid.UUID(analysis_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid analysis UUID")
+
+    # Returns ImpactResult — verify ownership via job → user_id
     stmt = (
         select(ImpactResult)
         .join(AnalysisJob, ImpactResult.job_id == AnalysisJob.id)
-        .where(ImpactResult.job_id == analysis_id, AnalysisJob.user_id == current_user.id)
+        .where(ImpactResult.job_id == analysis_uuid, AnalysisJob.user_id == current_user.id)
     )
     result = await db.execute(stmt)
     impact_result = result.scalar_one_or_none()
@@ -87,15 +124,34 @@ async def get_analysis_result(analysis_id: str, current_user: User = Depends(get
 
 @router.get("/analysis", response_model=list[AnalysisJobResponse])
 async def list_analysis_jobs(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    stmt = select(AnalysisJob).where(AnalysisJob.user_id == current_user.id).order_by(AnalysisJob.created_at.desc())
+    stmt = (
+        select(
+            AnalysisJob,
+            Requirement.title.label("requirement_title"),
+            Repository.name.label("repository_name"),
+        )
+        .outerjoin(Requirement, AnalysisJob.requirement_id == Requirement.id)
+        .outerjoin(Repository, AnalysisJob.repository_id == Repository.id)
+        .where(AnalysisJob.user_id == current_user.id)
+        .order_by(AnalysisJob.created_at.desc())
+    )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    jobs = []
+    for job, req_title, repo_name in result.all():
+        jobs.append({
+            "id": job.id,
+            "status": job.status,
+            "progress": job.progress,
+            "requirement_id": job.requirement_id,
+            "repository_id": job.repository_id,
+            "created_at": job.created_at,
+            "requirement_title": req_title,
+            "repository_name": repo_name,
+        })
+    return jobs
 
 @router.delete("/analysis/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_analysis_job(job_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    import uuid
-    from fastapi import HTTPException
-    
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
@@ -110,8 +166,6 @@ async def delete_analysis_job(job_id: str, current_user: User = Depends(get_curr
     if job.user_id != current_user.id:
         raise ForbiddenError("Not authorized to delete this job")
         
-    from sqlalchemy import delete
-    
     await db.execute(delete(ImpactResult).where(ImpactResult.job_id == job_uuid))
     await db.delete(job)
     await db.commit()

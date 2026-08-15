@@ -19,6 +19,7 @@ from app.modules.retrieval.services.semantic import semantic_search
 
 router = APIRouter(prefix="/api/v1/search", tags=["search"])
 
+
 @router.get("/code", response_model=list[SearchResultItem])
 async def search_code(
     q: str = Query(..., min_length=1),
@@ -30,15 +31,15 @@ async def search_code(
         repo_uuid = uuid.UUID(repository_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID")
-        
+
     # Security Boundary: Verify Ownership
     repo = await db.get(Repository, repo_uuid)
     if not repo or repo.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
-        
+
     # 1. Get AI Semantic Results (Vector Search)
     results = await semantic_search(db, q, repo_uuid)
-    
+
     # 2. Get Exact Keyword Results (Ripgrep)
     result_snap = await db.execute(
         select(RepositorySnapshot)
@@ -47,13 +48,13 @@ async def search_code(
         .limit(1)
     )
     snapshot = result_snap.scalar_one_or_none()
-    
+
     if snapshot:
         snapshot_dir = settings.snapshot_dir
         tar_path = os.path.join(snapshot_dir, snapshot.storage_key)
         if not os.path.exists(tar_path):
             tar_path = os.path.join("backend", snapshot_dir, snapshot.storage_key)
-            
+
         if os.path.exists(tar_path):
             # Temporarily extract the repo to run ripgrep
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -65,10 +66,11 @@ async def search_code(
                     results.extend(rg_results[:5])
                 except (tarfile.TarError, OSError):
                     pass
-                
+
     # Sort combined results by score desc
     results.sort(key=lambda x: x["score"], reverse=True)
     return results[:15]
+
 
 @router.get("/symbols", response_model=list[SearchResultItem])
 async def search_symbols(
@@ -81,12 +83,12 @@ async def search_symbols(
         repo_uuid = uuid.UUID(repository_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID")
-        
+
     # Security Boundary: Verify Ownership
     repo = await db.get(Repository, repo_uuid)
     if not repo or repo.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
-        
+
     # Query the Tree-sitter CodeSymbol table directly!
     stmt = (
         select(CodeSymbol, RepositoryFile)
@@ -95,19 +97,21 @@ async def search_symbols(
         .where(CodeSymbol.symbol_name.ilike(f"%{q}%"))
         .limit(20)
     )
-    
+
     db_results = await db.execute(stmt)
     items = []
     for sym, repo_file in db_results:
         # Strip the random temp directory root (e.g. 'tmpb5t11okc/...')
         path_parts = repo_file.file_path.split("/", 1)
         clean_path = path_parts[1] if len(path_parts) > 1 else repo_file.file_path
-        
-        items.append({
-            "file_path": clean_path,
-            "match_type": "symbol",
-            "snippet": f"{sym.symbol_type}: {sym.symbol_name} (Lines {sym.line_start}-{sym.line_end})",
-            "score": 1.0
-        })
-        
+
+        items.append(
+            {
+                "file_path": clean_path,
+                "match_type": "symbol",
+                "snippet": f"{sym.symbol_type}: {sym.symbol_name} (Lines {sym.line_start}-{sym.line_end})",
+                "score": 1.0,
+            }
+        )
+
     return items

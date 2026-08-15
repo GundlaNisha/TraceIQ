@@ -8,11 +8,14 @@ class ReqBase(BaseModel):
     title: str = Field(..., max_length=512)
     text: str = Field(..., min_length=1)
 
+
 class ReqCreate(ReqBase):
     repository_id: str
 
+
 class ReqUpdate(ReqBase):
     pass
+
 
 class VersionResponse(ReqBase):
     id: uuid.UUID
@@ -22,6 +25,7 @@ class VersionResponse(ReqBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class ReqResponse(ReqBase):
     id: uuid.UUID

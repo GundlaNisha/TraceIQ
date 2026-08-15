@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     snapshot_dir: str = "data/snapshots"
 
     # Celery task timeouts (seconds)
-    celery_task_soft_time_limit: int = 600   # 10 min warning
-    celery_task_time_limit: int = 900         # 15 min hard kill
+    celery_task_soft_time_limit: int = 600  # 10 min warning
+    celery_task_time_limit: int = 900  # 15 min hard kill
 
 
 settings = Settings()

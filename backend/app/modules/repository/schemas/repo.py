@@ -9,6 +9,7 @@ from app.modules.repository.models.repo import SyncStatus
 class RepoCreate(BaseModel):
     repo_url: HttpUrl
 
+
 class RepoResponse(BaseModel):
     id: UUID
     repo_url: str

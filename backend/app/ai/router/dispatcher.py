@@ -16,27 +16,50 @@ _adapter = LiteLLMAdapter()
 from typing import cast
 
 
-async def dispatch_impact_analysis(requirement_text: str, chunks: list[dict]) -> ImpactAnalysisOutput:
+async def dispatch_impact_analysis(
+    requirement_text: str, chunks: list[dict]
+) -> ImpactAnalysisOutput:
     context = build_context(chunks)
     system = impact_prompts.IMPACT_SYSTEM
     user = impact_prompts.build_impact_prompt(requirement_text, context)
-    return cast(ImpactAnalysisOutput, await _adapter.complete(system, user, ImpactAnalysisOutput))
+    return cast(
+        ImpactAnalysisOutput,
+        await _adapter.complete(system, user, ImpactAnalysisOutput),
+    )
 
-async def dispatch_commit_review(diff_text: str, requirement_text: str, chunks: list[dict], linter_output: str = "", missing_tests: list[str] | None = None) -> CommitReviewOutput:
+
+async def dispatch_commit_review(
+    diff_text: str,
+    requirement_text: str,
+    chunks: list[dict],
+    linter_output: str = "",
+    missing_tests: list[str] | None = None,
+) -> CommitReviewOutput:
     if missing_tests is None:
         missing_tests = []
     context = build_context(chunks)
     system = review_prompts.REVIEW_SYSTEM
-    user = review_prompts.build_review_prompt(diff_text, requirement_text, context, linter_output, missing_tests)
-    return cast(CommitReviewOutput, await _adapter.complete(system, user, CommitReviewOutput))
+    user = review_prompts.build_review_prompt(
+        diff_text, requirement_text, context, linter_output, missing_tests
+    )
+    return cast(
+        CommitReviewOutput, await _adapter.complete(system, user, CommitReviewOutput)
+    )
 
-async def dispatch_pr_generation(requirement_text: str, diff_summary: str, findings: list[dict]) -> PRDraftOutput:
+
+async def dispatch_pr_generation(
+    requirement_text: str, diff_summary: str, findings: list[dict]
+) -> PRDraftOutput:
     system = pr_draft_prompts.PR_DRAFT_SYSTEM
-    user = pr_draft_prompts.build_pr_draft_prompt(requirement_text, diff_summary, findings)
+    user = pr_draft_prompts.build_pr_draft_prompt(
+        requirement_text, diff_summary, findings
+    )
     return cast(PRDraftOutput, await _adapter.complete(system, user, PRDraftOutput))
 
 
-async def dispatch_pr_review(pr_title: str, pr_diff: str, requirement_text: str = "") -> PRReviewOutput:
+async def dispatch_pr_review(
+    pr_title: str, pr_diff: str, requirement_text: str = ""
+) -> PRReviewOutput:
     system = pr_review_prompts.PR_REVIEW_SYSTEM
     user = pr_review_prompts.build_pr_review_prompt(pr_title, pr_diff, requirement_text)
     return cast(PRReviewOutput, await _adapter.complete(system, user, PRReviewOutput))

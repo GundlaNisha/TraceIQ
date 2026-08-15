@@ -14,12 +14,12 @@ def ripgrep_search(query: str, snapshot_dir: str) -> list[dict]:
             capture_output=True,
             text=True,
             shell=False,
-            check=False
+            check=False,
         )
     except FileNotFoundError:
         # If 'rg' isn't installed on the system, gracefully degrade
         return []
-        
+
     items = []
     for line in result.stdout.splitlines():
         if not line.strip():
@@ -31,20 +31,22 @@ def ripgrep_search(query: str, snapshot_dir: str) -> list[dict]:
                 # Clean up the path so it's relative to the repo root
                 if file_path.startswith(snapshot_dir):
                     file_path = os.path.relpath(file_path, snapshot_dir)
-                    
+
                 # Strip the random temp directory root (e.g. 'tmpb5t11okc/...')
                 path_parts = file_path.split("/", 1)
                 clean_path = path_parts[1] if len(path_parts) > 1 else file_path
-                    
+
                 snippet = data["data"]["lines"]["text"].strip()
-                
-                items.append({
-                    "file_path": clean_path,
-                    "match_type": "exact",
-                    "snippet": snippet,
-                    "score": 1.0
-                })
+
+                items.append(
+                    {
+                        "file_path": clean_path,
+                        "match_type": "exact",
+                        "snippet": snippet,
+                        "score": 1.0,
+                    }
+                )
         except Exception:
             continue
-            
+
     return items

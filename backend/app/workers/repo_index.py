@@ -27,7 +27,17 @@ logger = logging.getLogger(__name__)
 INDEXABLE_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx"}
 
 # Directories to skip during indexing walk
-IGNORED_DIRS = {"node_modules", ".git", "dist", "build", "__pycache__", "venv", ".next", ".tox", ".mypy_cache"}
+IGNORED_DIRS = {
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "__pycache__",
+    "venv",
+    ".next",
+    ".tox",
+    ".mypy_cache",
+}
 
 
 @shared_task(name="app.workers.repo_index.index_repository")
@@ -35,13 +45,16 @@ def index_repository(repository_id: str, snapshot_id: str):
     """Celery background worker entrypoint"""
     asyncio.run(_async_index_repository(repository_id, snapshot_id))
 
+
 async def _async_index_repository(repository_id: str, snapshot_id: str):
     async with AsyncSessionLocal() as session:
         repo_uuid = uuid.UUID(repository_id)
         snap_uuid = uuid.UUID(snapshot_id)
 
         # 1. Fetch snapshot tarball info
-        result = await session.execute(select(RepositorySnapshot).where(RepositorySnapshot.id == snap_uuid))
+        result = await session.execute(
+            select(RepositorySnapshot).where(RepositorySnapshot.id == snap_uuid)
+        )
         snapshot = result.scalar_one_or_none()
         if not snapshot:
             logger.error(f"Snapshot {snapshot_id} not found — aborting index.")
@@ -61,7 +74,11 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                 return
 
         # Update status to indexing
-        await session.execute(update(Repository).where(Repository.id == repo_uuid).values(sync_status="syncing"))
+        await session.execute(
+            update(Repository)
+            .where(Repository.id == repo_uuid)
+            .values(sync_status="syncing")
+        )
         await session.commit()
 
         # 2. Extract tarball into a temporary folder that deletes itself after
@@ -72,7 +89,11 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                     tar.extractall(path=tmpdir, filter="data")
             except tarfile.TarError as exc:
                 logger.error(f"Failed to extract tarball {tar_path}: {exc}")
-                await session.execute(update(Repository).where(Repository.id == repo_uuid).values(sync_status="failed"))
+                await session.execute(
+                    update(Repository)
+                    .where(Repository.id == repo_uuid)
+                    .values(sync_status="failed")
+                )
                 await session.commit()
                 return
 
@@ -91,7 +112,9 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                     rel_path = os.path.relpath(full_path, tmpdir)
 
                     try:
-                        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                        with open(
+                            full_path, "r", encoding="utf-8", errors="replace"
+                        ) as f:
                             source = f.read()
                     except (OSError, PermissionError) as exc:
                         logger.warning(f"Could not read file {rel_path}: {exc}")
@@ -102,7 +125,7 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                         repository_id=repo_uuid,
                         snapshot_id=snap_uuid,
                         file_path=rel_path,
-                        language=ext.strip(".")
+                        language=ext.strip("."),
                     )
                     session.add(repo_file)
                     await session.flush()
@@ -115,13 +138,15 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                         symbols = []
 
                     for sym in symbols:
-                        session.add(CodeSymbol(
-                            file_id=repo_file.id,
-                            symbol_name=sym["name"],
-                            symbol_type=sym["type"],
-                            line_start=sym["line_start"],
-                            line_end=sym["line_end"]
-                        ))
+                        session.add(
+                            CodeSymbol(
+                                file_id=repo_file.id,
+                                symbol_name=sym["name"],
+                                symbol_type=sym["type"],
+                                line_start=sym["line_start"],
+                                line_end=sym["line_end"],
+                            )
+                        )
 
                     # 5. Chunker -> Split file into blocks
                     chunks = chunk_file(source, symbols)
@@ -144,19 +169,26 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                             chunk_text=chunk_data["text"],
                             token_count=chunk_data["token_count"],
                             line_start=chunk_data["line_start"],
-                            line_end=chunk_data["line_end"]
+                            line_end=chunk_data["line_end"],
                         )
                         session.add(chunk_record)
                         await session.flush()
 
-                        session.add(CodeEmbedding(
-                            chunk_id=chunk_record.id,
-                            embedding=embeddings[i]
-                        ))
+                        session.add(
+                            CodeEmbedding(
+                                chunk_id=chunk_record.id, embedding=embeddings[i]
+                            )
+                        )
 
                     files_indexed += 1
 
         # 8. Mark repository as fully indexed!
-        await session.execute(update(Repository).where(Repository.id == repo_uuid).values(sync_status="completed"))
+        await session.execute(
+            update(Repository)
+            .where(Repository.id == repo_uuid)
+            .values(sync_status="completed")
+        )
         await session.commit()
-        logger.info(f"Repository {repository_id} indexed successfully ({files_indexed} files).")
+        logger.info(
+            f"Repository {repository_id} indexed successfully ({files_indexed} files)."
+        )

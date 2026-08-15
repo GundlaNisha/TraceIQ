@@ -36,10 +36,15 @@ async def _run_impact_analysis_async(job_id: str):
 
             # 4. Call semantic_search
             # returns list of dicts: {"file_path": str, "match_type": str, "snippet": str, "score": float}
-            search_results = await semantic_search(db, req.text, job.repository_id, top_k=15)
+            search_results = await semantic_search(
+                db, req.text, job.repository_id, top_k=15
+            )
 
             # Map search_results to chunks format expected by dispatcher: {"file_path": str, "chunk_text": str}
-            chunks = [{"file_path": item["file_path"], "chunk_text": item["snippet"]} for item in search_results]
+            chunks = [
+                {"file_path": item["file_path"], "chunk_text": item["snippet"]}
+                for item in search_results
+            ]
 
             # 5. Set progress=40
             job.progress = 40
@@ -54,8 +59,7 @@ async def _run_impact_analysis_async(job_id: str):
 
             # 8. Insert ImpactResult
             impact_result = ImpactResult(
-                job_id=job.id,
-                impacted_files=ai_result.model_dump()
+                job_id=job.id, impacted_files=ai_result.model_dump()
             )
             db.add(impact_result)
 
@@ -79,7 +83,9 @@ async def _run_impact_analysis_async(job_id: str):
                     job.status = JobStatus.failed
                     await db.commit()
             except Exception as inner_exc:
-                logger.error(f"Could not update job {job_id} status to failed: {inner_exc!s}")
+                logger.error(
+                    f"Could not update job {job_id} status to failed: {inner_exc!s}"
+                )
 
 
 @celery_app.task

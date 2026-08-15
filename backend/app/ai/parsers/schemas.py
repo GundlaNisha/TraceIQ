@@ -8,8 +8,10 @@ class ImpactedFile(BaseModel):
     related_symbols: list[str]
     related_tests: list[str]
 
+
 class ImpactAnalysisOutput(BaseModel):
     impacted_files: list[ImpactedFile]
+
 
 class ReviewFindingOutput(BaseModel):
     file_path: str
@@ -17,9 +19,11 @@ class ReviewFindingOutput(BaseModel):
     severity: str  # high | medium | low
     message: str
 
+
 class CommitReviewOutput(BaseModel):
     findings: list[ReviewFindingOutput]
     summary: str
+
 
 class PRDraftOutput(BaseModel):
     title: str
@@ -31,7 +35,9 @@ class PRReviewFindingOutput(BaseModel):
     line_number: int | None
     severity: str  # high | medium | low
     message: str
-    requirement_gap: str | None  # How this finding violates the stated requirement (if any)
+    requirement_gap: (
+        str | None
+    )  # How this finding violates the stated requirement (if any)
 
 
 class PRReviewOutput(BaseModel):

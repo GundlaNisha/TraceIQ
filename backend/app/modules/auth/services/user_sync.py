@@ -50,7 +50,7 @@ def _extract_name(payload: dict[str, Any]) -> str:
     username = (payload.get("username") or "").strip()
     if username:
         return username
-    
+
     # Last resort: use the email local-part.
     email = (payload.get("primary_email_address") or {}).get("email_address") or ""
     if "@" in email:

@@ -9,6 +9,7 @@ class ReviewCreate(BaseModel):
     repository_id: uuid.UUID
     requirement_id: uuid.UUID | None = None
 
+
 class CommitEventResponse(BaseModel):
     id: uuid.UUID
     status: str
@@ -18,6 +19,7 @@ class CommitEventResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class CommitDiffResponse(BaseModel):
     id: uuid.UUID
     file_path: str
@@ -26,6 +28,7 @@ class CommitDiffResponse(BaseModel):
     deletions: int
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class ReviewFindingResponse(BaseModel):
     id: uuid.UUID
@@ -70,4 +73,3 @@ class PRReviewFindingResponse(BaseModel):
     requirement_gap: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
-

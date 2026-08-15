@@ -9,7 +9,6 @@ plan-docs/
 
 # Node/npm
 node_modules/
-package-lock.json
 dist/
 build/
 .next/

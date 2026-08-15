@@ -16,6 +16,7 @@ class AnalysisJobResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class ImpactResultResponse(BaseModel):
     id: uuid.UUID
     job_id: uuid.UUID

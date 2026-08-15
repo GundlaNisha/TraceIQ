@@ -17,15 +17,25 @@ class JobStatus(str, enum.Enum):
     completed = "completed"
     failed = "failed"
 
+
 class AnalysisJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "analysis_jobs"
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    requirement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("requirements.id"), nullable=False)
-    repository_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repositories.id"), nullable=False)
-    status: Mapped[JobStatus] = mapped_column(SAEnum(JobStatus), default=JobStatus.queued)
+    requirement_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("requirements.id"), nullable=False
+    )
+    repository_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("repositories.id"), nullable=False
+    )
+    status: Mapped[JobStatus] = mapped_column(
+        SAEnum(JobStatus), default=JobStatus.queued
+    )
     progress: Mapped[int] = mapped_column(Integer, default=0)
+
 
 class ImpactResult(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "impact_results"
-    job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("analysis_jobs.id"), unique=True)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("analysis_jobs.id"), unique=True
+    )
     impacted_files: Mapped[dict] = mapped_column(JSON, nullable=False)

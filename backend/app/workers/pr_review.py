@@ -25,11 +25,13 @@ async def _fetch_pr_diff(repo_full_name: str, pr_number: int, token: str) -> str
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github.v3.diff",
                 "X-GitHub-Api-Version": "2022-11-28",
-            }
+            },
         )
         if response.status_code == 200:
             return response.text
-        logger.error(f"Failed to fetch PR diff for {repo_full_name}#{pr_number}: {response.text[:300]}")
+        logger.error(
+            f"Failed to fetch PR diff for {repo_full_name}#{pr_number}: {response.text[:300]}"
+        )
         return ""
 
 
@@ -64,18 +66,30 @@ async def _post_pr_review_to_github(
 
     sections = []
     if high:
-        sections.append("### 🔴 High Severity\n" + "\n\n---\n\n".join(format_finding(f) for f in high))
+        sections.append(
+            "### 🔴 High Severity\n"
+            + "\n\n---\n\n".join(format_finding(f) for f in high)
+        )
     if medium:
-        sections.append("### 🟡 Medium Severity\n" + "\n\n---\n\n".join(format_finding(f) for f in medium))
+        sections.append(
+            "### 🟡 Medium Severity\n"
+            + "\n\n---\n\n".join(format_finding(f) for f in medium)
+        )
     if low:
-        sections.append("### 🔵 Low Severity\n" + "\n\n---\n\n".join(format_finding(f) for f in low))
+        sections.append(
+            "### 🔵 Low Severity\n" + "\n\n---\n\n".join(format_finding(f) for f in low)
+        )
 
     stats = f"🔴 {len(high)} High · 🟡 {len(medium)} Medium · 🔵 {len(low)} Low"
     body = (
         f"## 🤖 TraceIQ AI Code Review\n\n"
         f"> {stats}\n\n"
         f"### Summary\n{summary}\n\n"
-        + ("\n\n".join(sections) if sections else "_No issues found — this PR looks good!_ ✅")
+        + (
+            "\n\n".join(sections)
+            if sections
+            else "_No issues found — this PR looks good!_ ✅"
+        )
     )
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -86,7 +100,7 @@ async def _post_pr_review_to_github(
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github.v3+json",
                 "X-GitHub-Api-Version": "2022-11-28",
-            }
+            },
         )
         if response.status_code not in (200, 201):
             logger.error(
@@ -94,15 +108,18 @@ async def _post_pr_review_to_github(
                 f"({response.status_code}): {response.text[:500]}"
             )
         else:
-            logger.info(f"✅ Posted TraceIQ review to GitHub PR {repo_full_name}#{pr_number}")
-
+            logger.info(
+                f"✅ Posted TraceIQ review to GitHub PR {repo_full_name}#{pr_number}"
+            )
 
 
 async def _process_pr_review(pr_review_id: str) -> None:
     async with AsyncSessionLocal() as session:
         try:
             # 1. Fetch PRReview record
-            result = await session.execute(select(PRReview).where(PRReview.id == pr_review_id))
+            result = await session.execute(
+                select(PRReview).where(PRReview.id == pr_review_id)
+            )
             pr_review = result.scalar_one_or_none()
             if not pr_review:
                 logger.error(f"PRReview {pr_review_id} not found.")
@@ -142,13 +159,17 @@ async def _process_pr_review(pr_review_id: str) -> None:
 
             # Truncate to ~120k chars to stay within model context limits
             if len(pr_diff) > 120_000:
-                pr_diff = pr_diff[:120_000] + "\n\n[... diff truncated for context limit ...]"
+                pr_diff = (
+                    pr_diff[:120_000] + "\n\n[... diff truncated for context limit ...]"
+                )
 
             # 6. Fetch linked requirement text (if any)
             req_text = ""
             if pr_review.requirement_id:
                 req_result = await session.execute(
-                    select(Requirement).where(Requirement.id == pr_review.requirement_id)
+                    select(Requirement).where(
+                        Requirement.id == pr_review.requirement_id
+                    )
                 )
                 req = req_result.scalar_one_or_none()
                 if req:
@@ -186,12 +207,16 @@ async def _process_pr_review(pr_review_id: str) -> None:
                         saved_findings,
                     )
                 except Exception as gh_err:
-                    logger.error(f"GitHub PR review post failed (non-fatal): {gh_err!s}")
+                    logger.error(
+                        f"GitHub PR review post failed (non-fatal): {gh_err!s}"
+                    )
 
         except Exception:
             logger.exception(f"PR review failed for {pr_review_id}")
             await session.rollback()
-            result = await session.execute(select(PRReview).where(PRReview.id == pr_review_id))
+            result = await session.execute(
+                select(PRReview).where(PRReview.id == pr_review_id)
+            )
             pr_review = result.scalar_one_or_none()
             if pr_review:
                 pr_review.status = "failed"

@@ -22,89 +22,126 @@ from app.modules.requirement.services.req_service import (
 
 router = APIRouter(prefix="/api/v1/requirements", tags=["requirements"])
 
+
 @router.get("", response_model=list[ReqResponse])
-async def list_requirements(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Requirement).where(Requirement.user_id == current_user.id))
+async def list_requirements(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Requirement).where(Requirement.user_id == current_user.id)
+    )
     return result.scalars().all()
 
+
 @router.post("", response_model=ReqResponse, status_code=201)
-async def add_requirement(body: ReqCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def add_requirement(
+    body: ReqCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         repo_uuid = uuid.UUID(body.repository_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid repo UUID")
-        
+
     repo = await db.get(Repository, repo_uuid)
     if not repo or repo.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Forbidden: Repo not found or not owned by user")
-        
-    return await create_requirement(db, current_user.id, repo_uuid, body.title, body.text)
+        raise HTTPException(
+            status_code=403, detail="Forbidden: Repo not found or not owned by user"
+        )
+
+    return await create_requirement(
+        db, current_user.id, repo_uuid, body.title, body.text
+    )
+
 
 @router.get("/{req_id}", response_model=ReqResponse)
-async def get_requirement(req_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_requirement(
+    req_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         req_uuid = uuid.UUID(req_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid req UUID")
-        
+
     req = await db.get(Requirement, req_uuid)
     if not req or req.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Requirement not found")
-        
+
     return req
 
+
 @router.patch("/{req_id}", response_model=ReqResponse)
-async def patch_requirement(req_id: str, body: ReqUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def patch_requirement(
+    req_id: str,
+    body: ReqUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         req_uuid = uuid.UUID(req_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid req UUID")
-        
+
     req = await db.get(Requirement, req_uuid)
     if not req or req.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Requirement not found")
-        
+
     return await update_requirement(db, req, body.title, body.text)
 
+
 @router.delete("/{req_id}", status_code=204)
-async def delete_requirement(req_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def delete_requirement(
+    req_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         req_uuid = uuid.UUID(req_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid req UUID")
-        
+
     req = await db.get(Requirement, req_uuid)
     if not req or req.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Requirement not found")
-        
+
     from sqlalchemy import delete, select
 
     from app.modules.impact.models.impact import AnalysisJob, ImpactResult
     from app.modules.pr.models.draft import PRDraft
-    
+
     # Cascade to ImpactResult first
     subq = select(AnalysisJob.id).where(AnalysisJob.requirement_id == req_uuid)
     await db.execute(delete(ImpactResult).where(ImpactResult.job_id.in_(subq)))
-    
+
     # Then delete dependent tables
     await db.execute(delete(AnalysisJob).where(AnalysisJob.requirement_id == req_uuid))
     await db.execute(delete(PRDraft).where(PRDraft.requirement_id == req_uuid))
-    await db.execute(delete(RequirementVersion).where(RequirementVersion.requirement_id == req_uuid))
-        
+    await db.execute(
+        delete(RequirementVersion).where(RequirementVersion.requirement_id == req_uuid)
+    )
+
     await db.delete(req)
     await db.commit()
 
+
 @router.get("/{req_id}/versions", response_model=list[VersionResponse])
-async def list_requirement_versions(req_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def list_requirement_versions(
+    req_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         req_uuid = uuid.UUID(req_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid req UUID")
-        
+
     req = await db.get(Requirement, req_uuid)
     if not req or req.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Requirement not found")
-        
+
     result = await db.execute(
         select(RequirementVersion)
         .where(RequirementVersion.requirement_id == req_uuid)

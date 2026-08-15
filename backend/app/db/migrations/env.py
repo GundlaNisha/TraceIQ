@@ -32,6 +32,7 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+
 def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table" and object.schema == "neon_auth":
         return False
@@ -65,7 +66,7 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     context.configure(
-        connection=connection, 
+        connection=connection,
         target_metadata=target_metadata,
         include_object=include_object,
     )

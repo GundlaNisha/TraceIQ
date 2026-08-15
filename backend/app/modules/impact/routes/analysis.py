@@ -20,8 +20,13 @@ from app.workers.impact_analysis import run_impact_analysis
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
 
+
 @router.post("/requirements/{req_id}/analyze", status_code=status.HTTP_202_ACCEPTED)
-async def trigger_analysis(req_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def trigger_analysis(
+    req_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         req_uuid = uuid.UUID(req_id)
     except ValueError:
@@ -31,41 +36,46 @@ async def trigger_analysis(req_id: str, current_user: User = Depends(get_current
     stmt = select(Requirement).where(Requirement.id == req_uuid)
     result = await db.execute(stmt)
     req = result.scalar_one_or_none()
-    
+
     if not req:
         raise NotFoundError("Requirement not found")
     if req.user_id != current_user.id:
         raise ForbiddenError("Not authorized to analyze this requirement")
-        
+
     # Create AnalysisJob with status="queued"
     job = AnalysisJob(
         user_id=current_user.id,
         requirement_id=req.id,
         repository_id=req.repository_id,
-        status=JobStatus.queued
+        status=JobStatus.queued,
     )
-    
+
     audit = AuditLog(
         user_id=str(current_user.id),
         action="analysis.create",
         resource_type="analysis_job",
-        resource_id=""
+        resource_id="",
     )
     db.add(job)
     db.add(audit)
     await db.commit()
     await db.refresh(job)
-    
+
     audit.resource_id = str(job.id)
     await db.commit()
-    
+
     # Trigger Celery task
     run_impact_analysis.delay(str(job.id))
-    
+
     return {"job_id": str(job.id)}
 
+
 @router.get("/analysis/jobs/{job_id}", response_model=AnalysisJobResponse)
-async def get_job_status(job_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
@@ -83,13 +93,13 @@ async def get_job_status(job_id: str, current_user: User = Depends(get_current_u
     )
     result = await db.execute(stmt)
     row = result.first()
-    
+
     if not row:
         raise NotFoundError("Analysis job not found")
     job, req_title, repo_name = row
     if job.user_id != current_user.id:
         raise ForbiddenError("Not authorized to view this job")
-        
+
     return {
         "id": job.id,
         "status": job.status,
@@ -101,8 +111,13 @@ async def get_job_status(job_id: str, current_user: User = Depends(get_current_u
         "repository_name": repo_name,
     }
 
+
 @router.get("/analysis/{analysis_id}", response_model=ImpactResultResponse)
-async def get_analysis_result(analysis_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_analysis_result(
+    analysis_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         analysis_uuid = uuid.UUID(analysis_id)
     except ValueError:
@@ -112,18 +127,23 @@ async def get_analysis_result(analysis_id: str, current_user: User = Depends(get
     stmt = (
         select(ImpactResult)
         .join(AnalysisJob, ImpactResult.job_id == AnalysisJob.id)
-        .where(ImpactResult.job_id == analysis_uuid, AnalysisJob.user_id == current_user.id)
+        .where(
+            ImpactResult.job_id == analysis_uuid, AnalysisJob.user_id == current_user.id
+        )
     )
     result = await db.execute(stmt)
     impact_result = result.scalar_one_or_none()
-    
+
     if not impact_result:
         raise NotFoundError("Impact result not found")
-        
+
     return impact_result
 
+
 @router.get("/analysis", response_model=list[AnalysisJobResponse])
-async def list_analysis_jobs(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def list_analysis_jobs(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
     stmt = (
         select(
             AnalysisJob,
@@ -138,34 +158,41 @@ async def list_analysis_jobs(current_user: User = Depends(get_current_user), db:
     result = await db.execute(stmt)
     jobs = []
     for job, req_title, repo_name in result.all():
-        jobs.append({
-            "id": job.id,
-            "status": job.status,
-            "progress": job.progress,
-            "requirement_id": job.requirement_id,
-            "repository_id": job.repository_id,
-            "created_at": job.created_at,
-            "requirement_title": req_title,
-            "repository_name": repo_name,
-        })
+        jobs.append(
+            {
+                "id": job.id,
+                "status": job.status,
+                "progress": job.progress,
+                "requirement_id": job.requirement_id,
+                "repository_id": job.repository_id,
+                "created_at": job.created_at,
+                "requirement_title": req_title,
+                "repository_name": repo_name,
+            }
+        )
     return jobs
 
+
 @router.delete("/analysis/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_analysis_job(job_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def delete_analysis_job(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid job UUID")
-        
+
     stmt = select(AnalysisJob).where(AnalysisJob.id == job_uuid)
     result = await db.execute(stmt)
     job = result.scalar_one_or_none()
-    
+
     if not job:
         raise NotFoundError("Analysis job not found")
     if job.user_id != current_user.id:
         raise ForbiddenError("Not authorized to delete this job")
-        
+
     await db.execute(delete(ImpactResult).where(ImpactResult.job_id == job_uuid))
     await db.delete(job)
     await db.commit()

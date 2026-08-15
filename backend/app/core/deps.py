@@ -21,7 +21,9 @@ def _get_jwks_client() -> jwt.PyJWKClient:
     return _jwks_client  # type: ignore[return-value]
 
 
-async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+async def get_current_user(
+    request: Request, db: AsyncSession = Depends(get_db)
+) -> User:
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -35,7 +37,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         # Fetch the JWKS from Clerk
         if not settings.clerk_jwks_url:
             # Fallback for development if not configured
-            user_id = "user_2k" # dummy clerk id
+            user_id = "user_2k"  # dummy clerk id
             return User(id=user_id, email="dummy@clerk.com", name="Dummy User")
 
         jwks_client = _get_jwks_client()
@@ -50,7 +52,9 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
 
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token: missing subject")
+            raise HTTPException(
+                status_code=401, detail="Invalid token: missing subject"
+            )
 
         # Fetch user from database
         result = await db.execute(select(User).where(User.id == user_id))

@@ -16,15 +16,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/github", tags=["github"])
 
+
 def verify_signature(payload_body: bytes, signature_header: str, secret: str) -> bool:
     if not signature_header or not signature_header.startswith("sha256="):
         return False
 
-    expected_signature = "sha256=" + hmac.new(
-        secret.encode(), payload_body, hashlib.sha256
-    ).hexdigest()
+    expected_signature = (
+        "sha256=" + hmac.new(secret.encode(), payload_body, hashlib.sha256).hexdigest()
+    )
 
     return hmac.compare_digest(expected_signature, signature_header)
+
 
 @router.post("/webhook")
 async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
@@ -34,7 +36,9 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     secret = settings.github_webhook_secret
     if not secret:
         logger.error("GITHUB_WEBHOOK_SECRET is not configured")
-        raise HTTPException(status_code=500, detail="Server webhook configuration error")
+        raise HTTPException(
+            status_code=500, detail="Server webhook configuration error"
+        )
 
     payload_body = await request.body()
     signature_header = request.headers.get("X-Hub-Signature-256", "")
@@ -56,11 +60,15 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
             if head_commit and repo_url:
                 # Find the repository in our DB
-                result = await db.execute(select(Repository).where(Repository.repo_url == repo_url))
+                result = await db.execute(
+                    select(Repository).where(Repository.repo_url == repo_url)
+                )
                 repo = result.scalar_one_or_none()
 
                 if repo:
-                    logger.info(f"Triggering AI review for PR in {repo_url} (commit: {head_commit[:7]})")
+                    logger.info(
+                        f"Triggering AI review for PR in {repo_url} (commit: {head_commit[:7]})"
+                    )
                     # Create a CommitEvent to track this review
                     commit_event = CommitEvent(
                         repository_id=repo.id,
@@ -74,7 +82,9 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                     # Queue the background worker
                     run_commit_review.delay(str(commit_event.id))
                 else:
-                    logger.warning(f"Webhook received for untracked repository: {repo_url}")
+                    logger.warning(
+                        f"Webhook received for untracked repository: {repo_url}"
+                    )
 
     elif event == "push":
         # Optionally handle direct pushes too
@@ -83,10 +93,14 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         ref = payload.get("ref", "")
 
         if head_commit and repo_url and ref.startswith("refs/heads/"):
-            result = await db.execute(select(Repository).where(Repository.repo_url == repo_url))
+            result = await db.execute(
+                select(Repository).where(Repository.repo_url == repo_url)
+            )
             repo = result.scalar_one_or_none()
             if repo:
-                logger.info(f"Push to {ref} in {repo_url} — queuing review for {head_commit[:7]}")
+                logger.info(
+                    f"Push to {ref} in {repo_url} — queuing review for {head_commit[:7]}"
+                )
                 commit_event = CommitEvent(
                     repository_id=repo.id,
                     user_id=repo.user_id,

@@ -2,14 +2,12 @@ import pytest
 from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from app.core.deps import get_current_user
 from app.main import app
 from app.modules.auth.models.user import User
 from app.modules.auth.services.user_sync import upsert_user_from_jwt
-from tests.conftest import TEST_DATABASE_URL
+from tests.conftest import TestingSessionLocal
 
 
 @pytest.fixture
@@ -28,11 +26,8 @@ async def commit_session():
     in a rollback-only transaction). Used for tests that explicitly verify
     a function commits to the DB.
     """
-    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
-    Session = async_sessionmaker(engine, expire_on_commit=False)
-    async with Session() as session:
+    async with TestingSessionLocal() as session:
         yield session
-    await engine.dispose()
 
 
 async def test_auth_me_unauthenticated(test_client: AsyncClient):
@@ -86,20 +81,20 @@ async def test_get_current_user_lazy_upserts_on_jwt(commit_session):
 
 async def test_get_current_user_lazy_upsert_idempotent(commit_session):
     """Calling upsert twice for the same ``sub`` should not duplicate rows."""
-    payload = {"sub": "user_idempotent", "email": "idem@example.com", "email_verified": False}
+    payload = {
+        "sub": "user_idempotent",
+        "email": "idem@example.com",
+        "email_verified": False,
+    }
 
     await upsert_user_from_jwt(commit_session, payload)
     await upsert_user_from_jwt(commit_session, payload)
 
-    # Query via a fresh session (the commit_session one is closing) to confirm
-    # the row is visible to other sessions.
-    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
-    Session = async_sessionmaker(engine, expire_on_commit=False)
-    async with Session() as verify_session:
+    # Query via a fresh session to confirm the row is visible to other sessions.
+    async with TestingSessionLocal() as verify_session:
         result = await verify_session.execute(
             select(User).where(User.id == "user_idempotent")
         )
         users = result.scalars().all()
-    await engine.dispose()
 
     assert len(users) == 1

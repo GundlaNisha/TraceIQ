@@ -5,22 +5,29 @@ Revises: c33d652cbc2e
 Create Date: 2026-08-08 14:47:40.676423
 
 """
+
 from collections.abc import Sequence
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '895ddd914ffb'
-down_revision: str | Sequence[str] | None = 'c33d652cbc2e'
+revision: str = "895ddd914ffb"
+down_revision: str | Sequence[str] | None = "c33d652cbc2e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.execute("CREATE INDEX IF NOT EXISTS idx_repo_files_repo_snap ON repository_files (repository_id, snapshot_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_code_symbols_name ON code_symbols (symbol_name);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status ON analysis_jobs (status);")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_repo_files_repo_snap ON repository_files (repository_id, snapshot_id);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_code_symbols_name ON code_symbols (symbol_name);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status ON analysis_jobs (status);"
+    )
 
 
 def downgrade() -> None:

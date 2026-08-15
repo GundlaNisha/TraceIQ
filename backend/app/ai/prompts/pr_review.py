@@ -8,17 +8,23 @@ Be specific: always reference the exact file path and line number.
 Respond only with the structured JSON format requested."""
 
 
-def build_pr_review_prompt(pr_title: str, pr_diff: str, requirement_text: str = "") -> str:
-    req_section = f"""
+def build_pr_review_prompt(
+    pr_title: str, pr_diff: str, requirement_text: str = ""
+) -> str:
+    req_section = (
+        f"""
 <requirement>
 {requirement_text}
 </requirement>
 
 Review the diff carefully and check whether the PR correctly and completely implements this requirement.
 Flag any requirement gaps with a clear explanation in the `requirement_gap` field.
-""" if requirement_text.strip() else """
+"""
+        if requirement_text.strip()
+        else """
 No specific requirement was provided. Focus on code quality, bugs, and security issues.
 """
+    )
 
     return f"""Pull Request: "{pr_title}"
 {req_section}

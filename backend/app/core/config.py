@@ -26,4 +26,22 @@ class Settings(BaseSettings):
     clerk_jwks_url: str = ""
     clerk_webhook_secret: str = ""
 
+    # GitHub App
+    github_app_id: str = ""
+    github_private_key: str = ""
+    github_webhook_secret: str = ""
+
+    # Deployment
+    frontend_url: str = "http://localhost:3000"
+    # Comma-separated list of allowed CORS origins; defaults to localhost dev
+    allowed_origins: list[str] = ["http://localhost:3000"]
+
+    # Snapshot storage — path where repo tarballs are written by repo_sync
+    snapshot_dir: str = "data/snapshots"
+
+    # Celery task timeouts (seconds)
+    celery_task_soft_time_limit: int = 600   # 10 min warning
+    celery_task_time_limit: int = 900         # 15 min hard kill
+
+
 settings = Settings()

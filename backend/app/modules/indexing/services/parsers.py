@@ -7,30 +7,35 @@ import tree_sitter_typescript
 from tree_sitter import Language, Parser
 
 try:
-    # Modern tree-sitter bindings (>= 0.22)
     PY_LANGUAGE = Language(tree_sitter_python.language())
     TS_LANGUAGE = Language(tree_sitter_typescript.language_typescript())
     TSX_LANGUAGE = Language(tree_sitter_typescript.language_tsx())
 except Exception:
-    # Older bindings fallback
-    PY_LANGUAGE = Language(tree_sitter_python.language())
-    TS_LANGUAGE = Language(tree_sitter_typescript.language_typescript())
-    TSX_LANGUAGE = Language(tree_sitter_typescript.language_tsx())
+    PY_LANGUAGE = None
+    TS_LANGUAGE = None
+    TSX_LANGUAGE = None
 
 def get_parser(extension: str) -> Parser | None:
-    parser = Parser()
-    if extension == ".py":
+    if extension == ".py" and PY_LANGUAGE:
+        parser = Parser()
         parser.language = PY_LANGUAGE
-    elif extension == ".ts":
+        return parser
+    elif extension == ".ts" and TS_LANGUAGE:
+        parser = Parser()
         parser.language = TS_LANGUAGE
-    elif extension == ".tsx":
+        return parser
+    elif extension == ".tsx" and TSX_LANGUAGE:
+        parser = Parser()
         parser.language = TSX_LANGUAGE
+        return parser
     elif extension in (".js", ".jsx"):
-        # Fallback to TS parser for JS since we didn't install tree-sitter-javascript
-        parser.language = TSX_LANGUAGE if extension == ".jsx" else TS_LANGUAGE
-    else:
-        return None
-    return parser
+        # Fallback to TS parser for JS
+        lang = TSX_LANGUAGE if extension == ".jsx" else TS_LANGUAGE
+        if lang:
+            parser = Parser()
+            parser.language = lang
+            return parser
+    return None
 
 def extract_symbols(node, source_code: bytes, symbols: list, parent_type=None):
     valid_types = (

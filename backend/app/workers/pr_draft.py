@@ -64,7 +64,7 @@ async def _process_pr_draft(draft_id: str):
             # 5. Save generated text to DB
             draft.title = ai_result.title
             draft.description_markdown = ai_result.description_markdown
-            draft.status = "completed"
+            draft.status = "generated"
             
             await session.commit()
             

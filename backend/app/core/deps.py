@@ -8,6 +8,18 @@ from app.db.session import get_db
 from app.modules.auth.models.user import User
 from app.modules.auth.services.user_sync import upsert_user_from_jwt
 
+# Module-level JWKS client — reused across all requests to avoid redundant
+# HTTP round-trips to the Clerk JWKS endpoint on every authenticated call.
+_jwks_client: jwt.PyJWKClient | None = None
+
+
+def _get_jwks_client() -> jwt.PyJWKClient:
+    """Return a cached PyJWKClient, creating it lazily on first use."""
+    global _jwks_client
+    if _jwks_client is None and settings.clerk_jwks_url:
+        _jwks_client = jwt.PyJWKClient(settings.clerk_jwks_url, cache_keys=True)
+    return _jwks_client  # type: ignore[return-value]
+
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     auth_header = request.headers.get("Authorization")
@@ -26,7 +38,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
             user_id = "user_2k" # dummy clerk id
             return User(id=user_id, email="dummy@clerk.com", name="Dummy User")
 
-        jwks_client = jwt.PyJWKClient(settings.clerk_jwks_url)
+        jwks_client = _get_jwks_client()
         signing_key = jwks_client.get_signing_key_from_jwt(token)
 
         # Verify the token

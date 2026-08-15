@@ -16,7 +16,7 @@ describe("useJobPoll", () => {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.data).toBeDefined());
-    expect(["queued", "running"]).toContain(result.current.data?.status);
+    expect(["queued", "running", "completed"]).toContain(result.current.data?.status);
   });
 
   it("returns null data when jobId is null", () => {

@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
-
-from app.modules.repository.models.repo import Repository, SyncStatus
 from app.modules.impact.models.impact import AnalysisJob, ImpactResult
-from app.modules.requirement.models.req import Requirement
 from app.modules.pr.models.draft import PRDraft
+from app.modules.repository.models.repo import Repository, SyncStatus
+from app.modules.requirement.models.req import Requirement
 from app.modules.review.models.rev_models import CommitEvent
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
@@ -31,7 +31,7 @@ async def get_dashboard_summary(current_user: User = Depends(get_current_user), 
     # Fetch Analysis Jobs
     analysis_stmt = (
         select(AnalysisJob, Requirement.title)
-        .join(Requirement, AnalysisJob.requirement_id == Requirement.id)
+        .outerjoin(Requirement, AnalysisJob.requirement_id == Requirement.id)
         .where(AnalysisJob.user_id == current_user.id)
         .order_by(desc(AnalysisJob.created_at))
         .limit(5)
@@ -41,7 +41,7 @@ async def get_dashboard_summary(current_user: User = Depends(get_current_user), 
         recent_jobs.append({
             "id": str(job.id),
             "type": "analysis",
-            "label": req_title,
+            "label": req_title or "Impact Analysis",
             "status": job.status,
             "created_at": job.created_at
         })
@@ -79,19 +79,22 @@ async def get_dashboard_summary(current_user: User = Depends(get_current_user), 
     ra_stmt = (
         select(AnalysisJob.id, Requirement.title, Repository.name, ImpactResult.impacted_files)
         .join(ImpactResult, AnalysisJob.id == ImpactResult.job_id)
-        .join(Requirement, AnalysisJob.requirement_id == Requirement.id)
-        .join(Repository, AnalysisJob.repository_id == Repository.id)
+        .outerjoin(Requirement, AnalysisJob.requirement_id == Requirement.id)
+        .outerjoin(Repository, AnalysisJob.repository_id == Repository.id)
         .where(AnalysisJob.user_id == current_user.id)
         .order_by(desc(AnalysisJob.created_at))
         .limit(5)
     )
     ra_res = await db.execute(ra_stmt)
     for j_id, req_title, repo_name, impacted_files in ra_res:
+        # impacted_files is always a dict produced by ai_result.model_dump().
+        # The actual list of files lives under the "impacted_files" key.
+        files_list = impacted_files.get("impacted_files", []) if isinstance(impacted_files, dict) else []
         recent_analyses.append({
             "id": str(j_id),
-            "requirement_title": req_title,
-            "repository": repo_name,
-            "impacted_files_count": len(impacted_files) if isinstance(impacted_files, dict) else len(impacted_files)
+            "requirement_title": req_title or "Impact Analysis",
+            "repository": repo_name or "Unknown Repository",
+            "impacted_files_count": len(files_list)
         })
         
     # 4. Recent PR Drafts (for the list in dashboard)

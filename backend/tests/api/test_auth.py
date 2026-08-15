@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.core.deps import get_current_user
-from app.db.session import get_db
 from app.main import app
 from app.modules.auth.models.user import User
 from app.modules.auth.services.user_sync import upsert_user_from_jwt

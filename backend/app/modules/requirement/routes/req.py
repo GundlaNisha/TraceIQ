@@ -78,6 +78,7 @@ async def delete_requirement(req_id: str, current_user: User = Depends(get_curre
         raise HTTPException(status_code=404, detail="Requirement not found")
         
     from sqlalchemy import delete, select
+
     from app.modules.impact.models.impact import AnalysisJob, ImpactResult
     from app.modules.pr.models.draft import PRDraft
     

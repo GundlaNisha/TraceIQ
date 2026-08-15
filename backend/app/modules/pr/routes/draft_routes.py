@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, status
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,12 +14,28 @@ from app.modules.pr.schemas.draft_schemas import (
     PRDraftResponse,
     PRDraftUpdate,
 )
+from app.modules.requirement.models.req import Requirement
+from app.modules.review.models.rev_models import CommitEvent
 from app.workers.pr_draft import run_pr_draft_generation
 
 router = APIRouter(prefix="/api/v1/pr-drafts", tags=["pr-drafts"])
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def create_pr_draft(body: PRDraftCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if body.requirement_id:
+        req = await db.get(Requirement, body.requirement_id)
+        if not req:
+            raise NotFoundError("Requirement not found")
+        if req.user_id != current_user.id:
+            raise ForbiddenError("Not authorized to use this requirement")
+
+    if body.commit_event_id:
+        ce = await db.get(CommitEvent, body.commit_event_id)
+        if not ce:
+            raise NotFoundError("Commit event not found")
+        if ce.user_id != current_user.id:
+            raise ForbiddenError("Not authorized to use this commit event")
+
     draft = PRDraft(
         user_id=current_user.id,
         requirement_id=body.requirement_id,
@@ -43,7 +61,12 @@ async def list_pr_drafts(current_user: User = Depends(get_current_user), db: Asy
 
 @router.get("/{draft_id}", response_model=PRDraftResponse)
 async def get_pr_draft(draft_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    stmt = select(PRDraft).where(PRDraft.id == draft_id)
+    try:
+        draft_uuid = uuid.UUID(draft_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid draft UUID")
+
+    stmt = select(PRDraft).where(PRDraft.id == draft_uuid)
     result = await db.execute(stmt)
     draft = result.scalar_one_or_none()
     
@@ -56,7 +79,12 @@ async def get_pr_draft(draft_id: str, current_user: User = Depends(get_current_u
 
 @router.patch("/{draft_id}", response_model=PRDraftResponse)
 async def update_pr_draft(draft_id: str, body: PRDraftUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    stmt = select(PRDraft).where(PRDraft.id == draft_id)
+    try:
+        draft_uuid = uuid.UUID(draft_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid draft UUID")
+
+    stmt = select(PRDraft).where(PRDraft.id == draft_uuid)
     result = await db.execute(stmt)
     draft = result.scalar_one_or_none()
     
@@ -79,7 +107,12 @@ async def update_pr_draft(draft_id: str, body: PRDraftUpdate, current_user: User
 
 @router.delete("/{draft_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_pr_draft(draft_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    stmt = select(PRDraft).where(PRDraft.id == draft_id)
+    try:
+        draft_uuid = uuid.UUID(draft_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid draft UUID")
+
+    stmt = select(PRDraft).where(PRDraft.id == draft_uuid)
     result = await db.execute(stmt)
     draft = result.scalar_one_or_none()
     

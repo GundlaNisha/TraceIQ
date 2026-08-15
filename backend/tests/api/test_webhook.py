@@ -8,7 +8,7 @@ then assemble the three required Svix headers manually.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -57,11 +57,11 @@ def _sign_payload(body: bytes, msg_id: str = "msg_test_123") -> dict[str, str]:
     from svix.webhooks import Webhook
 
     signature = Webhook(SECRET).sign(
-        msg_id, datetime.now(timezone.utc), body.decode("utf-8")
+        msg_id, datetime.now(UTC), body.decode("utf-8")
     )
     return {
         "svix-id": msg_id,
-        "svix-timestamp": str(int(datetime.now(timezone.utc).timestamp())),
+        "svix-timestamp": str(int(datetime.now(UTC).timestamp())),
         "svix-signature": signature,
     }
 
@@ -176,11 +176,11 @@ async def test_webhook_invalid_signature_returns_401(test_client: AsyncClient, c
 
     bad_secret = "whsec_" + "b3RoZXJfc2VjcmV0X3N0cmluZ19mb3JfdW5pdF90ZXN0c19vbmx5"
     signature = Webhook(bad_secret).sign(
-        "msg_test_123", datetime.now(timezone.utc), body.decode("utf-8")
+        "msg_test_123", datetime.now(UTC), body.decode("utf-8")
     )
     headers = {
         "svix-id": "msg_test_123",
-        "svix-timestamp": str(int(datetime.now(timezone.utc).timestamp())),
+        "svix-timestamp": str(int(datetime.now(UTC).timestamp())),
         "svix-signature": signature,
     }
 

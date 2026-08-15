@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
@@ -48,19 +49,22 @@ async def search_code(
     snapshot = result_snap.scalar_one_or_none()
     
     if snapshot:
-        tar_path = f"data/snapshots/{snapshot.storage_key}"
+        snapshot_dir = settings.snapshot_dir
+        tar_path = os.path.join(snapshot_dir, snapshot.storage_key)
         if not os.path.exists(tar_path):
-            tar_path = f"backend/data/snapshots/{snapshot.storage_key}"
+            tar_path = os.path.join("backend", snapshot_dir, snapshot.storage_key)
             
         if os.path.exists(tar_path):
             # Temporarily extract the repo to run ripgrep
             with tempfile.TemporaryDirectory() as tmpdir:
-                with tarfile.open(tar_path, "r:gz") as tar:
-                    tar.extractall(path=tmpdir)
-                rg_results = ripgrep_search(q, tmpdir)
-                
-                # Limit ripgrep to top 5 so it doesn't push out all our AI Semantic results!
-                results.extend(rg_results[:5])
+                try:
+                    with tarfile.open(tar_path, "r:gz") as tar:
+                        tar.extractall(path=tmpdir, filter="data")
+                    rg_results = ripgrep_search(q, tmpdir)
+                    # Limit ripgrep to top 5 so it doesn't push out all our AI Semantic results!
+                    results.extend(rg_results[:5])
+                except (tarfile.TarError, OSError):
+                    pass
                 
     # Sort combined results by score desc
     results.sort(key=lambda x: x["score"], reverse=True)

@@ -11,9 +11,10 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 describe("DraftEditor", () => {
   it("renders the draft title and markdown content", async () => {
     render(<DraftEditor draftId="draft_1" />, { wrapper: Wrapper });
-    await waitFor(() =>
-      expect(screen.getByText(/idempotency key/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => {
+      const elements = screen.getAllByText(/idempotency key/i);
+      expect(elements.length).toBeGreaterThan(0);
+    });
   });
 
   it("shows preview alongside editor", async () => {

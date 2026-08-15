@@ -15,6 +15,8 @@ class RepoResponse(BaseModel):
     name: str
     sync_status: SyncStatus
     default_branch: str
+    github_installation_id: int | None = None
+    is_private: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

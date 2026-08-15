@@ -1,4 +1,5 @@
 import { AddRepositoryModal } from "@/features/repositories/components/AddRepositoryModal";
+import { ConnectGithubButton } from "@/features/repositories/components/ConnectGithubButton";
 import { RepositoryList } from "@/features/repositories/components/RepositoryList";
 
 export default function RepositoriesPage() {
@@ -11,7 +12,10 @@ export default function RepositoriesPage() {
             Connect a repository to start analyzing your codebase.
           </p>
         </div>
-        <AddRepositoryModal />
+        <div className="flex gap-3">
+          <ConnectGithubButton />
+          <AddRepositoryModal />
+        </div>
       </header>
       <RepositoryList />
     </div>

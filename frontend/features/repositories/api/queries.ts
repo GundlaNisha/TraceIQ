@@ -77,3 +77,35 @@ export function useDeleteRepository() {
   });
 }
 
+// GITHUB STATUS
+export function useGithubStatus() {
+  const { fetchApi } = useApiClient();
+
+  return useQuery({
+    queryKey: ["github_status"],
+    queryFn: async () => {
+      const res = await fetchApi(`/api/v1/github/status`, {});
+      if (!res.ok) throw new Error("Failed to fetch github status");
+      return res.json() as Promise<{ connected: boolean }>;
+    },
+  });
+}
+
+// DISCONNECT GITHUB
+export function useDisconnectGithub() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetchApi(`/api/v1/github/disconnect`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to disconnect GitHub");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["github_status"] });
+      qc.invalidateQueries({ queryKey: ["repositories"] });
+    }
+  });
+}

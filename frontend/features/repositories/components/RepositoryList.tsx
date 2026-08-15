@@ -3,6 +3,7 @@ import { useRepositories, useDeleteRepository } from "../api/queries";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { type Repository } from "@/lib/types/api";
 import { Button } from "@/components/ui/button";
+import { GitBranch } from "lucide-react";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-slate-100 text-muted" },
@@ -68,7 +69,8 @@ export function RepositoryList() {
                 className={`border-b border-border/40 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors ${isActive ? "bg-accent/5" : ""}`}
                 onClick={() => setActiveRepositoryId(repo.id)}
               >
-                <td className="px-6 py-4 font-semibold text-foreground">
+                <td className="px-6 py-4 font-semibold text-foreground flex items-center gap-2">
+                  {repo.github_installation_id && <span title="GitHub App Connected"><GitBranch className="w-4 h-4 text-muted-foreground" /></span>}
                   {repo.name}
                   {isActive && <span className="ml-3 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-white uppercase tracking-wider">Active</span>}
                 </td>

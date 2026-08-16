@@ -43,7 +43,15 @@ jobs:
         run: cd frontend && npm ci
       - name: Run Vitest unit tests
         run: cd frontend && npm run test
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          CLERK_SECRET_KEY: sk_test_mock_clerk_secret_key
+          NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
       - name: Install Playwright browsers
         run: cd frontend && npx playwright install chromium
       - name: Run Playwright E2E tests
         run: cd frontend && npm run e2e
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          CLERK_SECRET_KEY: sk_test_mock_clerk_secret_key
+          NEXT_PUBLIC_BACKEND_URL: http://localhost:8000

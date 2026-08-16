@@ -135,14 +135,17 @@ async def upsert_user_from_jwt(db: AsyncSession, payload: dict[str, Any]) -> Use
     email = (payload.get("email") or "").strip()
     email_verified = bool(payload.get("email_verified", False))
 
-    # Build the display name from the username claim.
-    # The user specifically requested to use username and NOT first/last name.
-    # If username is missing (e.g., Google OAuth without explicitly set usernames),
-    # fallback to the email prefix so we don't end up using the raw user_id.
+    # Build the display name from the available claims (username, name, given/family name, or email).
     if payload.get("username"):
         name = str(payload["username"]).strip()
     elif payload.get("name"):
         name = str(payload["name"]).strip()
+    elif payload.get("given_name") or payload.get("family_name"):
+        name = (
+            f"{payload.get('given_name', '')} {payload.get('family_name', '')}".strip()
+        )
+    elif payload.get("first_name") or payload.get("last_name"):
+        name = f"{payload.get('first_name', '')} {payload.get('last_name', '')}".strip()
     elif email and "@" in email:
         name = email.split("@")[0].strip()
     else:

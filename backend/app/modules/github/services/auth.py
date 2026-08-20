@@ -1,6 +1,10 @@
+import logging
+
 from github import Github, GithubIntegration
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_github_integration() -> GithubIntegration:
@@ -48,3 +52,24 @@ def get_github_client_for_installation(installation_id: int) -> Github:
     """
     token = get_installation_token(installation_id)
     return Github(login_or_token=token)
+
+
+def get_installation_id_for_repo(repo_full_name: str) -> int | None:
+    """
+    Look up the GitHub App installation ID for a given 'owner/repo' using PyGithub integration.
+    """
+    auth_logger = logging.getLogger(__name__)
+
+    try:
+        parts = [p for p in repo_full_name.strip("/").split("/") if p]
+        if len(parts) >= 2:
+            owner, repo = parts[-2], parts[-1]
+            integration = get_github_integration()
+            inst = integration.get_repo_installation(owner, repo)
+            if inst and inst.id:
+                return inst.id
+    except Exception as e:
+        auth_logger.debug(
+            f"Failed to lookup GitHub installation for {repo_full_name}: {e!s}"
+        )
+    return None

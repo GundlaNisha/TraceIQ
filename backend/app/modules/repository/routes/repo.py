@@ -25,6 +25,9 @@ async def list_repositories(
     return result.scalars().all()
 
 
+from app.modules.github.models.installation import GithubInstallation
+
+
 @router.post("", response_model=RepoResponse, status_code=201)
 async def add_repository(
     body: RepoCreate,
@@ -33,10 +36,29 @@ async def add_repository(
 ):
     url_str = str(body.repo_url)
     parsed = urlparse(url_str)
-    name = parsed.path.strip("/").split("/")[-1]
-    name = name.removesuffix(".git")
+    path = parsed.path.strip("/")
+    path = path.removesuffix(".git")
+    parts = [p for p in path.split("/") if p]
+    if len(parts) >= 2:
+        name = f"{parts[-2]}/{parts[-1]}"
+    elif len(parts) == 1:
+        name = parts[0]
+    else:
+        name = "repository"
 
-    repo = Repository(user_id=current_user.id, name=name, repo_url=url_str)
+    # Auto-link github installation if user has one
+    inst_res = await db.execute(
+        select(GithubInstallation).where(GithubInstallation.user_id == current_user.id)
+    )
+    inst = inst_res.scalar_one_or_none()
+    installation_id = inst.installation_id if inst else None
+
+    repo = Repository(
+        user_id=current_user.id,
+        name=name,
+        repo_url=url_str,
+        github_installation_id=installation_id,
+    )
     db.add(repo)
     await db.commit()
     await db.refresh(repo)
@@ -76,6 +98,69 @@ async def delete_repository(
     repo = await db.get(Repository, repo_uuid)
     if not repo or repo.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Repository not found")
+
+    from sqlalchemy import delete
+
+    from app.modules.impact.models.impact import AnalysisJob, ImpactResult
+    from app.modules.indexing.models.index_models import (
+        CodeChunk,
+        CodeEmbedding,
+        CodeSymbol,
+        RepositoryFile,
+    )
+    from app.modules.pr.models.draft import PRDraft
+    from app.modules.repository.models.repo import RepositorySnapshot
+    from app.modules.requirement.models.req import Requirement, RequirementVersion
+    from app.modules.review.models.rev_models import (
+        CommitEvent,
+        PRReview,
+        PRReviewFinding,
+        Review,
+        ReviewFinding,
+    )
+
+    # 1. PR Reviews & findings
+    subq_pr_rev = select(PRReview.id).where(PRReview.repository_id == repo_uuid)
+    await db.execute(
+        delete(PRReviewFinding).where(PRReviewFinding.pr_review_id.in_(subq_pr_rev))
+    )
+    await db.execute(delete(PRReview).where(PRReview.repository_id == repo_uuid))
+
+    # 2. Commit Events, reviews & findings
+    subq_ce = select(CommitEvent.id).where(CommitEvent.repository_id == repo_uuid)
+    subq_rev = select(Review.id).where(Review.commit_event_id.in_(subq_ce))
+    await db.execute(delete(ReviewFinding).where(ReviewFinding.review_id.in_(subq_rev)))
+    await db.execute(delete(Review).where(Review.commit_event_id.in_(subq_ce)))
+    await db.execute(delete(CommitEvent).where(CommitEvent.repository_id == repo_uuid))
+
+    # 3. Requirements, analysis jobs, impact results, versions, PR drafts
+    subq_req = select(Requirement.id).where(Requirement.repository_id == repo_uuid)
+    subq_jobs = select(AnalysisJob.id).where(
+        AnalysisJob.requirement_id.in_(subq_req)
+        | (AnalysisJob.repository_id == repo_uuid)
+    )
+    await db.execute(delete(ImpactResult).where(ImpactResult.job_id.in_(subq_jobs)))
+    await db.execute(delete(AnalysisJob).where(AnalysisJob.id.in_(subq_jobs)))
+    await db.execute(delete(PRDraft).where(PRDraft.requirement_id.in_(subq_req)))
+    await db.execute(
+        delete(RequirementVersion).where(
+            RequirementVersion.requirement_id.in_(subq_req)
+        )
+    )
+    await db.execute(delete(Requirement).where(Requirement.repository_id == repo_uuid))
+
+    # 4. Code index, snapshots
+    await db.execute(
+        delete(CodeEmbedding).where(CodeEmbedding.repository_id == repo_uuid)
+    )
+    await db.execute(delete(CodeChunk).where(CodeChunk.repository_id == repo_uuid))
+    await db.execute(delete(CodeSymbol).where(CodeSymbol.repository_id == repo_uuid))
+    await db.execute(
+        delete(RepositoryFile).where(RepositoryFile.repository_id == repo_uuid)
+    )
+    await db.execute(
+        delete(RepositorySnapshot).where(RepositorySnapshot.repository_id == repo_uuid)
+    )
 
     await db.delete(repo)
     await db.commit()

@@ -32,6 +32,12 @@ export function usePRReviews() {
       if (!res.ok) throw new Error("Failed to fetch PR reviews");
       return res.json() as Promise<PRReview[]>;
     },
+    refetchInterval: (query) => {
+      const hasActive = query.state.data?.some(
+        (r) => r.status === "queued" || r.status === "running"
+      );
+      return hasActive ? 3000 : false;
+    },
   });
 }
 
@@ -54,7 +60,7 @@ export function usePRReview(id: string) {
   });
 }
 
-export function usePRReviewFindings(id: string) {
+export function usePRReviewFindings(id: string, isJobActive: boolean = false) {
   const { fetchApi } = useApiClient();
 
   return useQuery({
@@ -65,5 +71,23 @@ export function usePRReviewFindings(id: string) {
       return res.json() as Promise<PRReviewFinding[]>;
     },
     enabled: !!id,
+    refetchInterval: isJobActive ? 3000 : false,
+  });
+}
+
+export function usePublishPRComment() {
+  const { fetchApi } = useApiClient();
+
+  return useMutation({
+    mutationFn: async (reviewId: string) => {
+      const res = await fetchApi(`/api/v1/pr-reviews/${reviewId}/post-comment`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to post PR comment to GitHub");
+      }
+      return res.json() as Promise<{ success: boolean; message: string }>;
+    },
   });
 }

@@ -121,3 +121,119 @@ async def get_pr_review_findings(
         select(PRReviewFinding).where(PRReviewFinding.pr_review_id == review_uuid)
     )
     return findings_res.scalars().all()
+
+
+@router.post("/{review_id}/post-comment")
+async def post_review_comment_to_github(
+    review_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually post / comment this PR review content directly to the GitHub PR."""
+    try:
+        review_uuid = uuid.UUID(review_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid review UUID")
+
+    pr_review = await db.get(PRReview, review_uuid)
+    if not pr_review:
+        raise NotFoundError("PR review not found")
+    if pr_review.user_id != current_user.id:
+        raise ForbiddenError("Not authorized to post comments for this review")
+    if pr_review.status != "completed":
+        raise HTTPException(status_code=400, detail="Review is not completed yet")
+
+    repo = await db.get(Repository, pr_review.repository_id)
+    if not repo:
+        raise NotFoundError("Repository not found")
+
+    import logging
+
+    from app.modules.github.models.installation import GithubInstallation
+    from app.modules.github.services.auth import (
+        get_installation_id_for_repo,
+        get_installation_token,
+    )
+    from app.workers.pr_review import _extract_full_name, _post_pr_review_to_github
+
+    logger = logging.getLogger(__name__)
+
+    repo_full_name = _extract_full_name(repo)
+    token = None
+    if repo.github_installation_id:
+        try:
+            token = get_installation_token(repo.github_installation_id)
+        except Exception as exc:
+            logger.warning(
+                f"Could not get installation token for repo {repo.id}: {exc!s}"
+            )
+
+    if not token and repo_full_name:
+        inst_id = get_installation_id_for_repo(repo_full_name)
+        if inst_id:
+            try:
+                token = get_installation_token(inst_id)
+                # Ensure GithubInstallation record exists first to satisfy foreign key constraint
+                inst_check = await db.execute(
+                    select(GithubInstallation).where(
+                        GithubInstallation.installation_id == inst_id
+                    )
+                )
+                inst_rec = inst_check.scalar_one_or_none()
+                if not inst_rec:
+                    parts = [p for p in repo_full_name.strip("/").split("/") if p]
+                    account_name = parts[0] if parts else "github-user"
+                    inst_rec = GithubInstallation(
+                        user_id=current_user.id,
+                        installation_id=inst_id,
+                        account_name=account_name,
+                    )
+                    db.add(inst_rec)
+                    await db.flush()
+
+                repo.github_installation_id = inst_id
+                await db.commit()
+                logger.info(
+                    f"Discovered and linked GitHub App installation {inst_id} for repo {repo_full_name}"
+                )
+            except Exception as exc:
+                await db.rollback()
+                logger.warning(
+                    f"Could not persist discovered installation {inst_id}: {exc!s}"
+                )
+
+    if not token:
+        inst_res = await db.execute(
+            select(GithubInstallation).where(
+                GithubInstallation.user_id == current_user.id
+            )
+        )
+        inst = inst_res.scalar_one_or_none()
+        if inst:
+            try:
+                token = get_installation_token(inst.installation_id)
+            except Exception as exc:
+                logger.warning(
+                    f"Could not get user installation token {inst.installation_id}: {exc!s}"
+                )
+
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail="No active GitHub App installation found for this repository. Please ensure the GitHub App is installed on this repository.",
+        )
+
+    findings_res = await db.execute(
+        select(PRReviewFinding).where(PRReviewFinding.pr_review_id == review_uuid)
+    )
+    findings = findings_res.scalars().all()
+
+    await _post_pr_review_to_github(
+        repo_full_name=repo_full_name,
+        pr_number=pr_review.pr_number,
+        token=token,
+        summary=pr_review.summary or "PR review completed.",
+        findings=findings,
+    )
+
+    return {"success": True, "message": "PR review successfully commented on GitHub!"}

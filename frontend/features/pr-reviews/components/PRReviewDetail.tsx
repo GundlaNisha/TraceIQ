@@ -1,10 +1,13 @@
 "use client";
-import { usePRReview, usePRReviewFindings } from "../api/queries";
+import { useEffect, useState } from "react";
+import { usePRReview, usePRReviewFindings, usePublishPRComment } from "../api/queries";
 import {
   CheckCircle2, XCircle, Clock, Loader2, ExternalLink,
   AlertTriangle, AlertCircle, Info, Sparkles, GitPullRequest, ArrowLeft,
+  MessageSquarePlus, Check,
 } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import type { PRReviewFinding } from "@/lib/types/pr-review";
 
@@ -24,8 +27,19 @@ const SEVERITY_CONFIG = {
 interface Props { reviewId: string; }
 
 export function PRReviewDetail({ reviewId }: Props) {
+  const [commentSuccess, setCommentSuccess] = useState<string | null>(null);
+  const [commentError, setCommentError] = useState<string | null>(null);
+
   const { data: review, isLoading: reviewLoading } = usePRReview(reviewId);
-  const { data: findings } = usePRReviewFindings(reviewId);
+  const isActive = review?.status === "queued" || review?.status === "running";
+  const { data: findings, isLoading: findingsLoading, refetch: refetchFindings } = usePRReviewFindings(reviewId, isActive);
+  const { mutate: publishComment, isPending: isPublishing } = usePublishPRComment();
+
+  useEffect(() => {
+    if (review?.status === "completed" || review?.status === "failed") {
+      refetchFindings();
+    }
+  }, [review?.status, refetchFindings]);
 
   if (reviewLoading || !review) {
     return (
@@ -38,7 +52,6 @@ export function PRReviewDetail({ reviewId }: Props) {
 
   const statusKey = review.status as keyof typeof STATUS_CONFIG;
   const { label: statusLabel, icon: StatusIcon, text: statusText } = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.queued;
-  const isActive = review.status === "queued" || review.status === "running";
 
   const sortedFindings = [...(findings ?? [])].sort((a, b) => {
     const order = { high: 0, medium: 1, low: 2 };
@@ -48,6 +61,20 @@ export function PRReviewDetail({ reviewId }: Props) {
   const highCount = sortedFindings.filter((f) => f.severity === "high").length;
   const mediumCount = sortedFindings.filter((f) => f.severity === "medium").length;
   const lowCount = sortedFindings.filter((f) => f.severity === "low").length;
+
+  const handlePostComment = () => {
+    setCommentError(null);
+    setCommentSuccess(null);
+    publishComment(reviewId, {
+      onSuccess: (data) => {
+        setCommentSuccess(data.message || "Review comment successfully posted to GitHub PR!");
+        setTimeout(() => setCommentSuccess(null), 6000);
+      },
+      onError: (err: any) => {
+        setCommentError(err.message || "Failed to post comment to GitHub");
+      },
+    });
+  };
 
   return (
     <div className="flex flex-col gap-8 pb-16">
@@ -79,16 +106,65 @@ export function PRReviewDetail({ reviewId }: Props) {
               </div>
             </div>
           </div>
-          <a
-            href={review.pr_html_url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold text-foreground transition-colors shrink-0"
-          >
-            <ExternalLink className="w-4 h-4" />
-            View on GitHub
-          </a>
+
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {review.status === "completed" && (
+              <Button
+                type="button"
+                onClick={handlePostComment}
+                disabled={isPublishing}
+                className="gap-2 shadow-sm font-semibold"
+              >
+                {isPublishing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : commentSuccess ? (
+                  <Check className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <MessageSquarePlus className="w-4 h-4" />
+                )}
+                {isPublishing
+                  ? "Commenting on GitHub…"
+                  : commentSuccess
+                  ? "Posted to GitHub!"
+                  : "Add PR Comment"}
+              </Button>
+            )}
+
+            <a
+              href={review.pr_html_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold text-foreground transition-colors shrink-0"
+            >
+              <ExternalLink className="w-4 h-4" />
+              View on GitHub
+            </a>
+          </div>
         </div>
+
+        {commentSuccess && (
+          <div className="mt-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-1">
+            <span className="flex items-center gap-2 font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              {commentSuccess}
+            </span>
+            <a
+              href={review.pr_html_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-semibold text-emerald-700 underline hover:no-underline shrink-0"
+            >
+              Open PR Conversation →
+            </a>
+          </div>
+        )}
+
+        {commentError && (
+          <div className="mt-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-2 font-medium animate-in fade-in slide-in-from-top-1">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{commentError}</span>
+          </div>
+        )}
       </div>
 
       {isActive && (
@@ -176,7 +252,14 @@ export function PRReviewDetail({ reviewId }: Props) {
         </div>
       )}
 
-      {review.status === "completed" && sortedFindings.length === 0 && (
+      {review.status === "completed" && findingsLoading && sortedFindings.length === 0 && (
+        <div className="py-12 text-center text-muted animate-pulse">
+          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-accent" />
+          <p className="text-sm">Loading review findings…</p>
+        </div>
+      )}
+
+      {review.status === "completed" && !findingsLoading && findings !== undefined && sortedFindings.length === 0 && (
         <div className="py-16 text-center bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col items-center gap-3">
           <CheckCircle2 className="w-10 h-10 text-emerald-500" />
           <p className="font-semibold text-emerald-700 text-lg">All clear! No issues found.</p>

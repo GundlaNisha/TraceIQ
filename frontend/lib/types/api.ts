@@ -11,9 +11,12 @@ export interface Repository {
 
 export interface RequirementVersion {
   id: string;
+  requirement_id: string;
   version_number: number;
-  content: string;
+  title: string;
+  text: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Requirement {

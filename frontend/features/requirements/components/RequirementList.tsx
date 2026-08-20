@@ -125,30 +125,41 @@ export function RequirementList() {
       </div>
 
       {/* Version history panel */}
-      {selectedId && versions && (
-        <div className="w-80 rounded-2xl border border-border/40 bg-white/80 backdrop-blur-md shadow-sm p-6 flex flex-col gap-4 self-start">
-          <h3 className="font-semibold font-serif text-foreground text-lg tracking-tight">Version History</h3>
-          <div className="flex flex-col gap-4 mt-2">
-            {versions.map((v: RequirementVersion, index: number) => (
-              <div
-                key={v.version_number}
-                className={`border-l-2 pl-4 pb-4 ${index !== versions.length - 1 ? 'border-accent/20' : 'border-transparent'}`}
-              >
-                <div className="flex items-center gap-2 mb-1 -ml-[21px]">
-                  <div className="w-2.5 h-2.5 rounded-full bg-accent border-2 border-white ring-2 ring-accent/20" />
-                  <div className="text-sm font-semibold text-foreground">
-                    v{v.version_number}
+      {selectedId && (
+        <div className="w-96 rounded-2xl border border-border/40 bg-white/80 backdrop-blur-md shadow-sm p-6 flex flex-col gap-4 self-start">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold font-serif text-foreground text-lg tracking-tight">Version History</h3>
+            {versions && <span className="text-xs text-muted font-medium">{versions.length} version{versions.length !== 1 ? 's' : ''}</span>}
+          </div>
+          
+          {!versions ? (
+            <div className="text-xs text-muted animate-pulse py-4 text-center">Loading versions...</div>
+          ) : versions.length === 0 ? (
+            <div className="text-xs text-muted py-4 text-center">No previous versions.</div>
+          ) : (
+            <div className="flex flex-col gap-4 mt-2 max-h-[600px] overflow-y-auto pr-1">
+              {versions.map((v: RequirementVersion, index: number) => (
+                <div
+                  key={v.id || v.version_number}
+                  className={`border-l-2 pl-4 pb-4 ${index !== versions.length - 1 ? 'border-accent/20' : 'border-transparent'}`}
+                >
+                  <div className="flex items-center gap-2 mb-1 -ml-[21px]">
+                    <div className="w-2.5 h-2.5 rounded-full bg-accent border-2 border-white ring-2 ring-accent/20" />
+                    <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <span>v{v.version_number}</span>
+                      {v.title && <span className="font-normal text-muted text-xs truncate max-w-[180px]">({v.title})</span>}
+                    </div>
+                  </div>
+                  <div className="text-xs font-medium text-muted mb-2">
+                    {parseUTCDate(v.created_at).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-foreground/90 leading-relaxed bg-slate-50/70 p-3 rounded-xl border border-border/40 font-mono whitespace-pre-wrap">
+                    {v.text || "No text content recorded."}
                   </div>
                 </div>
-                <div className="text-xs font-medium text-muted mb-2">
-                  {parseUTCDate(v.created_at).toLocaleString()}
-                </div>
-                <div className="text-sm text-foreground/80 leading-relaxed bg-slate-50/50 p-3 rounded-xl border border-border/40">
-                  {v.content}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

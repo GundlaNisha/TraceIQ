@@ -9,7 +9,7 @@ from celery import shared_task
 from sqlalchemy import select, update
 
 from app.core.config import settings
-from app.db.session import AsyncSessionLocal
+from app.db.session import get_worker_session
 from app.modules.indexing.models.index_models import (
     CodeChunk,
     CodeEmbedding,
@@ -47,7 +47,7 @@ def index_repository(repository_id: str, snapshot_id: str):
 
 
 async def _async_index_repository(repository_id: str, snapshot_id: str):
-    async with AsyncSessionLocal() as session:
+    async with get_worker_session() as session:
         repo_uuid = uuid.UUID(repository_id)
         snap_uuid = uuid.UUID(snapshot_id)
 

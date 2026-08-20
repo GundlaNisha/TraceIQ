@@ -11,7 +11,7 @@ import git
 from celery.utils.log import get_task_logger
 from sqlalchemy import update
 
-from app.db.session import AsyncSessionLocal
+from app.db.session import get_worker_session
 from app.integrations.storage.local_client import upload_tarball
 from app.modules.repository.models.repo import (
     Repository,
@@ -72,7 +72,7 @@ def validate_url(repo_url: str) -> None:
 
 
 async def _get_repo(repo_id: str) -> Repository:
-    async with AsyncSessionLocal() as session:
+    async with get_worker_session() as session:
         repo = await session.get(Repository, uuid.UUID(repo_id))
         if not repo:
             raise ValueError("Repo not found")
@@ -80,7 +80,7 @@ async def _get_repo(repo_id: str) -> Repository:
 
 
 async def _update_status(repo_id: str, status: SyncStatus):
-    async with AsyncSessionLocal() as session:
+    async with get_worker_session() as session:
         await session.execute(
             update(Repository)
             .where(Repository.id == uuid.UUID(repo_id))
@@ -90,7 +90,7 @@ async def _update_status(repo_id: str, status: SyncStatus):
 
 
 async def _create_snapshot(repo_id: str, storage_key: str, commit_sha: str):
-    async with AsyncSessionLocal() as session:
+    async with get_worker_session() as session:
         snap = RepositorySnapshot(
             repository_id=uuid.UUID(repo_id),
             storage_key=storage_key,

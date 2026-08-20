@@ -4,8 +4,10 @@ import logging
 from sqlalchemy import select
 
 from app.ai.router.dispatcher import dispatch_impact_analysis
-from app.db.session import AsyncSessionLocal
+from app.db.session import get_worker_session
+from app.modules.auth.models.user import User  # noqa: F401
 from app.modules.impact.models.impact import AnalysisJob, ImpactResult, JobStatus
+from app.modules.repository.models.repo import Repository  # noqa: F401
 from app.modules.requirement.models.req import Requirement
 from app.modules.retrieval.services.semantic import semantic_search
 from app.workers.celery_app import celery_app
@@ -14,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _run_impact_analysis_async(job_id: str):
-    async with AsyncSessionLocal() as db:
+    async with get_worker_session() as db:
         try:
             # 1. Fetch AnalysisJob
             stmt = select(AnalysisJob).where(AnalysisJob.id == job_id)

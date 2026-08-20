@@ -3,6 +3,9 @@ import { useState } from "react";
 import { useJobPoll } from "@/hooks/useJobPoll";
 import { useImpactResult } from "../api/queries";
 import { DependencyGraph } from "./DependencyGraph";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Sparkles } from "lucide-react";
 
 interface Props {
   jobId: string;
@@ -12,6 +15,7 @@ export function ImpactDashboard({ jobId }: Props) {
   const { data: job } = useJobPoll(jobId);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"files" | "graph">("files");
+
   // Only fetch the full result once the job is done
   const { data: result, isLoading: resultLoading } = useImpactResult(
     job?.status === "completed" ? jobId : null, // use job_id as analysis_id in mock; real API may differ
@@ -96,7 +100,7 @@ export function ImpactDashboard({ jobId }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
         <div>
           <h2 className="text-xl font-semibold font-serif text-foreground">
             {job.requirement_title || "Impact Analysis Results"}
@@ -111,6 +115,16 @@ export function ImpactDashboard({ jobId }: Props) {
             <span>{sortedFiles.length} impacted files identified</span>
           </div>
         </div>
+        <Link href="/pull-requests">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 border-accent/30 text-foreground hover:bg-accent/10 shadow-sm shrink-0 font-semibold text-xs"
+          >
+            <Sparkles className="w-4 h-4 text-accent" />
+            Go to Pull Requests &rarr;
+          </Button>
+        </Link>
       </div>
 
       {/* Tab switcher */}

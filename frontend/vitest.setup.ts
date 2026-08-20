@@ -21,19 +21,6 @@ vi.mock("@clerk/nextjs", () => ({
 
 // Mock global fetch for unit tests
 global.fetch = vi.fn().mockImplementation(async (url: string) => {
-  if (url.includes("/api/v1/pr-drafts/draft_1")) {
-    return {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        id: "draft_1",
-        title: "Add idempotency key check to webhook",
-        description_markdown: "## Description\nThis PR adds an idempotency key check.",
-        status: "generated",
-        created_at: new Date().toISOString(),
-      }),
-    };
-  }
 
   if (url.includes("/api/v1/analysis/jobs/job_1")) {
     return {

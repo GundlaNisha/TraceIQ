@@ -11,12 +11,10 @@ from app.modules.github.routes.callback import router as github_callback_router
 from app.modules.github.routes.prs import router as github_prs_router
 from app.modules.github.routes.webhook import router as github_webhook_router
 from app.modules.impact.routes.analysis import router as analysis_router
-from app.modules.pr.routes.draft_routes import router as pr_router
 from app.modules.repository.routes.repo import router as repo_router
 from app.modules.requirement.routes.req import router as req_router
 from app.modules.retrieval.routes.search import router as search_router
 from app.modules.review.routes.pr_review import router as pr_review_router
-from app.modules.review.routes.review import router as review_router
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +35,7 @@ app.include_router(repo_router)
 app.include_router(search_router)
 app.include_router(req_router)
 app.include_router(analysis_router)
-app.include_router(review_router)
 app.include_router(pr_review_router)
-app.include_router(pr_router)
 app.include_router(dashboard_router)
 app.include_router(github_callback_router)
 app.include_router(github_webhook_router)

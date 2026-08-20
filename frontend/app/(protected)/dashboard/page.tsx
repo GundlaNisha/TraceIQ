@@ -7,14 +7,16 @@ const STATUS_COLORS: Record<string, string> = {
   running: "text-blue-600",
   queued: "text-gray-500",
   failed: "text-red-600",
-  generated: "text-gray-600",
-  edited: "text-blue-600",
 };
 
 const JOB_TYPE_LABELS: Record<string, string> = {
-  analysis: "Analysis",
-  review: "Review",
-  pr_draft: "PR Draft",
+  analysis: "Impact Analysis",
+  pr_review: "PR Review",
+};
+
+const JOB_TYPE_HREF: Record<string, (id: string) => string> = {
+  analysis: (id) => `/analysis/${id}`,
+  pr_review: (id) => `/pr-reviews/${id}`,
 };
 
 export default function DashboardPage() {
@@ -79,27 +81,31 @@ export default function DashboardPage() {
             {data.recentJobs.length === 0 && (
               <div className="text-sm text-muted py-4 text-center">No recent activity.</div>
             )}
-            {data.recentJobs.map((job: any) => (
-              <div
-                key={job.id}
-                className="flex items-center justify-between py-3 px-4 rounded-xl bg-slate-50/50 hover:bg-slate-50 border border-transparent transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-xs bg-white border shadow-sm text-foreground px-2.5 py-1 rounded-md font-medium tracking-wide">
-                    {JOB_TYPE_LABELS[job.type]}
-                  </span>
-                  <span className="text-sm font-medium text-foreground truncate max-w-[200px]">{job.label}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {job.status === "running" && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
-                  <span
-                    className={`text-xs font-semibold capitalize ${STATUS_COLORS[job.status] || "text-muted"}`}
-                  >
-                    {job.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+            {data.recentJobs.map((job: any) => {
+              const href = JOB_TYPE_HREF[job.type]?.(job.id) || "#";
+              return (
+                <Link
+                  key={job.id}
+                  href={href}
+                  className="group flex items-center justify-between py-3 px-4 rounded-xl bg-slate-50/50 hover:bg-white hover:shadow-sm border border-transparent hover:border-border/40 transition-all"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs bg-white group-hover:bg-slate-50 border shadow-sm text-foreground px-2.5 py-1 rounded-md font-medium tracking-wide">
+                      {JOB_TYPE_LABELS[job.type] || job.type}
+                    </span>
+                    <span className="text-sm font-medium text-foreground group-hover:text-accent transition-colors truncate max-w-[200px]">{job.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {job.status === "running" && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
+                    <span
+                      className={`text-xs font-semibold capitalize ${STATUS_COLORS[job.status] || "text-muted"}`}
+                    >
+                      {job.status}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </SectionCard>
 
@@ -127,22 +133,22 @@ export default function DashboardPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Recent PR Drafts">
+          <SectionCard title="Recent PR Reviews">
             <div className="flex flex-col gap-2">
-              {data.recentPRDrafts.length === 0 && (
-                <div className="text-sm text-muted py-4 text-center">No recent drafts.</div>
+              {(!data.recentPRReviews || data.recentPRReviews.length === 0) && (
+                <div className="text-sm text-muted py-4 text-center">No recent PR reviews.</div>
               )}
-              {data.recentPRDrafts.map((d: any) => (
+              {data.recentPRReviews?.map((r: any) => (
                 <Link
-                  key={d.id}
-                  href={`/pr-drafts/${d.id}`}
+                  key={r.id}
+                  href={`/pr-reviews/${r.id}`}
                   className="group flex flex-col p-3 rounded-xl hover:bg-white hover:shadow-sm border border-transparent hover:border-border/40 transition-all"
                 >
                   <div className="text-sm text-foreground font-semibold truncate group-hover:text-accent transition-colors">
-                    {d.title || "Untitled Draft"}
+                    {r.title || `PR #${r.pr_number}`}
                   </div>
-                  <div className={`text-xs font-medium capitalize mt-1 ${STATUS_COLORS[d.status] || "text-muted"}`}>
-                    {d.status}
+                  <div className={`text-xs font-medium capitalize mt-1 ${STATUS_COLORS[r.status] || "text-muted"}`}>
+                    {r.status}
                   </div>
                 </Link>
               ))}

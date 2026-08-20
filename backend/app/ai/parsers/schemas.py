@@ -13,23 +13,6 @@ class ImpactAnalysisOutput(BaseModel):
     impacted_files: list[ImpactedFile]
 
 
-class ReviewFindingOutput(BaseModel):
-    file_path: str
-    line_number: int | None
-    severity: str  # high | medium | low
-    message: str
-
-
-class CommitReviewOutput(BaseModel):
-    findings: list[ReviewFindingOutput]
-    summary: str
-
-
-class PRDraftOutput(BaseModel):
-    title: str
-    description_markdown: str
-
-
 class PRReviewFindingOutput(BaseModel):
     file_path: str
     line_number: int | None

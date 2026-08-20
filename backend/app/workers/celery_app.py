@@ -1,6 +1,16 @@
 from celery import Celery
 from celery.signals import worker_process_init
 
+# Ensure all SQLAlchemy models are registered in Base.metadata for Celery worker processes
+import app.modules.audit.models.audit
+import app.modules.auth.models.user
+import app.modules.github.models.installation
+import app.modules.impact.models.impact
+import app.modules.indexing.models.index_models
+import app.modules.pr.models.draft
+import app.modules.repository.models.repo
+import app.modules.requirement.models.req
+import app.modules.review.models.rev_models  # noqa: F401
 from app.core.config import settings
 from app.db.session import engine
 
@@ -12,8 +22,6 @@ celery_app = Celery(
         "app.workers.repo_sync",
         "app.workers.repo_index",
         "app.workers.impact_analysis",
-        "app.workers.commit_review",
-        "app.workers.pr_draft",
         "app.workers.pr_review",
     ],
 )

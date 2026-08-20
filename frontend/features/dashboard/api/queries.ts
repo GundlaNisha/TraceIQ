@@ -14,7 +14,7 @@ export function useDashboardSummary() {
           repositories: { total: 0, completed: 0, syncing: 0, failed: 0 },
           recentJobs: [],
           recentAnalyses: [],
-          recentPRDrafts: [],
+          recentPRReviews: [],
         };
       }
       return res.json();

@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.session import get_db
 from app.modules.repository.models.repo import Repository
-from app.modules.review.models.rev_models import CommitEvent
-from app.workers.commit_review import run_commit_review
+from app.modules.review.models.rev_models import PRReview
+from app.workers.pr_review import run_pr_review
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def verify_signature(payload_body: bytes, signature_header: str, secret: str) ->
 @router.post("/webhook")
 async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """
-    Listens to GitHub Webhook events (Pull Requests, pushes, etc.)
+    Listens to GitHub Webhook events (Pull Requests, etc.)
     """
     secret = settings.github_webhook_secret
     if not secret:
@@ -55,11 +55,12 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         # Process 'opened' or 'synchronize' (new commits pushed to PR)
         if action in ["opened", "synchronize"]:
             pull_request = payload.get("pull_request", {})
-            head_commit = pull_request.get("head", {}).get("sha")
+            pr_number = pull_request.get("number")
+            pr_title = pull_request.get("title", "")
+            pr_html_url = pull_request.get("html_url", "")
             repo_url = payload.get("repository", {}).get("html_url")
 
-            if head_commit and repo_url:
-                # Find the repository in our DB
+            if pr_number and repo_url:
                 result = await db.execute(
                     select(Repository).where(Repository.repo_url == repo_url)
                 )
@@ -67,49 +68,23 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
                 if repo:
                     logger.info(
-                        f"Triggering AI review for PR in {repo_url} (commit: {head_commit[:7]})"
+                        f"Triggering AI review for PR #{pr_number} in {repo_url}"
                     )
-                    # Create a CommitEvent to track this review
-                    commit_event = CommitEvent(
+                    pr_review = PRReview(
                         repository_id=repo.id,
                         user_id=repo.user_id,
-                        commit_hash=head_commit,
+                        pr_number=pr_number,
+                        pr_title=pr_title,
+                        pr_html_url=pr_html_url,
                         status="queued",
                     )
-                    db.add(commit_event)
+                    db.add(pr_review)
                     await db.commit()
-                    await db.refresh(commit_event)
-                    # Queue the background worker
-                    run_commit_review.delay(str(commit_event.id))
+                    await db.refresh(pr_review)
+                    run_pr_review.delay(str(pr_review.id))
                 else:
                     logger.warning(
                         f"Webhook received for untracked repository: {repo_url}"
                     )
-
-    elif event == "push":
-        # Optionally handle direct pushes too
-        head_commit = payload.get("head_commit", {}).get("id")
-        repo_url = payload.get("repository", {}).get("html_url")
-        ref = payload.get("ref", "")
-
-        if head_commit and repo_url and ref.startswith("refs/heads/"):
-            result = await db.execute(
-                select(Repository).where(Repository.repo_url == repo_url)
-            )
-            repo = result.scalar_one_or_none()
-            if repo:
-                logger.info(
-                    f"Push to {ref} in {repo_url} — queuing review for {head_commit[:7]}"
-                )
-                commit_event = CommitEvent(
-                    repository_id=repo.id,
-                    user_id=repo.user_id,
-                    commit_hash=head_commit,
-                    status="queued",
-                )
-                db.add(commit_event)
-                await db.commit()
-                await db.refresh(commit_event)
-                run_commit_review.delay(str(commit_event.id))
 
     return {"status": "ok"}

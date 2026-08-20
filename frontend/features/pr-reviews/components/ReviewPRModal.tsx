@@ -36,23 +36,29 @@ export function ReviewPRModal({ pr, onClose }: Props) {
   }, [repos]);
 
   const reqItems: SelectOption[] = useMemo(() => {
+    const filtered = (reqs || []).filter(
+      (r: any) => !repositoryId || r.repository_id === repositoryId
+    );
     return [
-      { label: "None — code quality only", value: "none" },
-      ...(reqs || []).map((req: any) => ({
+      { label: "None — code quality & security only", value: "none" },
+      ...filtered.map((req: any) => ({
         label: req.title,
         value: req.id,
       })),
     ];
-  }, [reqs]);
+  }, [reqs, repositoryId]);
 
-  // Automatically select the repo that matches the PR repository_name
+  // Automatically select the repo that matches the PR repository_name or URL
   useEffect(() => {
     if (pr && repos?.length) {
       const match = repos.find(
         (r: any) =>
           r.name === pr.repository_name ||
           r.name.endsWith(`/${pr.repository_name}`) ||
-          pr.repository_name.endsWith(`/${r.name}`)
+          pr.repository_name?.endsWith(`/${r.name}`) ||
+          (r.repo_url &&
+            pr.repository_url &&
+            r.repo_url.replace(/\.git$/, "") === pr.repository_url.replace(/\.git$/, ""))
       );
       if (match) {
         setRepositoryId(match.id);
@@ -132,10 +138,10 @@ export function ReviewPRModal({ pr, onClose }: Props) {
           {/* Requirement selector */}
           <div className="space-y-2">
             <Label className="text-sm font-semibold text-foreground">
-              Linked Requirement <span className="text-muted-foreground font-normal">(optional)</span>
+              Linked Requirement & Impact Analysis <span className="text-muted-foreground font-normal">(recommended)</span>
             </Label>
             <p className="text-xs text-muted-foreground">
-              Without a requirement, the AI focuses on code quality, bugs, and security only.
+              AI verifies requirement criteria fulfillment and cross-checks against the expected impact blast radius (impacted files, symbols, test suites).
             </p>
             <Select
               items={reqItems}

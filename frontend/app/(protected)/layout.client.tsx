@@ -27,8 +27,9 @@ export default function ProtectedLayoutClient({
     useEnsureBackendUser();
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="w-64 bg-slate-50/30 border-r border-border/50 flex flex-col py-6 px-4 gap-2 shrink-0">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      {/* Sidebar - permanently locked in place */}
+      <aside className="w-64 bg-slate-50/30 border-r border-border/50 flex flex-col py-6 px-4 gap-2 shrink-0 h-full overflow-y-auto z-30 select-none">
         <div className="text-2xl font-bold font-serif text-foreground mb-8 px-3 tracking-tight">TraceIQ</div>
         {NAV_ITEMS.map((item) => {
           const isActive = pathname.startsWith(item.href);
@@ -48,10 +49,10 @@ export default function ProtectedLayoutClient({
         })}
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Header */}
-        <header className="bg-background/80 backdrop-blur-xl border-b border-border/40 sticky top-0 z-20">
+        <header className="bg-background/80 backdrop-blur-xl border-b border-border/40 shrink-0 z-20">
           <div className="w-full max-w-7xl mx-auto px-8 md:px-12 py-3 flex items-center justify-between">
             <GlobalSearchBar />
             <div className="flex items-center gap-5">
@@ -69,7 +70,7 @@ export default function ProtectedLayoutClient({
           </div>
         </header>
 
-        {/* Page content */}
+        {/* Scrollable Page content */}
         <main className="flex-1 overflow-y-auto">
           <div className="w-full max-w-7xl mx-auto px-8 md:px-12 py-10 md:py-12">
             {children}

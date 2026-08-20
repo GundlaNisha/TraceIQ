@@ -1,3 +1,5 @@
+from datetime import UTC
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,13 +44,16 @@ async def get_dashboard_summary(
     )
     analysis_res = await db.execute(analysis_stmt)
     for job, req_title in analysis_res:
+        created_at_val = (
+            job.created_at.replace(tzinfo=UTC).isoformat() if job.created_at else None
+        )
         recent_jobs.append(
             {
                 "id": str(job.id),
                 "type": "analysis",
                 "label": req_title or "Impact Analysis",
                 "status": job.status,
-                "created_at": job.created_at,
+                "created_at": created_at_val,
             }
         )
 
@@ -67,13 +72,18 @@ async def get_dashboard_summary(
             if pr_rev.pr_title
             else f"PR #{pr_rev.pr_number}"
         )
+        rev_created_at = (
+            pr_rev.created_at.replace(tzinfo=UTC).isoformat()
+            if pr_rev.created_at
+            else None
+        )
         recent_jobs.append(
             {
                 "id": str(pr_rev.id),
                 "type": "pr_review",
                 "label": label,
                 "status": pr_rev.status,
-                "created_at": pr_rev.created_at,
+                "created_at": rev_created_at,
             }
         )
         recent_pr_reviews.append(

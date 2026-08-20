@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { formatDistanceToNow } from "date-fns";
+import { formatTimeAgo } from "@/lib/utils";
 import type { PRReviewFinding } from "@/lib/types/pr-review";
 
 const STATUS_CONFIG = {
@@ -99,9 +99,9 @@ export function PRReviewDetail({ reviewId }: Props) {
                   <StatusIcon className={`w-4 h-4 ${isActive ? "animate-spin" : ""}`} />
                   {statusLabel}
                 </span>
-                <span className="text-muted text-xs">·</span>
+                <span className="text-muted text-xs">&middot;</span>
                 <span className="text-xs text-muted-foreground">
-                  {formatDistanceToNow(new Date(review.created_at), { addSuffix: true })}
+                  {formatTimeAgo(review.created_at)}
                 </span>
               </div>
             </div>

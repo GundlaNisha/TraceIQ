@@ -3,7 +3,7 @@ import { useState } from "react";
 import { usePullRequests } from "../api/queries";
 import { usePRReviews, usePublishPRComment } from "@/features/pr-reviews/api/queries";
 import { GitPullRequest, GitMerge, XCircle, Clock, ExternalLink, Sparkles, CheckCircle2, RotateCw, MessageSquarePlus, Check } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ReviewPRModal } from "@/features/pr-reviews/components/ReviewPRModal";
 import Link from "next/link";
@@ -140,7 +140,7 @@ export function PullRequestList() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
-                    Updated {formatDistanceToNow(new Date(pr.updated_at), { addSuffix: true })}
+                    Updated {formatTimeAgo(pr.updated_at)}
                   </div>
                 </div>
               </div>

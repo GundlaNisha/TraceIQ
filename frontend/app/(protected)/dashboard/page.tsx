@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useDashboardSummary } from "@/features/dashboard/api/queries";
+import { formatTimeAgo } from "@/lib/utils";
 
 const STATUS_COLORS: Record<string, string> = {
   completed: "text-green-600",
@@ -95,7 +96,12 @@ export default function DashboardPage() {
                     </span>
                     <span className="text-sm font-medium text-foreground group-hover:text-accent transition-colors truncate max-w-[200px]">{job.label}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    {job.created_at && (
+                      <span className="text-xs text-muted font-normal">
+                        {formatTimeAgo(job.created_at)}
+                      </span>
+                    )}
                     {job.status === "running" && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
                     <span
                       className={`text-xs font-semibold capitalize ${STATUS_COLORS[job.status] || "text-muted"}`}

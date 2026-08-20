@@ -1,7 +1,7 @@
-import datetime
 import uuid
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 
 class ReviewCreate(BaseModel):
@@ -15,7 +15,7 @@ class CommitEventResponse(BaseModel):
     status: str
     requirement_id: uuid.UUID | None = None
     commit_hash: str
-    created_at: datetime.datetime
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -58,7 +58,13 @@ class PRReviewResponse(BaseModel):
     pr_html_url: str
     status: str
     summary: str | None = None
-    created_at: datetime.datetime
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, dt: datetime, _info):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
 
     model_config = ConfigDict(from_attributes=True)
 

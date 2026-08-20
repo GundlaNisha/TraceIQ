@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 
 class AnalysisJobResponse(BaseModel):
@@ -14,6 +14,12 @@ class AnalysisJobResponse(BaseModel):
     requirement_title: str | None = None
     repository_name: str | None = None
 
+    @field_serializer("created_at")
+    def serialize_created_at(self, dt: datetime, _info):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -22,5 +28,11 @@ class ImpactResultResponse(BaseModel):
     job_id: uuid.UUID
     impacted_files: dict
     created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, dt: datetime, _info):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
 
     model_config = ConfigDict(from_attributes=True)

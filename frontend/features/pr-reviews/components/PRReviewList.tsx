@@ -1,7 +1,7 @@
 "use client";
 import { usePRReviews } from "../api/queries";
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
+import { formatTimeAgo } from "@/lib/utils";
 import { GitPullRequest, Sparkles, Clock, CheckCircle2, Loader2, XCircle, AlertCircle } from "lucide-react";
 import type { PRReview } from "@/lib/types/pr-review";
 
@@ -78,7 +78,7 @@ export function PRReviewList() {
 
               <div className="flex items-center gap-1.5 mt-3 text-xs text-muted-foreground">
                 <Clock className="w-3.5 h-3.5" />
-                {formatDistanceToNow(new Date(review.created_at), { addSuffix: true })}
+                {formatTimeAgo(review.created_at)}
               </div>
             </div>
           </Link>

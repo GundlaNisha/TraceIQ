@@ -10,7 +10,7 @@ import { RequirementForm } from "./RequirementForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDeleteRequirement } from "../api/queries";
 import { Trash2, Edit2 } from "lucide-react";
-import { parseUTCDate } from "@/lib/utils";
+import { parseUTCDate, formatTimeAgo, formatDateTime } from "@/lib/utils";
 
 export function RequirementList() {
   const { data: requirements, isLoading } = useRequirements();
@@ -75,8 +75,8 @@ export function RequirementList() {
                 <td className="px-6 py-4">
                   <span className="px-2 py-1 bg-slate-100 text-muted rounded-md text-xs font-mono font-medium">v{req.version_number}</span>
                 </td>
-                <td className="px-6 py-4 text-muted text-xs font-medium">
-                  {req.updated_at ? parseUTCDate(req.updated_at).toLocaleDateString() : 'Never'}
+                <td className="px-6 py-4 text-muted text-xs font-medium" title={formatDateTime(req.updated_at)}>
+                  {req.updated_at ? formatTimeAgo(req.updated_at) : 'Never'}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -151,7 +151,7 @@ export function RequirementList() {
                     </div>
                   </div>
                   <div className="text-xs font-medium text-muted mb-2">
-                    {parseUTCDate(v.created_at).toLocaleString()}
+                    {formatDateTime(v.created_at)}
                   </div>
                   <div className="text-xs text-foreground/90 leading-relaxed bg-slate-50/70 p-3 rounded-xl border border-border/40 font-mono whitespace-pre-wrap">
                     {v.text || "No text content recorded."}

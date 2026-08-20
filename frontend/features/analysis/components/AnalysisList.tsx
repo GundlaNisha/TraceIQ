@@ -1,12 +1,11 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
 import { useAnalysisJobs, useDeleteAnalysisJob } from "../api/queries";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Trash2, FolderGit2, FileText, Sparkles, ArrowRight } from "lucide-react";
-import { parseUTCDate } from "@/lib/utils";
+import { formatTimeAgo } from "@/lib/utils";
 import { type AnalysisJob } from "@/lib/types/api";
 import { useRouter } from "next/navigation";
 
@@ -107,7 +106,7 @@ function AnalysisJobCard({ job }: { job: AnalysisJob }) {
         </div>
         
         <div className="mt-auto pt-4 border-t border-border/40 flex justify-between items-center text-xs font-medium text-muted">
-          <span>{formatDistanceToNow(parseUTCDate(job.created_at), { addSuffix: true })}</span>
+          <span>{formatTimeAgo(job.created_at)}</span>
           <span className="text-accent opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 font-semibold">
             View Analysis <ArrowRight className="w-3.5 h-3.5" />
           </span>

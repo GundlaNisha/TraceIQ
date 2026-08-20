@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class ReqBase(BaseModel):
@@ -24,6 +24,12 @@ class VersionResponse(ReqBase):
     created_at: datetime
     updated_at: datetime
 
+    @field_serializer("created_at", "updated_at")
+    def serialize_dates(self, dt: datetime, _info):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -34,5 +40,11 @@ class ReqResponse(ReqBase):
     version_number: int
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_dates(self, dt: datetime, _info):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
 
     model_config = ConfigDict(from_attributes=True)

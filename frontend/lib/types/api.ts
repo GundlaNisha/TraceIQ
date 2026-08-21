@@ -6,6 +6,9 @@ export interface Repository {
   default_branch: string;
   github_installation_id?: number | null;
   is_private?: boolean;
+  auto_review_prs?: boolean;
+  auto_post_comments?: boolean;
+  default_requirement_id?: string | null;
   created_at: string;
 }
 
@@ -75,4 +78,59 @@ export interface SearchResultItem {
   match_type: "exact" | "semantic" | "fuzzy" | "symbol";
   snippet?: string;
   score?: number;
+}
+
+export interface TraceabilityFindingSummary {
+  high: number;
+  medium: number;
+  low: number;
+  total: number;
+  gaps_count: number;
+}
+
+export interface TraceabilityReviewItem {
+  id: string;
+  pr_number: number;
+  pr_title: string;
+  pr_html_url: string;
+  status: string;
+  summary?: string | null;
+  finding_counts: TraceabilityFindingSummary;
+  created_at: string;
+}
+
+export interface TraceabilityAnalysisItem {
+  id: string;
+  status: string;
+  impacted_files_count: number;
+  high_risk_count: number;
+  created_at: string;
+}
+
+export interface TraceabilityRow {
+  requirement_id: string;
+  title: string;
+  version_number: number;
+  text: string;
+  repository_id: string;
+  repository_name: string;
+  created_at: string;
+  compliance_status: "verified" | "gaps_flagged" | "in_progress" | "pending_verification";
+  compliance_score: number;
+  latest_analysis?: TraceabilityAnalysisItem | null;
+  reviews: TraceabilityReviewItem[];
+}
+
+export interface TraceabilitySummary {
+  total_requirements: number;
+  verified_count: number;
+  gaps_count: number;
+  in_progress_count: number;
+  pending_count: number;
+  overall_coverage_pct: number;
+}
+
+export interface TraceabilityMatrixResponse {
+  summary: TraceabilitySummary;
+  items: TraceabilityRow[];
 }

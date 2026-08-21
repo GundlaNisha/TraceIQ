@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: "Impact Analysis", href: "/analysis" },
   { label: "Pull Requests", href: "/pull-requests" },
   { label: "PR Reviews", href: "/pr-reviews" },
+  { label: "Traceability Matrix", href: "/traceability" },
 ];
 
 export default function ProtectedLayoutClient({

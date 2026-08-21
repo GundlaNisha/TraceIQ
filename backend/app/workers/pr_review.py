@@ -358,23 +358,31 @@ async def _process_pr_review(pr_review_id: str) -> None:
             pr_review.status = "completed"
             await session.commit()
 
-            # 9. Post review to GitHub as native PR Review / Comment (if token is available)
-            if token:
-                try:
-                    await _post_pr_review_to_github(
-                        repo_full_name,
-                        pr_review.pr_number,
-                        token,
-                        ai_result.summary,
-                        saved_findings,
-                    )
-                except Exception as gh_err:
-                    logger.error(
-                        f"GitHub PR review post failed (non-fatal): {gh_err!s}"
+            # 9. Post review to GitHub as native PR Review / Comment (if auto_post_comments enabled)
+            if repository.auto_post_comments:
+                if token:
+                    try:
+                        await _post_pr_review_to_github(
+                            repo_full_name,
+                            pr_review.pr_number,
+                            token,
+                            ai_result.summary,
+                            saved_findings,
+                        )
+                        logger.info(
+                            f"Automated PR review comment posted to GitHub PR #{pr_review.pr_number} in {repo_full_name}"
+                        )
+                    except Exception as gh_err:
+                        logger.error(
+                            f"GitHub PR review auto-post failed (non-fatal): {gh_err!s}"
+                        )
+                else:
+                    logger.warning(
+                        f"No GitHub token found for {repo_full_name} — skipping auto-posting review to GitHub."
                     )
             else:
-                logger.warning(
-                    f"No GitHub token found for {repo_full_name} — skipping posting review to GitHub."
+                logger.info(
+                    f"Auto-post comments disabled for {repo_full_name}. Findings saved to dashboard."
                 )
 
         except Exception:

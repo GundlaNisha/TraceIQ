@@ -9,7 +9,12 @@ from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
 from app.modules.repository.models.repo import Repository
-from app.modules.repository.schemas.repo import RepoCreate, RepoResponse
+from app.modules.repository.schemas.repo import (
+    RepoCreate,
+    RepoResponse,
+    RepoSettingsUpdate,
+)
+from app.modules.requirement.models.req import Requirement
 from app.workers.repo_sync import sync_repository
 
 router = APIRouter(prefix="/api/v1/repositories", tags=["repositories"])
@@ -81,6 +86,47 @@ async def get_repository(
     repo = await db.get(Repository, repo_uuid)
     if not repo or repo.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Repository not found")
+    return repo
+
+
+@router.patch("/{repo_id}/settings", response_model=RepoResponse)
+async def update_repository_settings(
+    repo_id: str,
+    body: RepoSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        repo_uuid = uuid.UUID(repo_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid repo UUID")
+
+    repo = await db.get(Repository, repo_uuid)
+    if not repo or repo.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    if body.default_requirement_id is not None:
+        req = await db.get(Requirement, body.default_requirement_id)
+        if not req or req.user_id != current_user.id or req.repository_id != repo_uuid:
+            raise HTTPException(
+                status_code=400,
+                detail="Default requirement not found or does not belong to this repository",
+            )
+        repo.default_requirement_id = body.default_requirement_id
+    elif (
+        "default_requirement_id" in body.model_fields_set
+        and body.default_requirement_id is None
+    ):
+        repo.default_requirement_id = None
+
+    if body.auto_review_prs is not None:
+        repo.auto_review_prs = body.auto_review_prs
+
+    if body.auto_post_comments is not None:
+        repo.auto_post_comments = body.auto_post_comments
+
+    await db.commit()
+    await db.refresh(repo)
     return repo
 
 

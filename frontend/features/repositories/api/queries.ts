@@ -106,6 +106,39 @@ export function useDisconnectGithub() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["github_status"] });
       qc.invalidateQueries({ queryKey: ["repositories"] });
-    }
+    },
+  });
+}
+
+// UPDATE SETTINGS
+export function useUpdateRepoSettings() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      settings,
+    }: {
+      id: string;
+      settings: {
+        auto_review_prs?: boolean;
+        auto_post_comments?: boolean;
+        default_requirement_id?: string | null;
+      };
+    }) => {
+      const res = await fetchApi(`/api/v1/repositories/${id}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      if (!res.ok) throw new Error("Failed to update repository settings");
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["repositories"] });
+      qc.invalidateQueries({ queryKey: ["repositories", variables.id] });
+      qc.invalidateQueries({ queryKey: ["traceability"] });
+    },
   });
 }

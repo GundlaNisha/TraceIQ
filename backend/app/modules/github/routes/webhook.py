@@ -67,21 +67,27 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 repo = result.scalar_one_or_none()
 
                 if repo:
-                    logger.info(
-                        f"Triggering AI review for PR #{pr_number} in {repo_url}"
-                    )
-                    pr_review = PRReview(
-                        repository_id=repo.id,
-                        user_id=repo.user_id,
-                        pr_number=pr_number,
-                        pr_title=pr_title,
-                        pr_html_url=pr_html_url,
-                        status="queued",
-                    )
-                    db.add(pr_review)
-                    await db.commit()
-                    await db.refresh(pr_review)
-                    run_pr_review.delay(str(pr_review.id))
+                    if repo.auto_review_prs:
+                        logger.info(
+                            f"Triggering automated AI review for PR #{pr_number} in {repo_url} with requirement {repo.default_requirement_id}"
+                        )
+                        pr_review = PRReview(
+                            repository_id=repo.id,
+                            user_id=repo.user_id,
+                            pr_number=pr_number,
+                            pr_title=pr_title,
+                            pr_html_url=pr_html_url,
+                            requirement_id=repo.default_requirement_id,
+                            status="queued",
+                        )
+                        db.add(pr_review)
+                        await db.commit()
+                        await db.refresh(pr_review)
+                        run_pr_review.delay(str(pr_review.id))
+                    else:
+                        logger.info(
+                            f"Auto-review disabled for {repo.name}. Skipping automatic trigger for PR #{pr_number}."
+                        )
                 else:
                     logger.warning(
                         f"Webhook received for untracked repository: {repo_url}"

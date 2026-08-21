@@ -10,6 +10,12 @@ class RepoCreate(BaseModel):
     repo_url: HttpUrl
 
 
+class RepoSettingsUpdate(BaseModel):
+    auto_review_prs: bool | None = None
+    auto_post_comments: bool | None = None
+    default_requirement_id: UUID | None = None
+
+
 class RepoResponse(BaseModel):
     id: UUID
     repo_url: str
@@ -18,6 +24,9 @@ class RepoResponse(BaseModel):
     default_branch: str
     github_installation_id: int | None = None
     is_private: bool = False
+    auto_review_prs: bool = False
+    auto_post_comments: bool = False
+    default_requirement_id: UUID | None = None
     created_at: datetime
 
     @field_serializer("created_at")

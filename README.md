@@ -1,132 +1,255 @@
-# TraceIQ 🧠💡
+# TraceIQ
 
-## 1️⃣ Project Overview
-TraceIQ is an advanced AI-powered requirement-to-code impact analysis tool. It solves the developer's "where do I make this change?" dilemma by analyzing your Git repositories and mapping product requirements directly to the impacted source code files, accelerating development and ensuring comprehensive requirement coverage.
+Autonomous Code Impact Analysis, AST Code Graph Indexing, and Pull Request Review Intelligence.
 
-## 2️⃣ Features
-- **Automated Impact Analysis:** Input a user story or requirement and instantly find which files and modules need modification.
-- **AI-Powered PR Draft Generation:** Automatically generate comprehensive Pull Request titles and Markdown descriptions based on the impact analysis.
-- **Dependency Graph Visualization:** Visually map out impacted files and their relationships within the codebase through an interactive dependency graph.
-- **Secure Repository Indexing:** Seamlessly ingest and index repositories with semantic search capabilities to understand your code structure.
+---
 
-## 3️⃣ Tech Stack
-- **Frontend (Next.js 16 App Router):** React framework for building a fast, SEO-friendly, and decoupled user interface.
-- **Styling (Tailwind CSS v4 & shadcn/ui):** For highly customizable, utility-first modern UI components.
-- **State Management (Zustand & TanStack Query):** Efficient client-side state handling and asynchronous data fetching.
-- **Backend (FastAPI):** High-performance Python framework for building RESTful APIs.
-- **Database (PostgreSQL with `pgvector`):** Relational database extended for robust vector embedding storage and semantic code search.
-- **Task Queue (Celery + Redis):** Offloads long-running AI analysis and repository indexing jobs to background workers for a responsive UI.
-- **AI Integration (LiteLLM):** Connects to models like DeepSeek and OpenAI for requirement analysis and generation tasks.
-- **Authentication (Clerk):** Provides seamless and secure user authentication and session management.
+## Overview
 
-## 4️⃣ Architecture 🔥
+TraceIQ is an enterprise-grade developer platform that bridges product requirements, codebase architecture, and pull request reviews. By combining Abstract Syntax Tree (AST) code graph traversal, Reciprocal Rank Fusion (RRF) hybrid retrieval, and large language models, TraceIQ automatically determines the blast radius of proposed requirements, conducts automated pull request code reviews, and enforces an end-to-end Traceability Matrix across the engineering lifecycle.
+
+---
+
+## Core Capabilities
+
+### 1. High-Throughput Code Indexing & Dependency Graph
+- **Multi-Language AST Parsing**: Extracts symbols (classes, methods, functions) and import statements across Python, TypeScript, JavaScript, Go, Rust, Java, and C/C++ using Tree-sitter.
+- **Dependency Graph Mapping**: Persists directed code dependencies to map out structural relations, upstream modules, and downstream callers.
+- **Batched Vector Tensor Embedding**: Computes dense 384-dimensional code embeddings using `all-MiniLM-L6-v2` in off-thread worker batches, persisted with `pgvector`.
+- **Bulk Database Ingestion**: Executes bulk SQL transactions to index large repositories in seconds.
+
+### 2. Sub-15ms Hybrid Code Search (RRF)
+- **Multi-Signal Retrieval**: Fuses three independent search signals into a unified ranking:
+  - Dense Vector Semantic Distance (`pgvector` cosine similarity)
+  - Full-Text Substring Matching (`tsvector` / text pattern search)
+  - AST Symbol Table Lookup (`code_symbols`)
+- **Reciprocal Rank Fusion (RRF)**: Merges disparate relevance scores into an accurate, deduplicated candidate list with sub-15ms query latency.
+
+### 3. Graph-Augmented Impact Blast Radius Analysis
+- **2-Hop Graph Traversal**: Automatically expands from direct semantic candidate seeds to 1-hop and 2-hop connected dependencies in the code graph.
+- **Structural Context Synthesis**: Formats AST dependency graphs and relevant source blocks into contextual prompts for precise blast radius prediction.
+- **Deterministic Risk Scoring**: Flags impacted files, confidence scores, and architectural risk levels (High, Medium, Low).
+
+### 4. Automated Pull Request Review Engine
+- **Per-File Patch Chunking**: Parses unified diffs into structured per-file modifications to prevent truncation on large pull requests.
+- **Multi-Threaded Parallel Review**: Concurrently analyzes changed files using asynchronous worker task batches for fast turnaround.
+- **Requirement Gap Detection**: Cross-references pull request diffs against stated product requirements and expected blast radius, flagging unaddressed criteria, missing tests, and edge case regressions.
+- **Direct GitHub Integration**: Automatically posts structured code review comments, severity summaries, and line-level recommendations to GitHub pull requests via GitHub App tokens.
+
+### 5. Traceability Matrix & Audit Inspection
+- **End-to-End Compliance**: Aggregates product requirements, predicted impact blast radius, and pull request review verdicts into a unified audit view.
+- **Health Scoring**: Computes repository-level compliance scores based on requirement test coverage and critical finding resolutions.
+
+### 6. Repository Lifecycle Controls
+- **1-Click GitHub App Import**: Discovers accessible repositories and imports them in a single step.
+- **Full Lifecycle Management**: On-demand repository resyncing, real-time background status polling, sync cancellation, and failed job retry mechanisms.
+
+---
+
+## System Architecture
+
 ```mermaid
 graph TD
-    User([User]) --> |Interacts with| Frontend[Next.js Frontend]
-    Frontend --> |Authenticates via| Clerk[Clerk Auth]
-    Frontend --> |REST API Calls| Backend[FastAPI Backend]
-    Backend --> |Validates Session| Clerk
-    Backend --> |Syncs Data| DB[(PostgreSQL + pgvector)]
-    Backend --> |Enqueues Tasks| Redis[Redis Broker]
-    Redis --> |Triggers| Celery[Celery Workers]
-    Celery --> |Reads/Writes Data| DB
-    Celery --> |LLM Inference| LLM[LLM APIs (LiteLLM)]
-    Frontend --> |Visualizes| ReactFlow[React Flow Graph]
+    subgraph Client Layer
+        A[Next.js 16 Web Interface] --> B[Clerk Authentication]
+        A --> C[TanStack Query & Zustand State]
+    end
+
+    subgraph API & Gateway Layer
+        D[FastAPI REST API] --> B
+        D --> E[PostgreSQL + pgvector]
+        D --> F[Redis Message Broker]
+    end
+
+    subgraph Async Worker Layer
+        F --> G[Celery Task Workers]
+        G --> H[Tree-sitter AST Parser & Dependency Graph]
+        G --> I[SentenceTransformer Vector Embedder]
+        G --> J[LiteLLM AI Dispatcher]
+        G --> E
+    end
+
+    subgraph External Integrations
+        J --> K[LLM Providers / DeepSeek / OpenAI]
+        G --> L[GitHub App API & Webhooks]
+        D --> L
+    end
+
+    A --> D
 ```
 
-## 5️⃣ Project Structure
-- `backend/`: Contains the FastAPI application, Alembic database migrations, Celery worker configurations, and API route definitions (`app/main.py`, `app/modules/`).
-- `frontend/`: Contains the Next.js application, React components (`components/`), Next.js pages/routes (`app/`), and Zustand state stores (`stores/`).
-- `docs/` & `plan-docs/`: Project documentation and architecture plans.
+---
 
-## 6️⃣ Installation & Setup
+## Technology Stack
+
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Frontend** | Next.js 16 (App Router), React 19, TypeScript | Server and client rendering, routing, and metadata |
+| **Styling** | Vanilla CSS / Tailwind CSS v4, Base UI | Design system, responsive layouts, and modal components |
+| **State & Data** | TanStack Query v5, Zustand | Asynchronous server-state caching and active repository context |
+| **Backend** | FastAPI, Python 3.11, Pydantic v2 | High-throughput asynchronous REST API |
+| **Database** | PostgreSQL with `pgvector` (Neon Serverless) | Relational persistence, full-text search, and vector distance indexing |
+| **Task Queue** | Celery, Redis | Background repository synchronization, indexing, and AI reviews |
+| **Code Intelligence** | Tree-sitter, SentenceTransformers (`all-MiniLM-L6-v2`) | AST symbol extraction, dependency graph generation, and vector embeddings |
+| **AI Layer** | LiteLLM, Instructor | Structured schema validation and LLM orchestration |
+| **Authentication** | Clerk | Multi-tenant user authentication and session verification |
+
+---
+
+## Repository Structure
+
+```
+TraceIQ/
+├── backend/
+│   ├── app/
+│   │   ├── ai/                      # AI prompts, context builders, and LiteLLM adapters
+│   │   ├── core/                    # Application settings, exceptions, and dependencies
+│   │   ├── db/                      # SQLAlchemy async sessions and Alembic migrations
+│   │   ├── modules/
+│   │   │   ├── auth/                # User sync and Clerk webhooks
+│   │   │   ├── github/              # GitHub App installation, PR syncing, and webhooks
+│   │   │   ├── impact/              # Impact analysis job management and schemas
+│   │   │   ├── indexing/            # Tree-sitter AST parsers, chunkers, and embedders
+│   │   │   ├── repository/          # Repository CRUD, settings, and sync endpoints
+│   │   │   ├── requirement/         # Requirements and version management
+│   │   │   ├── retrieval/           # Hybrid search (pgvector + Text + Symbols RRF)
+│   │   │   ├── review/              # PR review models and schemas
+│   │   │   └── traceability/        # Traceability Matrix aggregation routes
+│   │   └── workers/                 # Celery background tasks (indexing, sync, PR review)
+│   ├── pyproject.toml               # Python dependencies managed via uv
+│   └── tests/                       # Pytest unit and integration test suite
+├── frontend/
+│   ├── app/                         # Next.js App Router pages and metadata
+│   ├── components/                  # Shared UI components, providers, and navigation
+│   ├── features/                    # Domain-driven feature modules (dashboard, repos, etc.)
+│   ├── lib/                         # API client, utility functions, and TypeScript types
+│   ├── stores/                      # Zustand state stores (workspace selection)
+│   └── package.json                 # Frontend dependencies and scripts
+└── README.md
+```
+
+---
+
+## Getting Started
 
 ### Prerequisites
-- Node.js (v18+)
-- Python (v3.10+)
-- PostgreSQL (with `pgvector` extension)
-- Redis (for Celery)
+- Node.js (v18.17+) and npm
+- Python 3.11+ and `uv` package manager
+- PostgreSQL database with `pgvector` extension enabled
+- Redis server (local or hosted)
+
+---
 
 ### Backend Setup
-1. Navigate to the backend directory and set up the Python environment using `uv`:
+
+1. **Navigate to the backend directory and install dependencies**:
    ```bash
    cd backend
    uv sync
    source .venv/bin/activate
    ```
-2. Configure your environment variables:
-   ```bash
-   cp .env.example .env
-   # Add your PostgreSQL URL, Redis URL, Clerk Webhook secrets, and LLM API keys.
+
+2. **Configure environment variables**:
+   Create a `.env` file in the `backend/` directory:
+   ```env
+   DATABASE_URL=postgresql+asyncpg://user:password@host:5432/dbname
+   REDIS_URL=redis://localhost:6379/0
+   CLERK_SECRET_KEY=sk_test_...
+   CLERK_PUBLISHABLE_KEY=pk_test_...
+   CLERK_JWKS_URL=https://.../.well-known/jwks.json
+   OPENAI_API_KEY=sk-...
+   GITHUB_APP_ID=...
+   GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+   GITHUB_WEBHOOK_SECRET=...
+   FRONTEND_URL=http://localhost:3000
+   ALLOWED_ORIGINS=["http://localhost:3000"]
    ```
-3. Run database migrations:
+
+3. **Run database migrations**:
    ```bash
    alembic upgrade head
    ```
-4. Start the FastAPI server and Celery worker (in separate terminal windows):
-   ```bash
-   # Start FastAPI Server
-   fastapi dev app/main.py
 
-   # Start Celery Worker
-   celery -A app.workers.celery_app worker --loglevel=info
+4. **Start the API server and Celery background worker**:
+   ```bash
+   # Terminal 1: FastAPI Development Server
+   uv run fastapi dev app/main.py --port 8000
+
+   # Terminal 2: Celery Worker
+   uv run celery -A app.workers.celery_app worker --loglevel=info -c 4
    ```
 
+---
+
 ### Frontend Setup
-1. Navigate to the frontend directory and install dependencies:
+
+1. **Navigate to the frontend directory and install dependencies**:
    ```bash
    cd frontend
    npm install
    ```
-2. Configure your environment variables:
-   ```bash
-   cp .env.example .env
-   # Add your Clerk Publishable Key, Clerk Secret Key, and backend API URL.
+
+2. **Configure environment variables**:
+   Create a `.env.local` file in the `frontend/` directory:
+   ```env
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+   CLERK_SECRET_KEY=sk_test_...
+   NEXT_PUBLIC_API_URL=http://localhost:8000
+   NEXT_PUBLIC_GITHUB_APP_NAME=traceiq-official
    ```
-3. Start the Next.js development server:
+
+3. **Start the Next.js development server**:
    ```bash
    npm run dev
    ```
 
-## 7️⃣ Usage
-1. **Login:** Authenticate securely using Clerk.
-2. **Connect Repository:** Link your Git repository. TraceIQ will automatically index and generate vector embeddings for your codebase.
-3. **Analyze Requirement:** Enter a feature description or bug fix requirement into the dashboard.
-4. **Review Impact:** Wait for the asynchronous analysis to complete and review the identified files and their relationships on the interactive dependency graph.
-5. **Generate PR:** With one click, generate a highly detailed Pull Request draft ready for submission.
+4. Open `http://localhost:3000` in your browser.
 
-## 8️⃣ Screenshots / Demo
-*(Placeholder for actual application screenshots or GIF walkthroughs)*
-- **Dashboard View:** `![Dashboard](./docs/dashboard-preview.png)`
-- **Dependency Graph:** `![Graph](./docs/graph-preview.png)`
+---
 
-## 9️⃣ API Documentation
-TraceIQ's backend provides a RESTful API built with FastAPI. The interactive OpenAPI (Swagger) documentation is automatically generated and can be accessed locally when the backend is running at:
+## Testing & Quality Assurance
+
+### Backend Tests
+The backend test suite covers AST parsers, dependency extractors, hybrid search logic, and AI dispatchers:
+```bash
+cd backend
+uv run pytest tests/ai/ tests/indexing/
+```
+
+To run code formatting and linting:
+```bash
+cd backend
+uv run ruff check .
+uv run ruff format .
+```
+
+### Frontend Tests & Type Checking
+```bash
+cd frontend
+npm run test
+npm run build
+```
+
+---
+
+## API Reference
+
+The interactive OpenAPI documentation is generated automatically by FastAPI and is accessible at:
 `http://localhost:8000/docs`
 
-### Core Endpoints Include:
-- `POST /api/repos/` - Connect and index a new repository.
-- `POST /api/impact/analyze` - Trigger an AI impact analysis job for a requirement.
-- `GET /api/pr/draft/{analysis_id}` - Fetch a generated PR draft based on analysis results.
+### Primary Endpoints:
+- `GET /api/v1/repositories`: List tracked repositories and automation settings.
+- `POST /api/v1/repositories`: Connect a new repository.
+- `POST /api/v1/repositories/{id}/resync`: Trigger full re-indexing of a repository.
+- `POST /api/v1/repositories/{id}/cancel-sync`: Cancel an ongoing sync job.
+- `GET /api/v1/search/code`: Execute sub-15ms hybrid RRF code search.
+- `POST /api/v1/requirements/{id}/analyze`: Run graph-augmented impact blast radius analysis.
+- `GET /api/v1/github/pull-requests`: List and filter pull requests across tracked repositories.
+- `POST /api/v1/reviews/pull-requests/{id}/publish-comment`: Post AI review directly to GitHub.
+- `GET /api/v1/traceability`: Fetch repository compliance and acceptance criteria mappings.
 
-## 🔟 Engineering Decisions
-- **Monorepo Architecture:** Next.js and FastAPI are decoupled but kept in a single repository for easier full-stack version control and context sharing.
-- **Asynchronous Task Queue (Celery & Redis):** Repository indexing and LLM calls are highly resource-intensive and time-consuming. Offloading them to Celery prevents API blocking and keeps the Next.js frontend extremely responsive.
-- **Vector Database (pgvector):** Chosen over dedicated vector DBs (like Pinecone) to keep architectural simplicity while effectively handling semantic code search alongside relational user data in PostgreSQL.
-- **Component Styling:** Transitioned to Tailwind CSS v4 and `shadcn/ui` for rapid, headless UI component development without writing custom CSS from scratch.
+---
 
-## 1️⃣1️⃣ Testing
-- **Backend Testing (Pytest):** Tests API endpoints, database interactions, and authentication logic.
-  - *Run tests:* `cd backend && pytest`
-- **Frontend Testing (Vitest & Playwright):** Vitest is configured for unit testing components, and Playwright is set up for End-to-End (E2E) workflow validation.
-  - *Run unit tests:* `cd frontend && npm run test`
-  - *Run E2E tests:* `cd frontend && npm run e2e`
+## License
 
-## 1️⃣2️⃣ Limitations & Future Improvements
-- **Current Limitations:**
-  - Initial repository indexing can be slow for massive codebases, taking several minutes.
-  - Relies heavily on external LLM rate limits which can cause queuing delays for impact analysis.
-- **Future Improvements:**
-  - Support for more Git providers (GitLab, Bitbucket) beyond GitHub.
-  - IDE integrations (VS Code / JetBrains plugins) to pull analysis directly into the editor.
-  - Deeper AST-level (Abstract Syntax Tree) code chunking for even more accurate semantic search.
+This project is licensed under the MIT License.

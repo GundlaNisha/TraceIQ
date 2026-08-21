@@ -89,8 +89,19 @@ export default function ProtectedLayoutClient({
         {/* Modern Top Header */}
         <header className="bg-white/80 backdrop-blur-xl border-b border-border/50 shrink-0 z-20 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="w-full max-w-[1400px] mx-auto px-6 md:px-10 py-2.5 flex items-center justify-between gap-4">
-            {/* Global Search & Active Repo Switcher */}
-            <GlobalSearchBar />
+            {/* Left: Breadcrumb & Page Name */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-medium text-muted-foreground hidden lg:inline">Workspace</span>
+              <span className="text-xs text-muted-foreground/50 hidden lg:inline">/</span>
+              <span className="text-xs font-bold text-foreground">
+                {NAV_ITEMS.find((item) => pathname.startsWith(item.href))?.label || "Dashboard"}
+              </span>
+            </div>
+
+            {/* Center: Global Search & Active Repo Switcher */}
+            <div className="flex-1 max-w-xl mx-2">
+              <GlobalSearchBar />
+            </div>
 
             {/* Right-Hand Profile & System Status */}
             <div className="flex items-center gap-3.5 shrink-0">

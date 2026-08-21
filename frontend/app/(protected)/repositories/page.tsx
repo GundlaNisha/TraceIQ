@@ -2,6 +2,11 @@ import { AddRepositoryModal } from "@/features/repositories/components/AddReposi
 import { ConnectGithubButton } from "@/features/repositories/components/ConnectGithubButton";
 import { RepositoryList } from "@/features/repositories/components/RepositoryList";
 
+export const metadata = {
+  title: "Repositories",
+  description: "Connect and manage your GitHub repositories for code analysis and automated PR reviews.",
+};
+
 export default function RepositoriesPage() {
   return (
     <div className="flex flex-col gap-10 pb-12">

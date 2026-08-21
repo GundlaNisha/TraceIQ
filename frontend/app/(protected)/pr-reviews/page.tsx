@@ -1,5 +1,10 @@
 import { PRReviewList } from "@/features/pr-reviews/components/PRReviewList";
 
+export const metadata = {
+  title: "PR Reviews",
+  description: "AI-powered automated code reviews for GitHub Pull Requests checked against requirements.",
+};
+
 export default function PRReviewsPage() {
   return (
     <div className="flex flex-col gap-10 pb-12">

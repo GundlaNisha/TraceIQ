@@ -1,5 +1,10 @@
 import { PullRequestList } from "@/features/github/components/PullRequestList";
 
+export const metadata = {
+  title: "Pull Requests",
+  description: "Track and review open GitHub pull requests against project requirements.",
+};
+
 export default function PullRequestsPage() {
   return (
     <div className="flex flex-col gap-10 pb-12">

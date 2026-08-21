@@ -122,12 +122,19 @@ async def get_github_pull_requests(
             base_data = pr.get("base") or {}
             repo_data = base_data.get("repo") or {}
 
+            # Detect if PR was merged vs closed
+            raw_state = pr.get("state", "open")
+            is_merged = bool(pr.get("merged_at"))
+            state = "merged" if is_merged else raw_state
+
             all_prs.append(
                 {
                     "id": str(pr.get("id")),
                     "number": pr.get("number"),
                     "title": pr.get("title", ""),
-                    "state": pr.get("state", "open"),
+                    "state": state,
+                    "merged_at": pr.get("merged_at"),
+                    "closed_at": pr.get("closed_at"),
                     "html_url": pr.get("html_url", ""),
                     "created_at": pr.get("created_at"),
                     "updated_at": pr.get("updated_at"),

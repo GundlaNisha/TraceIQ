@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import git
 from celery.utils.log import get_task_logger
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from app.db.session import get_worker_session
 from app.integrations.storage.local_client import upload_tarball
@@ -111,11 +111,39 @@ async def _process_sync(repository_id: str):
 
     # Inject token for GitHub App installed repos.
     # The token is embedded in the URL for git-clone auth but MUST NOT be logged.
+    token = None
     if repo.github_installation_id:
-        token = get_installation_token(repo.github_installation_id)
-        if repo_url.startswith("https://"):
-            repo_url = repo_url.replace("https://", f"https://x-access-token:{token}@")
-    # Keep a safe (no-token) copy for any log messages below
+        try:
+            token = get_installation_token(repo.github_installation_id)
+        except Exception:
+            token = None
+
+    if not token:
+        from app.modules.github.models.installation import GithubInstallation
+        from app.modules.github.services.auth import get_installation_id_for_repo
+        # Try matching repo name first
+        parsed_path = urlparse(repo_url).path.strip("/").removesuffix(".git")
+        inst_id = get_installation_id_for_repo(parsed_path)
+        if inst_id:
+            try:
+                token = get_installation_token(inst_id)
+            except Exception:
+                token = None
+
+        if not token and repo.user_id:
+            async with get_worker_session() as user_sess:
+                u_inst = await user_sess.execute(
+                    select(GithubInstallation).where(GithubInstallation.user_id == repo.user_id)
+                )
+                inst_obj = u_inst.scalar_one_or_none()
+                if inst_obj:
+                    try:
+                        token = get_installation_token(inst_obj.installation_id)
+                    except Exception:
+                        token = None
+
+    if token and repo_url.startswith("https://"):
+        repo_url = repo_url.replace("https://", f"https://x-access-token:{token}@")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         git_repo = git.Repo.clone_from(repo_url, temp_dir, depth=1)

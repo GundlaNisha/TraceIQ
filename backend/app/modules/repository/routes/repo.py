@@ -213,7 +213,8 @@ async def delete_repository(
 
 
 @router.post("/{repo_id}/sync", status_code=202)
-async def trigger_sync(
+@router.post("/{repo_id}/resync", status_code=202)
+async def trigger_resync(
     repo_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -229,9 +230,11 @@ async def trigger_sync(
     if not repo or repo.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    repo.sync_status = "syncing"
+
     audit = AuditLog(
         user_id=str(current_user.id),
-        action="repo.sync",
+        action="repo.resync",
         resource_type="repository",
         resource_id=repo_id,
     )
@@ -239,7 +242,38 @@ async def trigger_sync(
     await db.commit()
 
     sync_repository.delay(repo_id, str(current_user.id))
-    return {"job": "queued"}
+    return {"status": "syncing", "message": "Repository sync initiated"}
+
+
+@router.post("/{repo_id}/cancel-sync", status_code=200)
+async def cancel_repo_sync(
+    repo_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.modules.audit.models.audit import AuditLog
+
+    try:
+        repo_uuid = uuid.UUID(repo_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid repo UUID")
+
+    repo = await db.get(Repository, repo_uuid)
+    if not repo or repo.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    repo.sync_status = "failed"
+
+    audit = AuditLog(
+        user_id=str(current_user.id),
+        action="repo.cancel_sync",
+        resource_type="repository",
+        resource_id=repo_id,
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {"status": "failed", "message": "Repository sync cancelled"}
 
 
 @router.post("/{repo_id}/index", status_code=202)

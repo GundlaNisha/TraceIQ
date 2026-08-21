@@ -9,11 +9,16 @@ export function useRepositories() {
   return useQuery({
     queryKey: ["repositories"],
     queryFn: async () => {
-      
-      const res = await fetchApi(`/api/v1/repositories`, {
-      });
+      const res = await fetchApi(`/api/v1/repositories`, {});
       if (!res.ok) throw new Error("Failed to fetch repositories");
       return res.json();
+    },
+    refetchInterval: (query) => {
+      const repos = query.state.data;
+      if (Array.isArray(repos) && repos.some((r: any) => r.sync_status === "pending" || r.sync_status === "syncing")) {
+        return 2000;
+      }
+      return false;
     },
   });
 }
@@ -53,7 +58,14 @@ export function useAddRepository() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repo_url }),
       });
-      if (!res.ok) throw new Error("Failed to add repository");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(
+          errData?.detail ||
+            errData?.message ||
+            `Failed to add repository (${res.status})`
+        );
+      }
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["repositories"] }),
@@ -86,7 +98,45 @@ export function useGithubStatus() {
     queryFn: async () => {
       const res = await fetchApi(`/api/v1/github/status`, {});
       if (!res.ok) throw new Error("Failed to fetch github status");
-      return res.json() as Promise<{ connected: boolean }>;
+      return res.json() as Promise<{
+        connected: boolean;
+        installation_id?: number | null;
+        account_name?: string | null;
+        settings_url?: string;
+      }>;
+    },
+  });
+}
+
+export interface AvailableGithubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  html_url: string;
+  private: boolean;
+  default_branch: string;
+  description: string | null;
+  is_imported: boolean;
+}
+
+// AVAILABLE GITHUB REPOSITORIES
+export function useAvailableGithubRepos(enabled: boolean = true) {
+  const { fetchApi } = useApiClient();
+
+  return useQuery({
+    queryKey: ["github_available_repos"],
+    enabled,
+    queryFn: async () => {
+      const res = await fetchApi(`/api/v1/github/available-repositories`, {});
+      if (!res.ok) throw new Error("Failed to fetch available GitHub repositories");
+      return res.json() as Promise<{
+        connected: boolean;
+        account_name?: string;
+        installation_id?: number;
+        total_count: number;
+        settings_url: string;
+        repositories: AvailableGithubRepo[];
+      }>;
     },
   });
 }
@@ -139,6 +189,70 @@ export function useUpdateRepoSettings() {
       qc.invalidateQueries({ queryKey: ["repositories"] });
       qc.invalidateQueries({ queryKey: ["repositories", variables.id] });
       qc.invalidateQueries({ queryKey: ["traceability"] });
+    },
+  });
+}
+
+// LINK GITHUB INSTALLATION MANUALLY
+export function useLinkGithubInstallation() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (installationId: number) => {
+      const res = await fetchApi(
+        `/api/v1/github/link-installation?installation_id=${installationId}`,
+        {
+          method: "POST",
+        }
+      );
+      if (!res.ok) throw new Error("Failed to link GitHub installation");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["github_status"] });
+      qc.invalidateQueries({ queryKey: ["github_available_repos"] });
+      qc.invalidateQueries({ queryKey: ["repositories"] });
+    },
+  });
+}
+
+// RESYNC / REPROCESS REPOSITORY
+export function useResyncRepository() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchApi(`/api/v1/repositories/${id}/resync`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to trigger repository resync");
+      return res.json();
+    },
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["repositories"] });
+      qc.invalidateQueries({ queryKey: ["repositories", id] });
+    },
+  });
+}
+
+// CANCEL REPOSITORY SYNC
+export function useCancelRepositorySync() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchApi(`/api/v1/repositories/${id}/cancel-sync`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to cancel repository sync");
+      return res.json();
+    },
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["repositories"] });
+      qc.invalidateQueries({ queryKey: ["repositories", id] });
     },
   });
 }

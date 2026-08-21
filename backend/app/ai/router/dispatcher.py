@@ -1,6 +1,6 @@
 from typing import cast
 
-from app.ai.context.builder import build_context
+from app.ai.context.builder import build_graph_augmented_context
 from app.ai.parsers.schemas import (
     ImpactAnalysisOutput,
     PRReviewOutput,
@@ -13,9 +13,11 @@ _adapter = LiteLLMAdapter()
 
 
 async def dispatch_impact_analysis(
-    requirement_text: str, chunks: list[dict]
+    requirement_text: str,
+    chunks: list[dict],
+    dependencies: list[dict] | None = None,
 ) -> ImpactAnalysisOutput:
-    context = build_context(chunks)
+    context = build_graph_augmented_context(chunks, dependencies)
     system = impact_prompts.IMPACT_SYSTEM
     user = impact_prompts.build_impact_prompt(requirement_text, context)
     return cast(

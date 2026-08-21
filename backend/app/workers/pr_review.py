@@ -1,10 +1,12 @@
 import asyncio
+import re
 from urllib.parse import urlparse
 
 import httpx
 from celery.utils.log import get_task_logger
 from sqlalchemy import select
 
+from app.ai.parsers.schemas import PRReviewFindingOutput, PRReviewOutput
 from app.ai.router.dispatcher import dispatch_pr_review
 from app.db.session import get_worker_session
 from app.modules.auth.models.user import User  # noqa: F401
@@ -39,6 +41,36 @@ def _extract_full_name(repo: Repository) -> str:
     return repo.name or ""
 
 
+def _parse_diff_into_file_patches(diff_text: str) -> list[dict]:
+    """
+    Parses a unified diff into clean per-file patch blocks.
+    Returns list of {'file_path': str, 'patch': str}
+    """
+    if not diff_text:
+        return []
+
+    file_chunks = re.split(r"(?=^diff --git )", diff_text, flags=re.MULTILINE)
+    patches = []
+
+    for chunk in file_chunks:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+
+        # Extract file path from diff header
+        match = re.search(r"^diff --git a/(.*?) b/(.*?)$", chunk, re.MULTILINE)
+        file_path = match.group(2) if match else "unknown"
+
+        patches.append(
+            {
+                "file_path": file_path,
+                "patch": chunk,
+            }
+        )
+
+    return patches
+
+
 async def _fetch_pr_diff(repo_full_name: str, pr_number: int, token: str | None) -> str:
     """Fetch the raw unified diff for a GitHub PR."""
     headers = {
@@ -61,7 +93,6 @@ async def _fetch_pr_diff(repo_full_name: str, pr_number: int, token: str | None)
                 f"API diff fetch error for {repo_full_name}#{pr_number}: {exc!s}"
             )
 
-        # Fallback to direct patch-diff endpoint
         try:
             diff_resp = await client.get(
                 f"https://patch-diff.githubusercontent.com/raw/{repo_full_name}/pull/{pr_number}.diff",
@@ -146,15 +177,12 @@ async def _post_pr_review_to_github(
                     f"✅ Successfully posted TraceIQ PR review to GitHub {repo_full_name}#{pr_number}"
                 )
                 return
-            logger.warning(
-                f"PR review API returned {response.status_code} ({response.text[:200]}). Falling back to PR issue comment..."
-            )
         except Exception as exc:
             logger.warning(
-                f"PR review API exception: {exc!s}. Falling back to PR issue comment..."
+                f"PR review API exception: {exc!s}. Falling back to comment..."
             )
 
-        # Fallback Attempt: Post as Issue Comment on the PR conversation
+        # Fallback: Post as Issue Comment
         try:
             comment_resp = await client.post(
                 f"https://api.github.com/repos/{repo_full_name}/issues/{pr_number}/comments",
@@ -169,87 +197,66 @@ async def _post_pr_review_to_github(
                 logger.info(
                     f"✅ Successfully posted TraceIQ comment to GitHub PR {repo_full_name}#{pr_number}"
                 )
-            else:
-                logger.error(
-                    f"Failed to post GitHub PR comment for {repo_full_name}#{pr_number} "
-                    f"({comment_resp.status_code}): {comment_resp.text[:500]}"
-                )
         except Exception as exc:
             logger.error(f"Failed to post PR comment fallback: {exc!s}")
 
 
 async def _process_pr_review(pr_review_id: str) -> None:
+    """Core review task logic with parallel file batching."""
     async with get_worker_session() as session:
+        # 1. Fetch PRReview record
+        result = await session.execute(
+            select(PRReview).where(PRReview.id == pr_review_id)
+        )
+        pr_review = result.scalar_one_or_none()
+        if not pr_review:
+            logger.error(f"PRReview {pr_review_id} not found — aborting.")
+            return
+
+        # 2. Set status to running
+        pr_review.status = "running"
+        await session.commit()
+
         try:
-            # 1. Fetch PRReview record
-            result = await session.execute(
-                select(PRReview).where(PRReview.id == pr_review_id)
-            )
-            pr_review = result.scalar_one_or_none()
-            if not pr_review:
-                logger.error(f"PRReview {pr_review_id} not found.")
-                return
-
-            pr_review.status = "running"
-            await session.commit()
-
-            # 2. Fetch Repository
+            # 3. Fetch Repository info
             repo_result = await session.execute(
                 select(Repository).where(Repository.id == pr_review.repository_id)
             )
-            repository = repo_result.scalar_one()
+            repository = repo_result.scalar_one_or_none()
+            if not repository:
+                raise ValueError(
+                    f"Repository {pr_review.repository_id} not found for PRReview {pr_review_id}"
+                )
 
-            # 3. Derive owner/repo accurately from URL or name
             repo_full_name = _extract_full_name(repository)
+            if not repo_full_name:
+                raise ValueError(
+                    f"Could not determine repo_full_name for repo {repository.id}"
+                )
 
-            # 4. Fetch linked GitHub Installation token
-            token = None
+            # 4. Resolve GitHub App Installation Token
+            token: str | None = None
             if repository.github_installation_id:
                 try:
                     token = get_installation_token(repository.github_installation_id)
                 except Exception as exc:
                     logger.warning(
-                        f"Could not get installation token for repo installation {repository.github_installation_id}: {exc!s}"
+                        f"Could not get token for repo installation {repository.github_installation_id}: {exc!s}"
                     )
 
-            # If not already linked, dynamically discover installation for this repo
-            if not token and repo_full_name:
+            if not token:
                 inst_id = get_installation_id_for_repo(repo_full_name)
                 if inst_id:
                     try:
                         token = get_installation_token(inst_id)
-                        # Ensure GithubInstallation record exists first to satisfy foreign key constraint
-                        inst_check = await session.execute(
-                            select(GithubInstallation).where(
-                                GithubInstallation.installation_id == inst_id
-                            )
-                        )
-                        inst_rec = inst_check.scalar_one_or_none()
-                        if not inst_rec:
-                            parts = [
-                                p for p in repo_full_name.strip("/").split("/") if p
-                            ]
-                            account_name = parts[0] if parts else "github-user"
-                            inst_rec = GithubInstallation(
-                                user_id=pr_review.user_id,
-                                installation_id=inst_id,
-                                account_name=account_name,
-                            )
-                            session.add(inst_rec)
-                            await session.flush()
-
                         repository.github_installation_id = inst_id
                         await session.commit()
-                        logger.info(
-                            f"Discovered and linked GitHub App installation {inst_id} for repo {repo_full_name}"
-                        )
                     except Exception as exc:
                         await session.rollback()
                         logger.warning(
-                            f"Could not persist discovered installation {inst_id}: {exc!s}"
+                            f"Could not persist installation {inst_id}: {exc!s}"
                         )
 
-            # Fallback to user installation
             if not token:
                 inst_result = await session.execute(
                     select(GithubInstallation).where(
@@ -270,79 +277,103 @@ async def _process_pr_review(pr_review_id: str) -> None:
             if not pr_diff:
                 raise ValueError("Empty PR diff — cannot review.")
 
-            # Truncate to ~120k chars to stay within model context limits
-            if len(pr_diff) > 120_000:
-                pr_diff = (
-                    pr_diff[:120_000] + "\n\n[... diff truncated for context limit ...]"
-                )
-
             # 6. Fetch linked requirement text and impact analysis (if any)
             req_text = ""
             analysis_context = ""
+
             if pr_review.requirement_id:
                 req_result = await session.execute(
                     select(Requirement).where(
                         Requirement.id == pr_review.requirement_id
                     )
                 )
-                req = req_result.scalar_one_or_none()
-                if req:
-                    req_text = (
-                        f"Title: {req.title}\n\nDescription & Criteria:\n{req.text}"
-                    )
+                req_record = req_result.scalar_one_or_none()
+                if req_record:
+                    req_text = f"Title: {req_record.title}\nVersion: {req_record.version_number}\nDescription:\n{req_record.text}"
 
-                    # Look up latest completed impact analysis for this requirement
-                    impact_stmt = (
+                    impact_result_db = await session.execute(
                         select(ImpactResult)
                         .join(AnalysisJob, ImpactResult.job_id == AnalysisJob.id)
                         .where(
                             AnalysisJob.requirement_id == pr_review.requirement_id,
+                            AnalysisJob.repository_id == pr_review.repository_id,
                             AnalysisJob.status == "completed",
                         )
                         .order_by(AnalysisJob.created_at.desc())
                         .limit(1)
                     )
-                    impact_res = await session.execute(impact_stmt)
-                    impact_result = impact_res.scalar_one_or_none()
-                    if impact_result and impact_result.impacted_files:
-                        files_data = impact_result.impacted_files
-                        impacted_list = (
-                            files_data.get("impacted_files", [])
-                            if isinstance(files_data, dict)
-                            else files_data
-                            if isinstance(files_data, list)
-                            else []
+                    impact_rec = impact_result_db.scalar_one_or_none()
+                    if impact_rec and impact_rec.impacted_files:
+                        files_data = impact_rec.impacted_files.get("files", [])
+                        if files_data:
+                            file_lines = []
+                            for f in files_data:
+                                file_lines.append(
+                                    f"- {f.get('file_path')} (confidence: {f.get('confidence')}, risk: {f.get('risk_level', 'medium')}): {f.get('reasoning', '')}"
+                                )
+                            analysis_context = (
+                                "Impacted files predicted by prior analysis:\n"
+                                + "\n".join(file_lines)
+                            )
+
+            # 7. High-Performance Multi-File Chunking & Parallel AI Review
+            file_patches = _parse_diff_into_file_patches(pr_diff)
+            all_findings: list[PRReviewFindingOutput] = []
+            final_summary = ""
+
+            if len(file_patches) > 4:
+                # Group patches into batches of 3-4 files and evaluate concurrently
+                patch_batches = [
+                    file_patches[i : i + 4] for i in range(0, len(file_patches), 4)
+                ]
+                logger.info(
+                    f"Evaluating {len(file_patches)} files in {len(patch_batches)} parallel review tasks..."
+                )
+
+                async def review_patch_batch(
+                    batch: list[dict], batch_idx: int
+                ) -> PRReviewOutput:
+                    combined_patch_diff = "\n\n".join(p["patch"] for p in batch)
+                    batch_title = f"{pr_review.pr_title} (Batch {batch_idx + 1}/{len(patch_batches)})"
+                    return await dispatch_pr_review(
+                        batch_title,
+                        combined_patch_diff,
+                        req_text,
+                        analysis_context,
+                    )
+
+                tasks = [
+                    review_patch_batch(batch, idx)
+                    for idx, batch in enumerate(patch_batches)
+                ]
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                summaries = []
+                for res in batch_results:
+                    if isinstance(res, PRReviewOutput):
+                        all_findings.extend(res.findings)
+                        if res.summary:
+                            summaries.append(res.summary)
+                    elif isinstance(res, Exception):
+                        logger.warning(
+                            f"Parallel review batch encountered error: {res!s}"
                         )
 
-                        if impacted_list:
-                            analysis_context = (
-                                "### Expected Impact Analysis Blast Radius:\n"
-                            )
-                            for f in impacted_list[:12]:
-                                path = f.get("file_path", "")
-                                conf = f.get("confidence", "")
-                                symbols = ", ".join(f.get("impacted_symbols", []))
-                                tests = ", ".join(f.get("related_tests", []))
-                                analysis_context += (
-                                    f"- File `{path}` (Confidence: {conf})\n"
-                                )
-                                if symbols:
-                                    analysis_context += (
-                                        f"  - Impacted Symbols: `{symbols}`\n"
-                                    )
-                                if tests:
-                                    analysis_context += (
-                                        f"  - Expected Tests: `{tests}`\n"
-                                    )
+                final_summary = " ".join(summaries)
+            else:
+                # Direct single-pass review for compact diffs
+                if len(pr_diff) > 120_000:
+                    pr_diff = pr_diff[:120_000] + "\n\n[... diff truncated ...]"
 
-            # 7. Dispatch to LLM with full requirement and impact context
-            ai_result = await dispatch_pr_review(
-                pr_review.pr_title, pr_diff, req_text, analysis_context
-            )
+                ai_result = await dispatch_pr_review(
+                    pr_review.pr_title, pr_diff, req_text, analysis_context
+                )
+                all_findings = ai_result.findings
+                final_summary = ai_result.summary
 
             # 8. Save findings to DB
             saved_findings = []
-            for finding in ai_result.findings:
+            for finding in all_findings:
                 rf = PRReviewFinding(
                     pr_review_id=pr_review.id,
                     file_path=finding.file_path,
@@ -354,7 +385,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
                 session.add(rf)
                 saved_findings.append(rf)
 
-            pr_review.summary = ai_result.summary
+            pr_review.summary = final_summary
             pr_review.status = "completed"
             await session.commit()
 
@@ -366,11 +397,11 @@ async def _process_pr_review(pr_review_id: str) -> None:
                             repo_full_name,
                             pr_review.pr_number,
                             token,
-                            ai_result.summary,
+                            final_summary,
                             saved_findings,
                         )
                         logger.info(
-                            f"Automated PR review comment posted to GitHub PR #{pr_review.pr_number} in {repo_full_name}"
+                            f"⚡ Automated PR review comment posted to GitHub PR #{pr_review.pr_number} in {repo_full_name}"
                         )
                     except Exception as gh_err:
                         logger.error(
@@ -378,25 +409,35 @@ async def _process_pr_review(pr_review_id: str) -> None:
                         )
                 else:
                     logger.warning(
-                        f"No GitHub token found for {repo_full_name} — skipping auto-posting review to GitHub."
+                        f"Auto-post comments enabled for {repo_full_name}, but no GitHub token was available."
                     )
-            else:
-                logger.info(
-                    f"Auto-post comments disabled for {repo_full_name}. Findings saved to dashboard."
-                )
+
+            logger.info(
+                f"⚡ PRReview {pr_review_id} completed successfully ({len(saved_findings)} findings)."
+            )
 
         except Exception:
-            logger.exception(f"PR review failed for {pr_review_id}")
+            logger.exception(f"PRReview {pr_review_id} failed")
             await session.rollback()
-            result = await session.execute(
-                select(PRReview).where(PRReview.id == pr_review_id)
-            )
-            failed_review = result.scalar_one_or_none()
-            if failed_review:
-                failed_review.status = "failed"
-                await session.commit()
+            try:
+                fail_result = await session.execute(
+                    select(PRReview).where(PRReview.id == pr_review_id)
+                )
+                failed_review = fail_result.scalar_one_or_none()
+                if failed_review:
+                    failed_review.status = "failed"
+                    await session.commit()
+            except Exception as inner_exc:
+                logger.error(
+                    f"Could not update PRReview {pr_review_id} status to failed: {inner_exc!s}"
+                )
 
 
-@celery_app.task
-def run_pr_review(pr_review_id: str) -> None:
+@celery_app.task(name="app.workers.pr_review.process_pr_review")
+def process_pr_review(pr_review_id: str) -> None:
+    """Synchronous Celery entry point."""
     asyncio.run(_process_pr_review(pr_review_id))
+
+
+# Alias for backwards compatibility
+run_pr_review = process_pr_review

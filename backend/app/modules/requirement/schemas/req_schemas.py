@@ -11,6 +11,7 @@ class ReqBase(BaseModel):
 
 class ReqCreate(ReqBase):
     repository_id: str
+    workspace_id: uuid.UUID | None = None
 
 
 class ReqUpdate(ReqBase):
@@ -38,8 +39,10 @@ class ReqResponse(ReqBase):
     user_id: str
     repository_id: uuid.UUID
     version_number: int
+    workspace_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+
 
     @field_serializer("created_at", "updated_at")
     def serialize_dates(self, dt: datetime, _info):

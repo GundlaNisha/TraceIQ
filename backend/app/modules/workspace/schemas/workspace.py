@@ -77,8 +77,11 @@ class WorkspaceMemberResponse(BaseModel):
     id: uuid.UUID
     workspace_id: uuid.UUID
     user_id: str
+    user_name: str | None = None
+    user_email: str | None = None
+    user_image: str | None = None
     role: str
-    invited_by: str | None
+    invited_by: str | None = None
     created_at: datetime
 
     @field_serializer("created_at")
@@ -110,3 +113,16 @@ class WorkspaceInviteResponse(BaseModel):
         return dt.isoformat()
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceSummaryResponse(BaseModel):
+    workspace: WorkspaceResponse
+    member_count: int
+    repository_count: int
+    requirement_count: int
+    user_role: str | None = None
+
+
+class WorkspaceRepoAssign(BaseModel):
+    repository_id: uuid.UUID
+

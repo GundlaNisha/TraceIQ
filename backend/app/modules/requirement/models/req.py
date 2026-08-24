@@ -19,6 +19,11 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
 
 
 class RequirementVersion(UUIDPrimaryKeyMixin, TimestampMixin, Base):

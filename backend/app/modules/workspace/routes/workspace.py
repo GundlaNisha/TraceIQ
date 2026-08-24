@@ -4,13 +4,17 @@ from datetime import UTC, datetime, timedelta
 from re import sub
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.db.session import get_db
 from app.modules.auth.models.user import User
+from app.modules.repository.models.repo import Repository
+from app.modules.repository.schemas.repo import RepoResponse
+from app.modules.requirement.models.req import Requirement
+from app.modules.requirement.schemas.req_schemas import ReqResponse
 from app.modules.workspace.models.workspace import (
     Workspace,
     WorkspaceInvitation,
@@ -23,7 +27,9 @@ from app.modules.workspace.schemas.workspace import (
     WorkspaceCreate,
     WorkspaceInviteResponse,
     WorkspaceMemberResponse,
+    WorkspaceRepoAssign,
     WorkspaceResponse,
+    WorkspaceSummaryResponse,
     WorkspaceUpdate,
 )
 
@@ -59,7 +65,12 @@ async def _get_member(
 
 def _require_role(member: WorkspaceMember | None, minimum: WorkspaceRole) -> None:
     """Raise ForbiddenError if member does not have at least the required role."""
-    hierarchy = [WorkspaceRole.viewer, WorkspaceRole.member, WorkspaceRole.admin, WorkspaceRole.owner]
+    hierarchy = [
+        WorkspaceRole.viewer,
+        WorkspaceRole.member,
+        WorkspaceRole.admin,
+        WorkspaceRole.owner,
+    ]
     if member is None or hierarchy.index(member.role) < hierarchy.index(minimum):
         raise ForbiddenError("Insufficient workspace permissions")
 
@@ -140,6 +151,50 @@ async def get_workspace(
     return workspace
 
 
+@router.get("/{workspace_id}/summary", response_model=WorkspaceSummaryResponse)
+async def get_workspace_summary(
+    workspace_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a summary of workspace resources (counts for repos, requirements, members, and user role)."""
+    workspace = await db.get(Workspace, workspace_id)
+    if not workspace:
+        raise NotFoundError("Workspace not found")
+    member = await _get_member(workspace_id, current_user.id, db)
+    if not member:
+        raise ForbiddenError("Not a member of this workspace")
+
+    member_count_res = await db.execute(
+        select(func.count(WorkspaceMember.id)).where(
+            WorkspaceMember.workspace_id == workspace_id
+        )
+    )
+    member_count = member_count_res.scalar() or 0
+
+    repo_count_res = await db.execute(
+        select(func.count(Repository.id)).where(
+            Repository.workspace_id == workspace_id
+        )
+    )
+    repo_count = repo_count_res.scalar() or 0
+
+    req_count_res = await db.execute(
+        select(func.count(Requirement.id)).where(
+            Requirement.workspace_id == workspace_id
+        )
+    )
+    req_count = req_count_res.scalar() or 0
+
+    return WorkspaceSummaryResponse(
+        workspace=WorkspaceResponse.model_validate(workspace),
+        member_count=member_count,
+        repository_count=repo_count,
+        requirement_count=req_count,
+        user_role=member.role.value if hasattr(member.role, "value") else str(member.role),
+    )
+
+
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)
 async def update_workspace(
     workspace_id: uuid.UUID,
@@ -182,6 +237,93 @@ async def delete_workspace(
 
 
 # ---------------------------------------------------------------------------
+# Workspace Repositories & Requirements
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{workspace_id}/repositories", response_model=list[RepoResponse])
+async def list_workspace_repositories(
+    workspace_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all repositories linked to this workspace."""
+    member = await _get_member(workspace_id, current_user.id, db)
+    if not member:
+        raise ForbiddenError("Not a member of this workspace")
+
+    result = await db.execute(
+        select(Repository)
+        .where(Repository.workspace_id == workspace_id)
+        .order_by(Repository.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{workspace_id}/repositories", response_model=RepoResponse)
+async def assign_repository_to_workspace(
+    workspace_id: uuid.UUID,
+    body: WorkspaceRepoAssign,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Link an existing repository to this workspace. Requires admin or owner role."""
+    member = await _get_member(workspace_id, current_user.id, db)
+    _require_role(member, WorkspaceRole.admin)
+
+    repo = await db.get(Repository, body.repository_id)
+    if not repo:
+        raise NotFoundError("Repository not found")
+
+    repo.workspace_id = workspace_id
+    await db.commit()
+    await db.refresh(repo)
+    return repo
+
+
+@router.delete("/{workspace_id}/repositories/{repository_id}", response_model=RepoResponse)
+async def unlink_repository_from_workspace(
+    workspace_id: uuid.UUID,
+    repository_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unlink a repository from this workspace (sets workspace_id to NULL). Requires admin+."""
+    member = await _get_member(workspace_id, current_user.id, db)
+    _require_role(member, WorkspaceRole.admin)
+
+    repo = await db.get(Repository, repository_id)
+    if not repo:
+        raise NotFoundError("Repository not found")
+    if repo.workspace_id != workspace_id:
+        raise HTTPException(status_code=400, detail="Repository is not in this workspace")
+
+    repo.workspace_id = None
+    await db.commit()
+    await db.refresh(repo)
+    return repo
+
+
+@router.get("/{workspace_id}/requirements", response_model=list[ReqResponse])
+async def list_workspace_requirements(
+    workspace_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all requirements belonging to this workspace."""
+    member = await _get_member(workspace_id, current_user.id, db)
+    if not member:
+        raise ForbiddenError("Not a member of this workspace")
+
+    result = await db.execute(
+        select(Requirement)
+        .where(Requirement.workspace_id == workspace_id)
+        .order_by(Requirement.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+# ---------------------------------------------------------------------------
 # Member management
 # ---------------------------------------------------------------------------
 
@@ -192,17 +334,34 @@ async def list_members(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all members of a workspace."""
+    """List all members of a workspace with joined user profile details."""
     member = await _get_member(workspace_id, current_user.id, db)
     if not member:
         raise ForbiddenError("Not a member of this workspace")
 
     result = await db.execute(
-        select(WorkspaceMember)
+        select(WorkspaceMember, User)
+        .outerjoin(User, WorkspaceMember.user_id == User.id)
         .where(WorkspaceMember.workspace_id == workspace_id)
         .order_by(WorkspaceMember.created_at)
     )
-    return result.scalars().all()
+
+    members_list: list[WorkspaceMemberResponse] = []
+    for wm, u in result.all():
+        members_list.append(
+            WorkspaceMemberResponse(
+                id=wm.id,
+                workspace_id=wm.workspace_id,
+                user_id=wm.user_id,
+                user_name=u.name if u else None,
+                user_email=u.email if u else None,
+                user_image=u.image if u else None,
+                role=wm.role.value if hasattr(wm.role, "value") else str(wm.role),
+                invited_by=wm.invited_by,
+                created_at=wm.created_at,
+            )
+        )
+    return members_list
 
 
 @router.patch("/{workspace_id}/members/{target_user_id}", response_model=WorkspaceMemberResponse)
@@ -226,7 +385,20 @@ async def update_member_role(
     target.role = WorkspaceRole(body.role)
     await db.commit()
     await db.refresh(target)
-    return target
+
+    # Fetch user info for response
+    u = await db.get(User, target_user_id)
+    return WorkspaceMemberResponse(
+        id=target.id,
+        workspace_id=target.workspace_id,
+        user_id=target.user_id,
+        user_name=u.name if u else None,
+        user_email=u.email if u else None,
+        user_image=u.image if u else None,
+        role=target.role.value if hasattr(target.role, "value") else str(target.role),
+        invited_by=target.invited_by,
+        created_at=target.created_at,
+    )
 
 
 @router.delete("/{workspace_id}/members/{target_user_id}", status_code=status.HTTP_204_NO_CONTENT)

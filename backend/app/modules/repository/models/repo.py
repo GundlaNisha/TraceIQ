@@ -40,6 +40,11 @@ class Repository(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("requirements.id", ondelete="SET NULL"),
         nullable=True,
     )
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
 
 
 class RepositorySnapshot(UUIDPrimaryKeyMixin, TimestampMixin, Base):

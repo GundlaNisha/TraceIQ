@@ -22,11 +22,33 @@ router = APIRouter(prefix="/api/v1/repositories", tags=["repositories"])
 
 @router.get("", response_model=list[RepoResponse])
 async def list_repositories(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    workspace_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Repository).where(Repository.user_id == current_user.id)
-    )
+    if workspace_id:
+        from app.modules.workspace.models.workspace import WorkspaceMember
+
+        member_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        if not member_res.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Not a member of this workspace")
+
+        result = await db.execute(
+            select(Repository)
+            .where(Repository.workspace_id == workspace_id)
+            .order_by(Repository.created_at.desc())
+        )
+    else:
+        result = await db.execute(
+            select(Repository)
+            .where(Repository.user_id == current_user.id)
+            .order_by(Repository.created_at.desc())
+        )
     return result.scalars().all()
 
 
@@ -58,11 +80,25 @@ async def add_repository(
     inst = inst_res.scalar_one_or_none()
     installation_id = inst.installation_id if inst else None
 
+    # If workspace_id provided, verify membership
+    if body.workspace_id:
+        from app.modules.workspace.models.workspace import WorkspaceMember
+
+        member_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == body.workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        if not member_res.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Not authorized to add repository to this workspace")
+
     repo = Repository(
         user_id=current_user.id,
         name=name,
         repo_url=url_str,
         github_installation_id=installation_id,
+        workspace_id=body.workspace_id,
     )
     db.add(repo)
     await db.commit()
@@ -84,8 +120,24 @@ async def get_repository(
         raise HTTPException(status_code=400, detail="Invalid repo UUID")
 
     repo = await db.get(Repository, repo_uuid)
-    if not repo or repo.user_id != current_user.id:
+    if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+
+    is_owner = repo.user_id == current_user.id
+    if not is_owner and repo.workspace_id:
+        from app.modules.workspace.models.workspace import WorkspaceMember
+
+        member_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == repo.workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        if not member_res.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Not authorized to view this repository")
+    elif not is_owner:
+        raise HTTPException(status_code=403, detail="Not authorized to view this repository")
+
     return repo
 
 
@@ -102,8 +154,12 @@ async def update_repository_settings(
         raise HTTPException(status_code=400, detail="Invalid repo UUID")
 
     repo = await db.get(Repository, repo_uuid)
-    if not repo or repo.user_id != current_user.id:
+    if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+
+    is_owner = repo.user_id == current_user.id
+    if not is_owner:
+        raise HTTPException(status_code=403, detail="Only repository owner can change settings")
 
     if body.default_requirement_id is not None:
         req = await db.get(Requirement, body.default_requirement_id)
@@ -124,6 +180,9 @@ async def update_repository_settings(
 
     if body.auto_post_comments is not None:
         repo.auto_post_comments = body.auto_post_comments
+
+    if "workspace_id" in body.model_fields_set:
+        repo.workspace_id = body.workspace_id
 
     await db.commit()
     await db.refresh(repo)

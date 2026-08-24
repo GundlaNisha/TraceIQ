@@ -8,12 +8,14 @@ from app.modules.repository.models.repo import SyncStatus
 
 class RepoCreate(BaseModel):
     repo_url: HttpUrl
+    workspace_id: UUID | None = None
 
 
 class RepoSettingsUpdate(BaseModel):
     auto_review_prs: bool | None = None
     auto_post_comments: bool | None = None
     default_requirement_id: UUID | None = None
+    workspace_id: UUID | None = None
 
 
 class RepoResponse(BaseModel):
@@ -27,7 +29,9 @@ class RepoResponse(BaseModel):
     auto_review_prs: bool = False
     auto_post_comments: bool = False
     default_requirement_id: UUID | None = None
+    workspace_id: UUID | None = None
     created_at: datetime
+
 
     @field_serializer("created_at")
     def serialize_created_at(self, dt: datetime, _info):

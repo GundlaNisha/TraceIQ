@@ -24,6 +24,14 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 from app.db.base.models import Base
 
+# Explicitly import all models so Alembic metadata is complete
+import app.modules.auth.models.user  # noqa: F401
+import app.modules.repository.models.repo  # noqa: F401
+import app.modules.requirement.models.req  # noqa: F401
+import app.modules.review.models.rev_models  # noqa: F401
+import app.modules.impact.models.impact  # noqa: F401
+import app.modules.workspace.models.workspace  # noqa: F401
+
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

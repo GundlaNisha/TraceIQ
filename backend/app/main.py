@@ -16,6 +16,7 @@ from app.modules.requirement.routes.req import router as req_router
 from app.modules.retrieval.routes.search import router as search_router
 from app.modules.review.routes.pr_review import router as pr_review_router
 from app.modules.traceability.routes.traceability import router as traceability_router
+from app.modules.workspace.routes.workspace import router as workspace_router
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ app.include_router(dashboard_router)
 app.include_router(github_callback_router)
 app.include_router(github_webhook_router)
 app.include_router(github_prs_router)
+app.include_router(workspace_router)
 
 
 @app.get("/health")

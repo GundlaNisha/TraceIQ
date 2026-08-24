@@ -13,6 +13,8 @@ class AnalysisJobResponse(BaseModel):
     created_at: datetime
     requirement_title: str | None = None
     repository_name: str | None = None
+    workspace_name: str | None = None
+    workspace_id: uuid.UUID | None = None
 
     @field_serializer("created_at")
     def serialize_created_at(self, dt: datetime, _info):

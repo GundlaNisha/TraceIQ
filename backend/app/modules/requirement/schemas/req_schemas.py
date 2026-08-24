@@ -42,6 +42,8 @@ class ReqResponse(ReqBase):
     workspace_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+    repository_name: str | None = None
+    workspace_name: str | None = None
 
 
     @field_serializer("created_at", "updated_at")

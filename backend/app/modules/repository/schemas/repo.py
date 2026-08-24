@@ -30,6 +30,7 @@ class RepoResponse(BaseModel):
     auto_post_comments: bool = False
     default_requirement_id: UUID | None = None
     workspace_id: UUID | None = None
+    workspace_name: str | None = None
     created_at: datetime
 
 

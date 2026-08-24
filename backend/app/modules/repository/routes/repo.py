@@ -1,11 +1,11 @@
 import uuid
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_active_workspace_id, get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
 from app.modules.repository.models.repo import Repository
@@ -20,36 +20,69 @@ from app.workers.repo_sync import sync_repository
 router = APIRouter(prefix="/api/v1/repositories", tags=["repositories"])
 
 
+from app.modules.workspace.models.workspace import Workspace, WorkspaceMember
+
+
 @router.get("", response_model=list[RepoResponse])
 async def list_repositories(
+    request: Request,
     workspace_id: uuid.UUID | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if workspace_id:
-        from app.modules.workspace.models.workspace import WorkspaceMember
+    target_ws = workspace_id or get_active_workspace_id(request)
 
+    base_query = (
+        select(
+            Repository,
+            Workspace.name.label("workspace_name"),
+        )
+        .outerjoin(Workspace, Repository.workspace_id == Workspace.id)
+    )
+
+    if target_ws:
         member_res = await db.execute(
             select(WorkspaceMember).where(
-                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.workspace_id == target_ws,
                 WorkspaceMember.user_id == current_user.id,
             )
         )
         if not member_res.scalar_one_or_none():
             raise HTTPException(status_code=403, detail="Not a member of this workspace")
 
-        result = await db.execute(
-            select(Repository)
-            .where(Repository.workspace_id == workspace_id)
-            .order_by(Repository.created_at.desc())
-        )
+        stmt = base_query.where(Repository.workspace_id == target_ws).order_by(Repository.created_at.desc())
+        result = await db.execute(stmt)
     else:
-        result = await db.execute(
-            select(Repository)
-            .where(Repository.user_id == current_user.id)
-            .order_by(Repository.created_at.desc())
+        user_ws_subq = select(WorkspaceMember.workspace_id).where(
+            WorkspaceMember.user_id == current_user.id
         )
-    return result.scalars().all()
+        stmt = base_query.where(
+            (Repository.user_id == current_user.id)
+            | (Repository.workspace_id.in_(user_ws_subq))
+        ).order_by(Repository.created_at.desc())
+        result = await db.execute(stmt)
+
+    rows = result.all()
+    repos = []
+    for r, ws_name in rows:
+        repos.append(
+            RepoResponse(
+                id=r.id,
+                repo_url=r.repo_url,
+                name=r.name,
+                sync_status=r.sync_status,
+                default_branch=r.default_branch,
+                github_installation_id=r.github_installation_id,
+                is_private=r.is_private,
+                auto_review_prs=r.auto_review_prs,
+                auto_post_comments=r.auto_post_comments,
+                default_requirement_id=r.default_requirement_id,
+                workspace_id=r.workspace_id,
+                workspace_name=ws_name,
+                created_at=r.created_at,
+            )
+        )
+    return repos
 
 
 from app.modules.github.models.installation import GithubInstallation
@@ -58,6 +91,7 @@ from app.modules.github.models.installation import GithubInstallation
 @router.post("", response_model=RepoResponse, status_code=201)
 async def add_repository(
     body: RepoCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -80,25 +114,29 @@ async def add_repository(
     inst = inst_res.scalar_one_or_none()
     installation_id = inst.installation_id if inst else None
 
-    # If workspace_id provided, verify membership
-    if body.workspace_id:
-        from app.modules.workspace.models.workspace import WorkspaceMember
+    # Resolve target workspace
+    target_ws = body.workspace_id or get_active_workspace_id(request)
+    if target_ws:
+        from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
 
         member_res = await db.execute(
             select(WorkspaceMember).where(
-                WorkspaceMember.workspace_id == body.workspace_id,
+                WorkspaceMember.workspace_id == target_ws,
                 WorkspaceMember.user_id == current_user.id,
             )
         )
-        if not member_res.scalar_one_or_none():
+        mem = member_res.scalar_one_or_none()
+        if not mem:
             raise HTTPException(status_code=403, detail="Not authorized to add repository to this workspace")
+        if mem.role == WorkspaceRole.viewer:
+            raise HTTPException(status_code=403, detail="Viewers cannot add repositories to a workspace")
 
     repo = Repository(
         user_id=current_user.id,
         name=name,
         repo_url=url_str,
         github_installation_id=installation_id,
-        workspace_id=body.workspace_id,
+        workspace_id=target_ws,
     )
     db.add(repo)
     await db.commit()
@@ -201,11 +239,27 @@ async def delete_repository(
         raise HTTPException(status_code=400, detail="Invalid repo UUID")
 
     repo = await db.get(Repository, repo_uuid)
-    if not repo or repo.user_id != current_user.id:
+    if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
-    from sqlalchemy import delete
+    is_owner = repo.user_id == current_user.id
+    if not is_owner and repo.workspace_id:
+        from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
 
+        member_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == repo.workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        mem = member_res.scalar_one_or_none()
+        if not mem or mem.role not in (WorkspaceRole.owner, WorkspaceRole.admin):
+            raise HTTPException(status_code=403, detail="Only workspace admins/owners can delete this repository")
+    elif not is_owner:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this repository")
+
+    # Cascading deletes
+    from sqlalchemy import delete
     from app.modules.impact.models.impact import AnalysisJob, ImpactResult
     from app.modules.indexing.models.index_models import (
         CodeChunk,
@@ -286,8 +340,24 @@ async def trigger_resync(
         raise HTTPException(status_code=400, detail="Invalid repo UUID")
 
     repo = await db.get(Repository, repo_uuid)
-    if not repo or repo.user_id != current_user.id:
+    if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+
+    is_owner = repo.user_id == current_user.id
+    if not is_owner and repo.workspace_id:
+        from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
+
+        member_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == repo.workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        mem = member_res.scalar_one_or_none()
+        if not mem or mem.role == WorkspaceRole.viewer:
+            raise HTTPException(status_code=403, detail="Viewers cannot resync repositories")
+    elif not is_owner:
+        raise HTTPException(status_code=403, detail="Not authorized to resync this repository")
 
     repo.sync_status = "syncing"
 
@@ -318,8 +388,24 @@ async def cancel_repo_sync(
         raise HTTPException(status_code=400, detail="Invalid repo UUID")
 
     repo = await db.get(Repository, repo_uuid)
-    if not repo or repo.user_id != current_user.id:
+    if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+
+    is_owner = repo.user_id == current_user.id
+    if not is_owner and repo.workspace_id:
+        from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
+
+        member_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == repo.workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        mem = member_res.scalar_one_or_none()
+        if not mem or mem.role == WorkspaceRole.viewer:
+            raise HTTPException(status_code=403, detail="Viewers cannot cancel sync")
+    elif not is_owner:
+        raise HTTPException(status_code=403, detail="Not authorized to cancel sync")
 
     repo.sync_status = "failed"
 
@@ -350,8 +436,24 @@ async def trigger_index(
         raise HTTPException(status_code=400, detail="Invalid repo UUID")
 
     repo = await db.get(Repository, repo_uuid)
-    if not repo or repo.user_id != current_user.id:
+    if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+
+    is_owner = repo.user_id == current_user.id
+    if not is_owner and repo.workspace_id:
+        from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
+
+        member_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == repo.workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        mem = member_res.scalar_one_or_none()
+        if not mem or mem.role == WorkspaceRole.viewer:
+            raise HTTPException(status_code=403, detail="Viewers cannot index repositories")
+    elif not is_owner:
+        raise HTTPException(status_code=403, detail="Not authorized to index this repository")
 
     # Get latest snapshot
     result = await db.execute(

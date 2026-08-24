@@ -59,6 +59,9 @@ class PRReviewResponse(BaseModel):
     status: str
     summary: str | None = None
     created_at: datetime
+    repository_name: str | None = None
+    workspace_name: str | None = None
+    workspace_id: uuid.UUID | None = None
 
     @field_serializer("created_at")
     def serialize_created_at(self, dt: datetime, _info):

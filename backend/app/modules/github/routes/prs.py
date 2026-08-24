@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid
 from urllib.parse import urlparse
 
 import httpx
@@ -13,6 +14,7 @@ from app.modules.auth.models.user import User
 from app.modules.github.models.installation import GithubInstallation
 from app.modules.github.services.auth import get_installation_token
 from app.modules.repository.models.repo import Repository
+from app.modules.workspace.models.workspace import Workspace, WorkspaceMember
 
 logger = logging.getLogger(__name__)
 
@@ -69,24 +71,61 @@ async def fetch_repo_prs(
 
 @router.get("")
 async def get_github_pull_requests(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    repo_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    # 1. Fetch user's GitHub installation if one exists
+    """Fetch GitHub Pull Requests with workspace and repository metadata."""
+    # 1. Fetch user's GitHub App installation
     inst_result = await db.execute(
         select(GithubInstallation).where(GithubInstallation.user_id == current_user.id)
     )
     user_installation = inst_result.scalar_one_or_none()
 
-    # 2. Get all repositories tracked by user
-    repo_result = await db.execute(
-        select(Repository).where(Repository.user_id == current_user.id)
+    base_query = (
+        select(Repository, Workspace.name.label("workspace_name"))
+        .outerjoin(Workspace, Repository.workspace_id == Workspace.id)
     )
-    repos = repo_result.scalars().all()
 
-    if not repos:
+    # 2. Get target repositories
+    if repo_id:
+        repo = await db.get(Repository, repo_id)
+        if not repo:
+            return []
+
+        # Check authorization (own repo OR in a workspace user belongs to)
+        is_owner = repo.user_id == current_user.id
+        if not is_owner and repo.workspace_id:
+            mem_res = await db.execute(
+                select(WorkspaceMember).where(
+                    WorkspaceMember.workspace_id == repo.workspace_id,
+                    WorkspaceMember.user_id == current_user.id,
+                )
+            )
+            if not mem_res.scalar_one_or_none():
+                return []
+        elif not is_owner:
+            return []
+
+        res = await db.execute(base_query.where(Repository.id == repo_id))
+        repos_with_ws = res.all()
+    else:
+        # Repositories owned by user OR in workspaces the user belongs to
+        user_ws_subquery = select(WorkspaceMember.workspace_id).where(
+            WorkspaceMember.user_id == current_user.id
+        )
+        repo_result = await db.execute(
+            base_query.where(
+                (Repository.user_id == current_user.id)
+                | (Repository.workspace_id.in_(user_ws_subquery))
+            )
+        )
+        repos_with_ws = repo_result.all()
+
+    if not repos_with_ws:
         return []
 
-    # 3. Resolve installation token if available
+    # 3. Resolve default installation token if available
     default_token = None
     if user_installation:
         try:
@@ -99,11 +138,13 @@ async def get_github_pull_requests(
     # 4. Fetch PRs concurrently for all repositories
     async with httpx.AsyncClient() as client:
         tasks = []
-        for repo in repos:
+        repo_contexts = []
+        for repo, ws_name in repos_with_ws:
             full_name = _extract_full_name(repo)
             repo_token = default_token
-            if repo.github_installation_id and repo.github_installation_id != (
-                user_installation.installation_id if user_installation else None
+            if repo.github_installation_id and (
+                not user_installation
+                or repo.github_installation_id != user_installation.installation_id
             ):
                 try:
                     repo_token = get_installation_token(repo.github_installation_id)
@@ -111,12 +152,13 @@ async def get_github_pull_requests(
                     repo_token = default_token
 
             tasks.append(fetch_repo_prs(client, full_name, repo_token))
+            repo_contexts.append((repo, ws_name))
 
         results = await asyncio.gather(*tasks)
 
     # 5. Flatten and format PR list
     all_prs = []
-    for pr_list in results:
+    for (repo, ws_name), pr_list in zip(repo_contexts, results):
         for pr in pr_list:
             user_data = pr.get("user") or {}
             base_data = pr.get("base") or {}
@@ -139,8 +181,11 @@ async def get_github_pull_requests(
                     "created_at": pr.get("created_at"),
                     "updated_at": pr.get("updated_at"),
                     "draft": bool(pr.get("draft", False)),
-                    "repository_url": repo_data.get("html_url", ""),
-                    "repository_name": repo_data.get("full_name", ""),
+                    "repository_id": str(repo.id),
+                    "repository_url": repo_data.get("html_url", repo.repo_url),
+                    "repository_name": repo_data.get("full_name", repo.name),
+                    "workspace_id": str(repo.workspace_id) if repo.workspace_id else None,
+                    "workspace_name": ws_name,
                     "user": {
                         "login": user_data.get("login", "Unknown"),
                         "avatar_url": user_data.get("avatar_url"),

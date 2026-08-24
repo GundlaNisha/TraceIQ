@@ -16,6 +16,7 @@ from app.modules.impact.schemas.analysis_schemas import (
 )
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
+from app.modules.workspace.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 from app.workers.impact_analysis import run_impact_analysis
 
 router = APIRouter(prefix="/api/v1", tags=["analysis"])
@@ -32,14 +33,27 @@ async def trigger_analysis(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid requirement UUID")
 
-    # Verify req belongs to current_user
+    # Verify requirement exists
     stmt = select(Requirement).where(Requirement.id == req_uuid)
     result = await db.execute(stmt)
     req = result.scalar_one_or_none()
 
     if not req:
         raise NotFoundError("Requirement not found")
-    if req.user_id != current_user.id:
+
+    # Check permission (own requirement OR member/admin/owner of workspace)
+    is_owner = req.user_id == current_user.id
+    if not is_owner and req.workspace_id:
+        mem_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == req.workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        member = mem_res.scalar_one_or_none()
+        if not member or member.role == WorkspaceRole.viewer:
+            raise ForbiddenError("Viewers cannot trigger impact analysis")
+    elif not is_owner:
         raise ForbiddenError("Not authorized to analyze this requirement")
 
     # Create AnalysisJob with status="queued"
@@ -86,6 +100,7 @@ async def get_job_status(
             AnalysisJob,
             Requirement.title.label("requirement_title"),
             Repository.name.label("repository_name"),
+            Repository.workspace_id.label("repo_workspace_id"),
         )
         .outerjoin(Requirement, AnalysisJob.requirement_id == Requirement.id)
         .outerjoin(Repository, AnalysisJob.repository_id == Repository.id)
@@ -96,8 +111,19 @@ async def get_job_status(
 
     if not row:
         raise NotFoundError("Analysis job not found")
-    job, req_title, repo_name = row
-    if job.user_id != current_user.id:
+    job, req_title, repo_name, repo_workspace_id = row
+
+    is_owner = job.user_id == current_user.id
+    if not is_owner and repo_workspace_id:
+        mem_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == repo_workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        if not mem_res.scalar_one_or_none():
+            raise ForbiddenError("Not authorized to view this job")
+    elif not is_owner:
         raise ForbiddenError("Not authorized to view this job")
 
     return {
@@ -123,41 +149,77 @@ async def get_analysis_result(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid analysis UUID")
 
-    # Returns ImpactResult — verify ownership via job → user_id
     stmt = (
-        select(ImpactResult)
+        select(ImpactResult, AnalysisJob, Repository.workspace_id.label("repo_workspace_id"))
         .join(AnalysisJob, ImpactResult.job_id == AnalysisJob.id)
-        .where(
-            ImpactResult.job_id == analysis_uuid, AnalysisJob.user_id == current_user.id
-        )
+        .outerjoin(Repository, AnalysisJob.repository_id == Repository.id)
+        .where(ImpactResult.job_id == analysis_uuid)
     )
     result = await db.execute(stmt)
-    impact_result = result.scalar_one_or_none()
+    row = result.first()
 
-    if not impact_result:
+    if not row:
         raise NotFoundError("Impact result not found")
+    impact_result, job, repo_workspace_id = row
+
+    is_owner = job.user_id == current_user.id
+    if not is_owner and repo_workspace_id:
+        mem_res = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == repo_workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        if not mem_res.scalar_one_or_none():
+            raise ForbiddenError("Not authorized to view this result")
+    elif not is_owner:
+        raise ForbiddenError("Not authorized to view this result")
 
     return impact_result
 
 
 @router.get("/analysis", response_model=list[AnalysisJobResponse])
 async def list_analysis_jobs(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    repo_id: uuid.UUID | None = None,
+    requirement_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     stmt = (
         select(
             AnalysisJob,
             Requirement.title.label("requirement_title"),
             Repository.name.label("repository_name"),
+            Repository.workspace_id.label("workspace_id"),
+            Workspace.name.label("workspace_name"),
         )
         .outerjoin(Requirement, AnalysisJob.requirement_id == Requirement.id)
         .outerjoin(Repository, AnalysisJob.repository_id == Repository.id)
-        .where(AnalysisJob.user_id == current_user.id)
-        .order_by(AnalysisJob.created_at.desc())
+        .outerjoin(Workspace, Repository.workspace_id == Workspace.id)
     )
+
+    if repo_id:
+        stmt = stmt.where(AnalysisJob.repository_id == repo_id)
+    elif requirement_id:
+        stmt = stmt.where(AnalysisJob.requirement_id == requirement_id)
+    else:
+        # Repositories owned by user OR in workspaces user belongs to
+        user_ws_subquery = select(WorkspaceMember.workspace_id).where(
+            WorkspaceMember.user_id == current_user.id
+        )
+        ws_repo_subquery = select(Repository.id).where(
+            Repository.workspace_id.in_(user_ws_subquery)
+        )
+
+        stmt = stmt.where(
+            (AnalysisJob.user_id == current_user.id)
+            | (AnalysisJob.repository_id.in_(ws_repo_subquery))
+        )
+
+    stmt = stmt.order_by(AnalysisJob.created_at.desc())
     result = await db.execute(stmt)
     jobs = []
-    for job, req_title, repo_name in result.all():
+    for job, req_title, repo_name, ws_id, ws_name in result.all():
         jobs.append(
             {
                 "id": job.id,
@@ -168,6 +230,8 @@ async def list_analysis_jobs(
                 "created_at": job.created_at,
                 "requirement_title": req_title,
                 "repository_name": repo_name,
+                "workspace_id": ws_id,
+                "workspace_name": ws_name,
             }
         )
     return jobs
@@ -193,6 +257,7 @@ async def delete_analysis_job(
     if job.user_id != current_user.id:
         raise ForbiddenError("Not authorized to delete this job")
 
+    # Clean up results
     await db.execute(delete(ImpactResult).where(ImpactResult.job_id == job_uuid))
     await db.delete(job)
     await db.commit()

@@ -26,23 +26,35 @@ celery_app = Celery(
     ],
 )
 
-celery_app.conf.update(
+celery_conf = {
     # Serialisation
-    task_serializer="json",
-    result_serializer="json",
-    accept_content=["json"],
+    "task_serializer": "json",
+    "result_serializer": "json",
+    "accept_content": ["json"],
     # Reliability: acknowledge only after task completes, so Celery re-queues
     # the task if the worker crashes mid-execution.
-    task_acks_late=True,
+    "task_acks_late": True,
     # Timeouts: raise SoftTimeLimitExceeded at 10 min, hard-kill at 15 min.
-    task_soft_time_limit=settings.celery_task_soft_time_limit,
-    task_time_limit=settings.celery_task_time_limit,
+    "task_soft_time_limit": settings.celery_task_soft_time_limit,
+    "task_time_limit": settings.celery_task_time_limit,
     # Clean up result metadata after 24 hours to prevent Redis bloat.
-    result_expires=86400,
+    "result_expires": 86400,
     # Timezone
-    timezone="UTC",
-    enable_utc=True,
-)
+    "timezone": "UTC",
+    "enable_utc": True,
+}
+
+# Automatically configure SSL when connecting to Upstash / Cloud Redis (rediss://)
+if settings.redis_url.startswith("rediss://"):
+    import ssl
+    celery_conf.update(
+        {
+            "broker_use_ssl": {"ssl_cert_reqs": ssl.CERT_NONE},
+            "redis_backend_use_ssl": {"ssl_cert_reqs": ssl.CERT_NONE},
+        }
+    )
+
+celery_app.conf.update(**celery_conf)
 
 
 @worker_process_init.connect

@@ -21,9 +21,14 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="TraceIQ API", version="1.0.0")
 
+cors_origins = list(dict.fromkeys(
+    ([settings.frontend_url] if settings.frontend_url else [])
+    + (settings.allowed_origins or ["http://localhost:3000", "http://127.0.0.1:3000"])
+))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins or ["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=cors_origins,
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
     allow_credentials=True,
     allow_methods=["*"],

@@ -10,8 +10,9 @@ from app.db.session import get_db
 from app.modules.auth.models.user import User
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
-from app.modules.review.models.rev_models import PRReview, PRReviewFinding
+from app.modules.review.models.rev_models import PRFileDiff, PRReview, PRReviewFinding
 from app.modules.review.schemas.rev_schemas import (
+    PRFileDiffResponse,
     PRReviewCreate,
     PRReviewFindingResponse,
     PRReviewResponse,
@@ -121,6 +122,33 @@ async def get_pr_review_findings(
         select(PRReviewFinding).where(PRReviewFinding.pr_review_id == review_uuid)
     )
     return findings_res.scalars().all()
+
+
+@router.get("/{review_id}/diffs", response_model=list[PRFileDiffResponse])
+async def get_pr_review_diffs(
+    review_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all persisted per-file unified diffs for a PR review (used by the inline diff viewer)."""
+    try:
+        review_uuid = uuid.UUID(review_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid review UUID")
+
+    # Verify ownership
+    pr_review = await db.get(PRReview, review_uuid)
+    if not pr_review:
+        raise NotFoundError("PR review not found")
+    if pr_review.user_id != current_user.id:
+        raise ForbiddenError("Not authorized to view this PR review")
+
+    diffs_res = await db.execute(
+        select(PRFileDiff)
+        .where(PRFileDiff.pr_review_id == review_uuid)
+        .order_by(PRFileDiff.file_path)
+    )
+    return diffs_res.scalars().all()
 
 
 @router.post("/{review_id}/post-comment")

@@ -18,7 +18,7 @@ from app.modules.github.services.auth import (
 from app.modules.impact.models.impact import AnalysisJob, ImpactResult
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
-from app.modules.review.models.rev_models import PRReview, PRReviewFinding
+from app.modules.review.models.rev_models import PRFileDiff, PRReview, PRReviewFinding
 from app.workers.celery_app import celery_app
 
 logger = get_task_logger(__name__)
@@ -371,7 +371,20 @@ async def _process_pr_review(pr_review_id: str) -> None:
                 all_findings = ai_result.findings
                 final_summary = ai_result.summary
 
-            # 8. Save findings to DB
+            # 8. Persist per-file raw diffs (powers the inline diff viewer)
+            for patch_info in file_patches:
+                additions = patch_info["patch"].count("\n+")
+                deletions = patch_info["patch"].count("\n-")
+                file_diff = PRFileDiff(
+                    pr_review_id=pr_review.id,
+                    file_path=patch_info["file_path"],
+                    patch=patch_info["patch"],
+                    additions=additions,
+                    deletions=deletions,
+                )
+                session.add(file_diff)
+
+            # 9. Save findings to DB
             saved_findings = []
             for finding in all_findings:
                 rf = PRReviewFinding(
@@ -389,7 +402,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
             pr_review.status = "completed"
             await session.commit()
 
-            # 9. Post review to GitHub as native PR Review / Comment (if auto_post_comments enabled)
+            # 10. Post review to GitHub as native PR Review / Comment (if auto_post_comments enabled)
             if repository.auto_post_comments:
                 if token:
                     try:

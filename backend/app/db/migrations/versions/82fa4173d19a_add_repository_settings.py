@@ -19,39 +19,47 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "repositories",
-        sa.Column(
-            "auto_review_prs",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
+    # Use raw SQL with IF NOT EXISTS so this is safe to run even if the columns
+    # already exist (e.g. on Render where the DB was partially migrated manually).
+    conn = op.get_bind()
+    conn.execute(
+        sa.text(
+            "ALTER TABLE repositories "
+            "ADD COLUMN IF NOT EXISTS auto_review_prs BOOLEAN NOT NULL DEFAULT false"
+        )
     )
-    op.add_column(
-        "repositories",
-        sa.Column(
-            "auto_post_comments",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
+    conn.execute(
+        sa.text(
+            "ALTER TABLE repositories "
+            "ADD COLUMN IF NOT EXISTS auto_post_comments BOOLEAN NOT NULL DEFAULT false"
+        )
     )
-    op.add_column(
-        "repositories",
-        sa.Column(
-            "default_requirement_id",
-            sa.UUID(),
-            nullable=True,
-        ),
+    conn.execute(
+        sa.text(
+            "ALTER TABLE repositories "
+            "ADD COLUMN IF NOT EXISTS default_requirement_id UUID NULL"
+        )
     )
-    op.create_foreign_key(
-        "fk_repositories_default_requirement",
-        "repositories",
-        "requirements",
-        ["default_requirement_id"],
-        ["id"],
-        ondelete="SET NULL",
+    # Add FK only if it doesn't already exist
+    conn.execute(
+        sa.text(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'fk_repositories_default_requirement'
+                ) THEN
+                    ALTER TABLE repositories
+                    ADD CONSTRAINT fk_repositories_default_requirement
+                    FOREIGN KEY (default_requirement_id)
+                    REFERENCES requirements(id)
+                    ON DELETE SET NULL;
+                END IF;
+            END
+            $$;
+            """
+        )
     )
 
 

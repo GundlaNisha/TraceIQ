@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base.mixins import TimestampMixin, UUIDPrimaryKeyMixin
@@ -74,3 +74,27 @@ class PRReviewFinding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     requirement_gap: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )  # how it violates the requirement
+
+
+class PRFileDiff(UUIDPrimaryKeyMixin, Base):
+    """Stores the raw unified diff patch for a single file within a PR review.
+
+    Populated by the pr_review worker after fetching the GitHub diff, so the
+    frontend can render an inline diff viewer without hitting the GitHub API again.
+    """
+
+    __tablename__ = "pr_file_diffs"
+
+    __table_args__ = (
+        Index("ix_pr_file_diffs_review_id", "pr_review_id"),
+    )
+
+    pr_review_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pr_reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    # Raw unified diff text for this single file (the @@ hunk block)
+    patch: Mapped[str] = mapped_column(Text, nullable=False)
+    additions: Mapped[int] = mapped_column(Integer, default=0)
+    deletions: Mapped[int] = mapped_column(Integer, default=0)
+

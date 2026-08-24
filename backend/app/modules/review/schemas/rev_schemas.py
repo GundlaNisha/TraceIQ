@@ -79,3 +79,15 @@ class PRReviewFindingResponse(BaseModel):
     requirement_gap: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PRFileDiffResponse(BaseModel):
+    id: uuid.UUID
+    pr_review_id: uuid.UUID
+    file_path: str
+    patch: str
+    additions: int
+    deletions: int
+
+    model_config = ConfigDict(from_attributes=True)
+

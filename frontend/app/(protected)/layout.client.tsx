@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { GlobalSearchBar } from "@/features/search/components/GlobalSearchBar";
 import { useEnsureBackendUser } from "@/features/auth/api/queries";
 import { UserButton, useUser } from "@clerk/nextjs";
+import { WorkspaceSwitcher } from "@/features/workspace/components/WorkspaceSwitcher";
 import {
   LayoutDashboard,
   FolderGit2,
@@ -17,6 +18,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Users,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -27,6 +29,7 @@ const NAV_ITEMS = [
   { label: "Pull Requests", href: "/pull-requests", icon: GitPullRequest },
   { label: "PR Reviews", href: "/pr-reviews", icon: CheckSquare },
   { label: "Traceability Matrix", href: "/traceability", icon: ShieldCheck },
+  { label: "Workspaces", href: "/workspaces", icon: Users },
 ];
 
 export default function ProtectedLayoutClient({
@@ -98,9 +101,12 @@ export default function ProtectedLayoutClient({
               </span>
             </div>
 
-            {/* Center: Global Search & Active Repo Switcher */}
-            <div className="flex-1 max-w-xl mx-2">
-              <GlobalSearchBar />
+            {/* Center: Global Search & Workspace Switcher */}
+            <div className="flex-1 flex items-center gap-2 max-w-2xl mx-2">
+              <div className="flex-1">
+                <GlobalSearchBar />
+              </div>
+              <WorkspaceSwitcher />
             </div>
 
             {/* Right-Hand Profile & System Status */}

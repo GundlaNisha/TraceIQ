@@ -1,6 +1,6 @@
 import { useApiClient } from "@/lib/api/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PRReview, PRReviewCreate, PRReviewFinding } from "@/lib/types/pr-review";
+import type { PRFileDiff, PRReview, PRReviewCreate, PRReviewFinding } from "@/lib/types/pr-review";
 
 export function useCreatePRReview() {
   const { fetchApi } = useApiClient();
@@ -91,3 +91,19 @@ export function usePublishPRComment() {
     },
   });
 }
+
+export function usePRReviewDiffs(id: string, enabled: boolean = true) {
+  const { fetchApi } = useApiClient();
+
+  return useQuery({
+    queryKey: ["pr_review_diffs", id],
+    queryFn: async () => {
+      const res = await fetchApi(`/api/v1/pr-reviews/${id}/diffs`, {});
+      if (!res.ok) throw new Error("Failed to fetch PR review diffs");
+      return res.json() as Promise<PRFileDiff[]>;
+    },
+    enabled: !!id && enabled,
+    staleTime: Infinity, // diffs are immutable once a review is complete
+  });
+}
+

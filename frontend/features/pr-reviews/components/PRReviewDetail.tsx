@@ -1,15 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
-import { usePRReview, usePRReviewFindings, usePublishPRComment } from "../api/queries";
+import { usePRReview, usePRReviewFindings, usePRReviewDiffs, usePublishPRComment } from "../api/queries";
 import {
   CheckCircle2, XCircle, Clock, Loader2, ExternalLink,
   AlertTriangle, AlertCircle, Info, Sparkles, GitPullRequest, ArrowLeft,
-  MessageSquarePlus, Check,
+  MessageSquarePlus, Check, FileCode2, List,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatTimeAgo } from "@/lib/utils";
 import type { PRReviewFinding } from "@/lib/types/pr-review";
+import { DiffFilesTab } from "./DiffFilesTab";
 
 const STATUS_CONFIG = {
   queued: { label: "Queued", icon: Clock, bar: "bg-slate-300", text: "text-slate-600" },
@@ -24,15 +25,21 @@ const SEVERITY_CONFIG = {
   low: { label: "Low", icon: Info, bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-600", badge: "bg-slate-100 text-slate-600" },
 } as const;
 
+type Tab = "findings" | "files";
+
 interface Props { reviewId: string; }
 
 export function PRReviewDetail({ reviewId }: Props) {
   const [commentSuccess, setCommentSuccess] = useState<string | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("findings");
 
   const { data: review, isLoading: reviewLoading } = usePRReview(reviewId);
   const isActive = review?.status === "queued" || review?.status === "running";
+  const isCompleted = review?.status === "completed";
+
   const { data: findings, isLoading: findingsLoading, refetch: refetchFindings } = usePRReviewFindings(reviewId, isActive);
+  const { data: diffs, isLoading: diffsLoading } = usePRReviewDiffs(reviewId, isCompleted ?? false);
   const { mutate: publishComment, isPending: isPublishing } = usePublishPRComment();
 
   useEffect(() => {
@@ -61,6 +68,7 @@ export function PRReviewDetail({ reviewId }: Props) {
   const highCount = sortedFindings.filter((f) => f.severity === "high").length;
   const mediumCount = sortedFindings.filter((f) => f.severity === "medium").length;
   const lowCount = sortedFindings.filter((f) => f.severity === "low").length;
+  const diffCount = diffs?.length ?? 0;
 
   const handlePostComment = () => {
     setCommentError(null);
@@ -177,7 +185,7 @@ export function PRReviewDetail({ reviewId }: Props) {
         </div>
       )}
 
-      {review.status === "completed" && (
+      {isCompleted && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Summary */}
           {review.summary && (
@@ -206,64 +214,114 @@ export function PRReviewDetail({ reviewId }: Props) {
         </div>
       )}
 
-      {/* Findings */}
-      {sortedFindings.length > 0 && (
+      {/* Tab bar — only show when completed */}
+      {isCompleted && (
         <div>
-          <h2 className="text-xl font-semibold font-serif text-foreground mb-4">
-            Findings <span className="text-muted font-normal text-lg">({sortedFindings.length})</span>
-          </h2>
-          <div className="flex flex-col gap-3">
-            {sortedFindings.map((finding: PRReviewFinding) => {
-              const sev = (finding.severity as keyof typeof SEVERITY_CONFIG) in SEVERITY_CONFIG
-                ? finding.severity as keyof typeof SEVERITY_CONFIG
-                : "low";
-              const { icon: SeverityIcon, bg, border, badge } = SEVERITY_CONFIG[sev];
-
-              return (
-                <div
-                  key={finding.id}
-                  className={`rounded-2xl border p-5 ${bg} ${border}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <SeverityIcon className={`w-4 h-4 mt-0.5 shrink-0 ${SEVERITY_CONFIG[sev].text}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${badge}`}>
-                          {finding.severity}
-                        </span>
-                        <code className="text-xs font-mono text-muted-foreground truncate">
-                          {finding.file_path}
-                          {finding.line_number ? `:${finding.line_number}` : ""}
-                        </code>
-                      </div>
-                      <p className={`text-sm leading-relaxed ${SEVERITY_CONFIG[sev].text}`}>{finding.message}</p>
-                      {finding.requirement_gap && (
-                        <div className="mt-3 pl-3 border-l-2 border-current/30">
-                          <p className="text-xs font-semibold uppercase tracking-wider opacity-70 mb-1">Requirement Gap</p>
-                          <p className="text-sm italic opacity-80">{finding.requirement_gap}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex items-center gap-1 border-b border-border/50 mb-6">
+            <button
+              type="button"
+              onClick={() => setActiveTab("findings")}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+                activeTab === "findings"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <List className="w-4 h-4" />
+              Findings
+              {sortedFindings.length > 0 && (
+                <span className="ml-1 text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">
+                  {sortedFindings.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("files")}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+                activeTab === "files"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <FileCode2 className="w-4 h-4" />
+              Files Changed
+              {diffCount > 0 && (
+                <span className="ml-1 text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">
+                  {diffCount}
+                </span>
+              )}
+            </button>
           </div>
-        </div>
-      )}
 
-      {review.status === "completed" && findingsLoading && sortedFindings.length === 0 && (
-        <div className="py-12 text-center text-muted animate-pulse">
-          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-accent" />
-          <p className="text-sm">Loading review findings…</p>
-        </div>
-      )}
+          {/* Findings Tab */}
+          {activeTab === "findings" && (
+            <>
+              {sortedFindings.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  {sortedFindings.map((finding: PRReviewFinding) => {
+                    const sev = (finding.severity as keyof typeof SEVERITY_CONFIG) in SEVERITY_CONFIG
+                      ? finding.severity as keyof typeof SEVERITY_CONFIG
+                      : "low";
+                    const { icon: SeverityIcon, bg, border, badge } = SEVERITY_CONFIG[sev];
 
-      {review.status === "completed" && !findingsLoading && findings !== undefined && sortedFindings.length === 0 && (
-        <div className="py-16 text-center bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col items-center gap-3">
-          <CheckCircle2 className="w-10 h-10 text-emerald-500" />
-          <p className="font-semibold text-emerald-700 text-lg">All clear! No issues found.</p>
-          <p className="text-sm text-emerald-600/80">The AI found no bugs, security issues, or requirement gaps in this PR.</p>
+                    return (
+                      <div
+                        key={finding.id}
+                        className={`rounded-2xl border p-5 ${bg} ${border}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <SeverityIcon className={`w-4 h-4 mt-0.5 shrink-0 ${SEVERITY_CONFIG[sev].text}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${badge}`}>
+                                {finding.severity}
+                              </span>
+                              <code className="text-xs font-mono text-muted-foreground truncate">
+                                {finding.file_path}
+                                {finding.line_number ? `:${finding.line_number}` : ""}
+                              </code>
+                            </div>
+                            <p className={`text-sm leading-relaxed ${SEVERITY_CONFIG[sev].text}`}>{finding.message}</p>
+                            {finding.requirement_gap && (
+                              <div className="mt-3 pl-3 border-l-2 border-current/30">
+                                <p className="text-xs font-semibold uppercase tracking-wider opacity-70 mb-1">Requirement Gap</p>
+                                <p className="text-sm italic opacity-80">{finding.requirement_gap}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {findingsLoading && sortedFindings.length === 0 && (
+                <div className="py-12 text-center text-muted animate-pulse">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-accent" />
+                  <p className="text-sm">Loading review findings…</p>
+                </div>
+              )}
+
+              {!findingsLoading && findings !== undefined && sortedFindings.length === 0 && (
+                <div className="py-16 text-center bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col items-center gap-3">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+                  <p className="font-semibold text-emerald-700 text-lg">All clear! No issues found.</p>
+                  <p className="text-sm text-emerald-600/80">The AI found no bugs, security issues, or requirement gaps in this PR.</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Files Changed Tab */}
+          {activeTab === "files" && (
+            <DiffFilesTab
+              diffs={diffs ?? []}
+              findings={sortedFindings}
+              isLoading={diffsLoading}
+            />
+          )}
         </div>
       )}
 

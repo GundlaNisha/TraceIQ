@@ -21,6 +21,15 @@ export interface PRReviewFinding {
   requirement_gap: string | null;
 }
 
+export interface PRFileDiff {
+  id: string;
+  pr_review_id: string;
+  file_path: string;
+  patch: string;
+  additions: number;
+  deletions: number;
+}
+
 export interface PRReviewCreate {
   repository_id: string;
   pr_number: number;
@@ -28,3 +37,4 @@ export interface PRReviewCreate {
   pr_html_url: string;
   requirement_id?: string;
 }
+

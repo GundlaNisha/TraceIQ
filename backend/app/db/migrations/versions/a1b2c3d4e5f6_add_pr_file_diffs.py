@@ -18,26 +18,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    conn = op.get_bind()
-    conn.execute(
-        sa.text(
-            """
-            CREATE TABLE IF NOT EXISTS pr_file_diffs (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                pr_review_id UUID NOT NULL REFERENCES pr_reviews(id) ON DELETE CASCADE,
-                file_path VARCHAR(1024) NOT NULL,
-                patch TEXT NOT NULL,
-                additions INTEGER NOT NULL DEFAULT 0,
-                deletions INTEGER NOT NULL DEFAULT 0
-            )
-            """
-        )
+    op.create_table(
+        "pr_file_diffs",
+        sa.Column("id", sa.dialects.postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("pr_review_id", sa.dialects.postgresql.UUID(as_uuid=True), sa.ForeignKey("pr_reviews.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("file_path", sa.String(1024), nullable=False),
+        sa.Column("patch", sa.Text(), nullable=False),
+        sa.Column("additions", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("deletions", sa.Integer(), server_default="0", nullable=False),
+        if_not_exists=True,
     )
-    conn.execute(
-        sa.text(
-            "CREATE INDEX IF NOT EXISTS ix_pr_file_diffs_review_id "
-            "ON pr_file_diffs (pr_review_id)"
-        )
+    op.create_index(
+        "ix_pr_file_diffs_review_id",
+        "pr_file_diffs",
+        ["pr_review_id"],
+        if_not_exists=True,
     )
 
 

@@ -107,3 +107,49 @@ export function usePRReviewDiffs(id: string, enabled: boolean = true) {
   });
 }
 
+export function useRerunPRReview() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (reviewId: string) => {
+      const res = await fetchApi(`/api/v1/pr-reviews/${reviewId}/rerun`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to rerun PR review");
+      }
+      return res.json() as Promise<{ id: string; status: string }>;
+    },
+    onSuccess: (_, reviewId) => {
+      qc.invalidateQueries({ queryKey: ["pr_reviews"] });
+      qc.invalidateQueries({ queryKey: ["pr_review", reviewId] });
+      qc.invalidateQueries({ queryKey: ["pr_review_findings", reviewId] });
+      qc.invalidateQueries({ queryKey: ["pr_review_diffs", reviewId] });
+    },
+  });
+}
+
+export function useDeletePRReview() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (reviewId: string) => {
+      const res = await fetchApi(`/api/v1/pr-reviews/${reviewId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to delete PR review");
+      }
+      return res.json() as Promise<{ id: string; deleted: boolean }>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pr_reviews"] });
+    },
+  });
+}
+
+

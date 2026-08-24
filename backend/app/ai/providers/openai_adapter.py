@@ -3,6 +3,7 @@ from litellm import acompletion
 from pydantic import BaseModel
 
 from app.ai.providers.base import ProviderAdapter
+from app.core.config import settings
 
 
 class LiteLLMAdapter(ProviderAdapter):
@@ -13,12 +14,22 @@ class LiteLLMAdapter(ProviderAdapter):
     async def complete(
         self, system_prompt: str, user_prompt: str, response_model: type[BaseModel]
     ) -> BaseModel:
+        extra_kwargs: dict = {}
+        if settings.openai_api_key:
+            extra_kwargs["api_key"] = settings.openai_api_key
+        if settings.openai_api_base:
+            extra_kwargs["api_base"] = settings.openai_api_base
+
+        model = settings.llm_model
+        if settings.openai_api_base and not ("/" in model):
+            model = f"openai/{model}"
+
         return await self.client.chat.completions.create(
-            # For Opencode Zen or standard OpenAI, we prefix the model name
-            model="openai/deepseek-v4-flash-free",
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             response_model=response_model,
+            **extra_kwargs,
         )

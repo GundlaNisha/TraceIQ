@@ -32,8 +32,10 @@ class Settings(BaseSettings):
     r2_bucket_name: str = ""
     r2_endpoint_url: str = ""
 
-    # OpenAI
+    # OpenAI / LLM
     openai_api_key: str = ""
+    openai_api_base: str = ""
+    llm_model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-small"
 
     # Auth

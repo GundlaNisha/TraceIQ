@@ -213,6 +213,13 @@ async def _process_pr_review(pr_review_id: str) -> None:
             logger.error(f"PRReview {pr_review_id} not found — aborting.")
             return
 
+        # Cache fields locally so they never trigger lazy loads after commits/rollbacks
+        pr_number = pr_review.pr_number
+        pr_title = pr_review.pr_title or "Pull Request Review"
+        repository_id = pr_review.repository_id
+        requirement_id = pr_review.requirement_id
+        user_id = pr_review.user_id
+
         # 2. Set status to running
         pr_review.status = "running"
         await session.commit()
@@ -220,15 +227,16 @@ async def _process_pr_review(pr_review_id: str) -> None:
         try:
             # 3. Fetch Repository info
             repo_result = await session.execute(
-                select(Repository).where(Repository.id == pr_review.repository_id)
+                select(Repository).where(Repository.id == repository_id)
             )
             repository = repo_result.scalar_one_or_none()
             if not repository:
                 raise ValueError(
-                    f"Repository {pr_review.repository_id} not found for PRReview {pr_review_id}"
+                    f"Repository {repository_id} not found for PRReview {pr_review_id}"
                 )
 
             repo_full_name = _extract_full_name(repository)
+            auto_post_comments = bool(repository.auto_post_comments)
             if not repo_full_name:
                 raise ValueError(
                     f"Could not determine repo_full_name for repo {repository.id}"
@@ -260,7 +268,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
             if not token:
                 inst_result = await session.execute(
                     select(GithubInstallation).where(
-                        GithubInstallation.user_id == pr_review.user_id
+                        GithubInstallation.user_id == user_id
                     )
                 )
                 installation = inst_result.scalar_one_or_none()
@@ -273,7 +281,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
                         )
 
             # 5. Fetch PR diff from GitHub
-            pr_diff = await _fetch_pr_diff(repo_full_name, pr_review.pr_number, token)
+            pr_diff = await _fetch_pr_diff(repo_full_name, pr_number, token)
             if not pr_diff:
                 raise ValueError("Empty PR diff — cannot review.")
 
@@ -281,11 +289,9 @@ async def _process_pr_review(pr_review_id: str) -> None:
             req_text = ""
             analysis_context = ""
 
-            if pr_review.requirement_id:
+            if requirement_id:
                 req_result = await session.execute(
-                    select(Requirement).where(
-                        Requirement.id == pr_review.requirement_id
-                    )
+                    select(Requirement).where(Requirement.id == requirement_id)
                 )
                 req_record = req_result.scalar_one_or_none()
                 if req_record:
@@ -295,8 +301,8 @@ async def _process_pr_review(pr_review_id: str) -> None:
                         select(ImpactResult)
                         .join(AnalysisJob, ImpactResult.job_id == AnalysisJob.id)
                         .where(
-                            AnalysisJob.requirement_id == pr_review.requirement_id,
-                            AnalysisJob.repository_id == pr_review.repository_id,
+                            AnalysisJob.requirement_id == requirement_id,
+                            AnalysisJob.repository_id == repository_id,
                             AnalysisJob.status == "completed",
                         )
                         .order_by(AnalysisJob.created_at.desc())
@@ -334,7 +340,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
                     batch: list[dict], batch_idx: int
                 ) -> PRReviewOutput:
                     combined_patch_diff = "\n\n".join(p["patch"] for p in batch)
-                    batch_title = f"{pr_review.pr_title} (Batch {batch_idx + 1}/{len(patch_batches)})"
+                    batch_title = f"{pr_title} (Batch {batch_idx + 1}/{len(patch_batches)})"
                     return await dispatch_pr_review(
                         batch_title,
                         combined_patch_diff,
@@ -366,7 +372,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
                     pr_diff = pr_diff[:120_000] + "\n\n[... diff truncated ...]"
 
                 ai_result = await dispatch_pr_review(
-                    pr_review.pr_title, pr_diff, req_text, analysis_context
+                    pr_title, pr_diff, req_text, analysis_context
                 )
                 all_findings = ai_result.findings
                 final_summary = ai_result.summary
@@ -376,7 +382,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
                 additions = patch_info["patch"].count("\n+")
                 deletions = patch_info["patch"].count("\n-")
                 file_diff = PRFileDiff(
-                    pr_review_id=pr_review.id,
+                    pr_review_id=pr_review_id,
                     file_path=patch_info["file_path"],
                     patch=patch_info["patch"],
                     additions=additions,
@@ -388,7 +394,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
             saved_findings = []
             for finding in all_findings:
                 rf = PRReviewFinding(
-                    pr_review_id=pr_review.id,
+                    pr_review_id=pr_review_id,
                     file_path=finding.file_path,
                     line_number=finding.line_number,
                     severity=finding.severity,
@@ -403,18 +409,18 @@ async def _process_pr_review(pr_review_id: str) -> None:
             await session.commit()
 
             # 10. Post review to GitHub as native PR Review / Comment (if auto_post_comments enabled)
-            if repository.auto_post_comments:
+            if auto_post_comments:
                 if token:
                     try:
                         await _post_pr_review_to_github(
                             repo_full_name,
-                            pr_review.pr_number,
+                            pr_number,
                             token,
                             final_summary,
                             saved_findings,
                         )
                         logger.info(
-                            f"⚡ Automated PR review comment posted to GitHub PR #{pr_review.pr_number} in {repo_full_name}"
+                            f"⚡ Automated PR review comment posted to GitHub PR #{pr_number} in {repo_full_name}"
                         )
                     except Exception as gh_err:
                         logger.error(

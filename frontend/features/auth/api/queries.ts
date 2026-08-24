@@ -10,7 +10,7 @@
 // guarantee the backend has the user row before any other API call runs — no
 // frontend-side Clerk webhook listener required.
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApiClient } from "@/lib/api/client";
 
 export type BackendUser = {
@@ -51,5 +51,28 @@ export function useEnsureBackendUser() {
     refetchInterval: 5 * 60 * 1000,
     // Don't block the page on this — it's a background sync, not a data dependency.
     staleTime: 60 * 1000,
+  });
+}
+
+export function useUpdateProfile() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ name }: { name: string }) => {
+      const res = await fetchApi(`/api/v1/auth/me`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update profile");
+      }
+      return res.json() as Promise<BackendUser>;
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(["backend", "me"], data);
+      qc.invalidateQueries({ queryKey: ["backend", "me"] });
+    },
   });
 }

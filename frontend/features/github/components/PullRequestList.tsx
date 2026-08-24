@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { usePullRequests } from "../api/queries";
 import { usePRReviews, usePublishPRComment } from "@/features/pr-reviews/api/queries";
 import {
@@ -19,6 +20,7 @@ import {
   FolderGit2,
   ArrowUpDown,
   Layers,
+  Building2,
 } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,7 +33,10 @@ type FilterTab = "open" | "all" | "merged" | "closed" | "reviewed";
 type SortOption = "updated_desc" | "created_desc" | "number_desc";
 
 export function PullRequestList() {
-  const { data: prs, isLoading, isError } = usePullRequests();
+  const searchParams = useSearchParams();
+  const repoIdParam = searchParams.get("repo_id");
+
+  const { data: prs, isLoading, isError } = usePullRequests(repoIdParam);
   const { data: prReviews } = usePRReviews();
   const [reviewingPR, setReviewingPR] = useState<GitHubPullRequest | null>(null);
   const { mutate: publishComment } = usePublishPRComment();
@@ -42,8 +47,10 @@ export function PullRequestList() {
   // Filters State
   const [activeTab, setActiveTab] = useState<FilterTab>("open");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedWorkspace, setSelectedWorkspace] = useState<string>("all");
   const [selectedRepo, setSelectedRepo] = useState<string>("all");
   const [sortBy, setSortBy] = useState<SortOption>("updated_desc");
+
 
   const handlePublishComment = (reviewId: string) => {
     setPublishingId(reviewId);
@@ -61,6 +68,20 @@ export function PullRequestList() {
       },
     });
   };
+
+  // Distinct workspaces
+  const workspaceOptions = useMemo(() => {
+    if (!prs) return [];
+    const map = new Map<string, string>();
+    prs.forEach((pr) => {
+      if (pr.workspace_id && pr.workspace_name) {
+        map.set(pr.workspace_id, pr.workspace_name);
+      } else {
+        map.set("personal", "Personal Workspace");
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [prs]);
 
   // Distinct repositories
   const repositoriesList = useMemo(() => {
@@ -123,17 +144,27 @@ export function PullRequestList() {
           if (!hasReview) return false;
         }
 
-        // 2. Repository filter
+        // 2. Workspace filter
+        if (selectedWorkspace !== "all") {
+          if (selectedWorkspace === "personal") {
+            if (pr.workspace_id) return false;
+          } else {
+            if (pr.workspace_id !== selectedWorkspace) return false;
+          }
+        }
+
+        // 3. Repository filter
         if (selectedRepo !== "all" && pr.repository_name !== selectedRepo) return false;
 
-        // 3. Search query filter
+        // 4. Search query filter
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchTitle = pr.title.toLowerCase().includes(q);
           const matchNum = `#${pr.number}`.includes(q) || String(pr.number) === q;
           const matchAuthor = pr.user?.login?.toLowerCase().includes(q);
           const matchRepo = pr.repository_name?.toLowerCase().includes(q);
-          if (!matchTitle && !matchNum && !matchAuthor && !matchRepo) return false;
+          const matchWS = (pr.workspace_name || "").toLowerCase().includes(q);
+          if (!matchTitle && !matchNum && !matchAuthor && !matchRepo && !matchWS) return false;
         }
 
         return true;
@@ -148,7 +179,7 @@ export function PullRequestList() {
         // Default: updated_desc
         return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
       });
-  }, [prs, prReviews, activeTab, selectedRepo, searchQuery, sortBy]);
+  }, [prs, prReviews, activeTab, selectedWorkspace, selectedRepo, searchQuery, sortBy]);
 
   if (isLoading) {
     return (
@@ -319,6 +350,25 @@ export function PullRequestList() {
               )}
             </div>
 
+            {/* Workspace Filter Dropdown */}
+            {workspaceOptions.length > 1 && (
+              <div className="relative">
+                <select
+                  value={selectedWorkspace}
+                  onChange={(e) => setSelectedWorkspace(e.target.value)}
+                  className="h-8 pl-2.5 pr-7 text-xs font-medium rounded-xl border border-border/70 bg-slate-50/70 text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="all">All Workspaces</option>
+                  {workspaceOptions.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.name}
+                    </option>
+                  ))}
+                </select>
+                <Building2 className="w-3.5 h-3.5 text-indigo-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            )}
+
             {/* Repository Filter Dropdown */}
             {repositoriesList.length > 1 && (
               <div className="relative">
@@ -423,10 +473,25 @@ export function PullRequestList() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
+                      {/* Workspace Badge */}
+                      <span
+                        className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                          !pr.workspace_id
+                            ? "bg-slate-100 text-slate-700 border border-slate-200"
+                            : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                        }`}
+                        title={!pr.workspace_id ? "Personal Workspace" : `Workspace: ${pr.workspace_name}`}
+                      >
+                        <Building2 className="w-3 h-3" />
+                        {pr.workspace_name || "Personal Workspace"}
+                      </span>
+
+                      {/* Repository Badge */}
+                      <span className="text-xs font-mono font-semibold text-slate-600 bg-slate-100/90 px-2.5 py-0.5 rounded-full border border-slate-200">
+                        <FolderGit2 className="w-3 h-3 inline-block mr-1 text-slate-400 -mt-0.5" />
                         {pr.repository_name}
                       </span>
-                      <span className="text-sm font-medium text-muted">#{pr.number}</span>
+                      <span className="text-xs font-mono font-medium text-muted-foreground">#{pr.number}</span>
 
                       {/* State Badge */}
                       {pr.state === "open" && (

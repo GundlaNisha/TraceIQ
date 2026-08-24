@@ -19,8 +19,10 @@ import {
   RefreshCw,
   Square,
   Zap,
+  Building2,
 } from "lucide-react";
 import { RepoSettingsModal } from "./RepoSettingsModal";
+import { useWorkspaceSummary } from "@/features/workspace/api/queries";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-slate-100 text-muted" },
@@ -43,7 +45,10 @@ export function RepositoryList() {
   const { mutate: deleteRepo } = useDeleteRepository();
   const { mutate: resyncRepo, isPending: isResyncPending } = useResyncRepository();
   const { mutate: cancelSync, isPending: isCancelPending } = useCancelRepositorySync();
-  const { setActiveRepositoryId, activeRepositoryId } = useWorkspaceStore();
+  const { setActiveRepositoryId, activeRepositoryId, activeWorkspaceId } = useWorkspaceStore();
+  const { data: wsSummary } = useWorkspaceSummary(activeWorkspaceId || "");
+  const isViewer = Boolean(activeWorkspaceId && wsSummary?.user_role === "viewer");
+  const canDelete = Boolean(!activeWorkspaceId || wsSummary?.user_role === "owner" || wsSummary?.user_role === "admin");
   const [selectedRepoForSettings, setSelectedRepoForSettings] =
     useState<Repository | null>(null);
 
@@ -105,18 +110,31 @@ export function RepositoryList() {
                   }`}
                   onClick={() => setActiveRepositoryId(repo.id)}
                 >
-                  <td className="px-6 py-4 font-semibold text-foreground flex items-center gap-2">
-                    {repo.github_installation_id && (
-                      <span title="GitHub App Connected">
-                        <GitBranch className="w-4 h-4 text-muted-foreground" />
+                  <td className="px-6 py-4 font-semibold text-foreground">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {repo.github_installation_id && (
+                        <span title="GitHub App Connected">
+                          <GitBranch className="w-4 h-4 text-muted-foreground" />
+                        </span>
+                      )}
+                      <span>{repo.name}</span>
+                      {isActive && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-white uppercase tracking-wider">
+                          Active
+                        </span>
+                      )}
+                      <span
+                        className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                          !repo.workspace_id
+                            ? "bg-slate-100 text-slate-700 border border-slate-200"
+                            : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                        }`}
+                        title={!repo.workspace_id ? "Personal Workspace" : `Workspace: ${repo.workspace_name}`}
+                      >
+                        <Building2 className="w-3 h-3" />
+                        {repo.workspace_name || "Personal Workspace"}
                       </span>
-                    )}
-                    {repo.name}
-                    {isActive && (
-                      <span className="ml-3 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-white uppercase tracking-wider">
-                        Active
-                      </span>
-                    )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-muted font-mono text-xs truncate max-w-xs">
                     {repo.repo_url}
@@ -159,77 +177,90 @@ export function RepositoryList() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      {/* Resync / Stop / Restart Actions */}
-                      {isSyncing ? (
+                      {!isViewer && (
+                        <>
+                          {/* Resync / Stop / Restart Actions */}
+                          {isSyncing ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isCancelPending}
+                              className="gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:text-amber-800 border-amber-200 font-semibold shadow-none h-8 px-2.5"
+                              title="Stop ongoing repository sync"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelSync(repo.id);
+                              }}
+                            >
+                              <Square className="w-3 h-3 fill-amber-700" />
+                              Stop Sync
+                            </Button>
+                          ) : isFailed ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isResyncPending}
+                              className="gap-1.5 text-xs text-rose-700 bg-rose-50 hover:bg-rose-100 hover:text-rose-800 border-rose-200 font-semibold shadow-none h-8 px-2.5"
+                              title="Restart failed repository sync"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                resyncRepo(repo.id);
+                              }}
+                            >
+                              <Zap className="w-3 h-3" />
+                              Retry Sync
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isResyncPending}
+                              className="gap-1.5 text-xs text-slate-700 hover:text-accent font-medium shadow-none h-8 px-2.5"
+                              title="Reprocess repository AST graph and vector index"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                resyncRepo(repo.id);
+                              }}
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              Resync
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 text-xs text-foreground hover:text-accent font-medium shadow-none h-8 px-2.5"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedRepoForSettings(repo);
+                            }}
+                          >
+                            <Settings className="w-3.5 h-3.5" />
+                            Settings
+                          </Button>
+                        </>
+                      )}
+
+                      {canDelete && !isViewer && (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
-                          disabled={isCancelPending}
-                          className="gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:text-amber-800 border-amber-200 font-semibold shadow-none h-8 px-2.5"
-                          title="Stop ongoing repository sync"
+                          className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 text-xs h-8 px-2"
                           onClick={(e) => {
                             e.stopPropagation();
-                            cancelSync(repo.id);
+                            deleteRepo(repo.id);
                           }}
                         >
-                          <Square className="w-3 h-3 fill-amber-700" />
-                          Stop Sync
-                        </Button>
-                      ) : isFailed ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isResyncPending}
-                          className="gap-1.5 text-xs text-rose-700 bg-rose-50 hover:bg-rose-100 hover:text-rose-800 border-rose-200 font-semibold shadow-none h-8 px-2.5"
-                          title="Restart failed repository sync"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            resyncRepo(repo.id);
-                          }}
-                        >
-                          <Zap className="w-3 h-3" />
-                          Retry Sync
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isResyncPending}
-                          className="gap-1.5 text-xs text-slate-700 hover:text-accent font-medium shadow-none h-8 px-2.5"
-                          title="Reprocess repository AST graph and vector index"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            resyncRepo(repo.id);
-                          }}
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                          Resync
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-xs text-foreground hover:text-accent font-medium shadow-none h-8 px-2.5"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedRepoForSettings(repo);
-                        }}
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                        Settings
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 text-xs h-8 px-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteRepo(repo.id);
-                        }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      {isViewer && (
+                        <span className="text-xs text-muted font-medium px-2 py-1 bg-slate-100 rounded-lg">
+                          Read-only
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>

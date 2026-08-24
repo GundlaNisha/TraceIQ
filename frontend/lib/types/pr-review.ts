@@ -9,6 +9,9 @@ export interface PRReview {
   status: "queued" | "running" | "completed" | "failed";
   summary: string | null;
   created_at: string;
+  repository_name?: string | null;
+  workspace_name?: string | null;
+  workspace_id?: string | null;
 }
 
 export interface PRReviewFinding {

@@ -9,6 +9,8 @@ export interface Repository {
   auto_review_prs?: boolean;
   auto_post_comments?: boolean;
   default_requirement_id?: string | null;
+  workspace_id?: string | null;
+  workspace_name?: string | null;
   created_at: string;
 }
 
@@ -29,6 +31,9 @@ export interface Requirement {
   title: string;
   text: string;
   version_number: number;
+  workspace_id?: string | null;
+  workspace_name?: string | null;
+  repository_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,6 +46,8 @@ export interface AnalysisJob {
   repository_id?: string;
   requirement_title?: string | null;
   repository_name?: string | null;
+  workspace_id?: string | null;
+  workspace_name?: string | null;
   result?: any;
   created_at: string;
 }

@@ -1,12 +1,21 @@
 "use client";
 import { useEffect, useState } from "react";
-import { usePRReview, usePRReviewFindings, usePRReviewDiffs, usePublishPRComment } from "../api/queries";
+import {
+  usePRReview,
+  usePRReviewFindings,
+  usePRReviewDiffs,
+  usePublishPRComment,
+  useRerunPRReview,
+  useDeletePRReview,
+} from "../api/queries";
 import {
   CheckCircle2, XCircle, Clock, Loader2, ExternalLink,
   AlertTriangle, AlertCircle, Info, Sparkles, GitPullRequest, ArrowLeft,
-  MessageSquarePlus, Check, FileCode2, List,
+  MessageSquarePlus, Check, FileCode2, List, RefreshCw, Trash2,
+  Building2, FolderGit2,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatTimeAgo } from "@/lib/utils";
 import type { PRReviewFinding } from "@/lib/types/pr-review";
@@ -30,6 +39,7 @@ type Tab = "findings" | "files";
 interface Props { reviewId: string; }
 
 export function PRReviewDetail({ reviewId }: Props) {
+  const router = useRouter();
   const [commentSuccess, setCommentSuccess] = useState<string | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("findings");
@@ -41,6 +51,8 @@ export function PRReviewDetail({ reviewId }: Props) {
   const { data: findings, isLoading: findingsLoading, refetch: refetchFindings } = usePRReviewFindings(reviewId, isActive);
   const { data: diffs, isLoading: diffsLoading } = usePRReviewDiffs(reviewId, isCompleted ?? false);
   const { mutate: publishComment, isPending: isPublishing } = usePublishPRComment();
+  const { mutate: rerunReview, isPending: isRerunning } = useRerunPRReview();
+  const { mutate: deleteReview, isPending: isDeleting } = useDeletePRReview();
 
   useEffect(() => {
     if (review?.status === "completed" || review?.status === "failed") {
@@ -84,6 +96,16 @@ export function PRReviewDetail({ reviewId }: Props) {
     });
   };
 
+  const handleDelete = () => {
+    if (confirm("Are you sure you want to delete this PR review?")) {
+      deleteReview(reviewId, {
+        onSuccess: () => {
+          router.push("/pr-reviews");
+        },
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-8 pb-16">
       {/* Back nav */}
@@ -100,7 +122,25 @@ export function PRReviewDetail({ reviewId }: Props) {
               <GitPullRequest className="w-6 h-6 text-accent" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">PR #{review.pr_number}</p>
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-muted-foreground">PR #{review.pr_number}</span>
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                    !review.workspace_id
+                      ? "bg-slate-100 text-slate-700 border border-slate-200"
+                      : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                  }`}
+                >
+                  <Building2 className="w-3 h-3" />
+                  {review.workspace_name || "Personal Workspace"}
+                </span>
+                {review.repository_name && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono text-slate-600 bg-slate-100/90 border border-slate-200">
+                    <FolderGit2 className="w-3 h-3 text-slate-400" />
+                    {review.repository_name}
+                  </span>
+                )}
+              </div>
               <h1 className="text-2xl font-semibold font-serif text-foreground tracking-tight">{review.pr_title}</h1>
               <div className="flex items-center gap-3 mt-2">
                 <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${statusText}`}>
@@ -116,6 +156,19 @@ export function PRReviewDetail({ reviewId }: Props) {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {review.status === "failed" && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => rerunReview(reviewId)}
+                disabled={isRerunning}
+                className="gap-2 text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200 font-semibold shadow-sm"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRerunning ? "animate-spin" : ""}`} />
+                {isRerunning ? "Retrying…" : "Retry Review"}
+              </Button>
+            )}
+
             {review.status === "completed" && (
               <Button
                 type="button"
@@ -147,6 +200,17 @@ export function PRReviewDetail({ reviewId }: Props) {
               <ExternalLink className="w-4 h-4" />
               View on GitHub
             </a>
+
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isDeleting}
+              onClick={handleDelete}
+              className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-3"
+              title="Delete PR review"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 

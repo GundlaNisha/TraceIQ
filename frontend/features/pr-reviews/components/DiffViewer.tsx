@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import type { PRReviewFinding } from "@/lib/types/pr-review";
 import { AlertTriangle, AlertCircle, Info } from "lucide-react";
 
@@ -196,8 +196,8 @@ export function DiffViewer({ patch, findings = [] }: DiffViewerProps) {
                 : [];
 
             return (
-              <>
-                <tr key={idx} className={`group ${rowBg} transition-colors`}>
+              <Fragment key={`diff-row-${idx}-${line.newLineNo ?? line.oldLineNo ?? "hdr"}`}>
+                <tr className={`group ${rowBg} transition-colors`}>
                   {/* Old line number */}
                   <td className="w-10 text-right pr-3 py-0.5 text-slate-400 select-none border-r border-slate-100 text-[10px] align-top leading-5">
                     {isRemoved ? line.oldLineNo : ""}
@@ -223,7 +223,7 @@ export function DiffViewer({ patch, findings = [] }: DiffViewerProps) {
                     </td>
                   </tr>
                 ))}
-              </>
+              </Fragment>
             );
           })}
         </tbody>

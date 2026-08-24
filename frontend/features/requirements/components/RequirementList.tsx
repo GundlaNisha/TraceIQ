@@ -9,11 +9,16 @@ import { Button } from "@/components/ui/button";
 import { RequirementForm } from "./RequirementForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDeleteRequirement } from "../api/queries";
-import { Trash2, Edit2 } from "lucide-react";
+import { Trash2, Edit2, Building2, FolderGit2 } from "lucide-react";
 import { parseUTCDate, formatTimeAgo, formatDateTime } from "@/lib/utils";
 
-export function RequirementList() {
-  const { data: requirements, isLoading } = useRequirements();
+interface Props {
+  repoId?: string | null;
+  isViewer?: boolean;
+}
+
+export function RequirementList({ repoId, isViewer = false }: Props) {
+  const { data: requirements, isLoading } = useRequirements(repoId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingReq, setEditingReq] = useState<Requirement | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -31,7 +36,7 @@ export function RequirementList() {
   if (!requirements?.length)
     return (
       <div className="text-sm text-gray-400 py-8 text-center">
-        No requirements yet.
+        No requirements found.
       </div>
     );
 
@@ -48,7 +53,7 @@ export function RequirementList() {
           <thead className="bg-slate-50/50 border-b border-border/40">
             <tr>
               <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
-                Title
+                Requirement
               </th>
               <th className="text-left px-6 py-4 font-semibold text-muted text-xs tracking-wider uppercase">
                 Version
@@ -68,9 +73,35 @@ export function RequirementList() {
                   setSelectedId(req.id === selectedId ? null : req.id)
                 }
               >
-                <td className="px-6 py-4 font-semibold text-foreground">
-                  {req.title}
-                  {selectedId === req.id && <span className="ml-3 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-white uppercase tracking-wider">Viewing</span>}
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">{req.title}</span>
+                    {selectedId === req.id && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-white uppercase tracking-wider">
+                        Viewing
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    {/* Workspace Badge */}
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                        !req.workspace_id
+                          ? "bg-slate-100 text-slate-700 border border-slate-200"
+                          : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                      }`}
+                    >
+                      <Building2 className="w-3 h-3" />
+                      {req.workspace_name || "Personal Workspace"}
+                    </span>
+                    {/* Repository Badge */}
+                    {req.repository_name && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                        <FolderGit2 className="w-3 h-3 text-slate-400" />
+                        {req.repository_name}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <span className="px-2 py-1 bg-slate-100 text-muted rounded-md text-xs font-mono font-medium">v{req.version_number}</span>
@@ -80,42 +111,49 @@ export function RequirementList() {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isAnalyzing}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerAnalysis(req.id, {
-                          onSuccess: (data) => {
-                            router.push(`/analysis/${data.job_id}`);
-                          },
-                          onError: (error) => {
-                            console.error("Failed to trigger analysis", error);
-                          }
-                        });
-                      }}
-                    >
-                      Analyze
-                    </Button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingReq(req);
-                      }}
-                      className="p-2 text-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-colors"
-                      title="Edit Requirement"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteClick(e, req.id)}
-                      disabled={isDeleting}
-                      className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
-                      title="Delete Requirement"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!isViewer && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isAnalyzing}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerAnalysis(req.id, {
+                              onSuccess: (data) => {
+                                router.push(`/analysis/${data.job_id}`);
+                              },
+                              onError: (error) => {
+                                console.error("Failed to trigger analysis", error);
+                              }
+                            });
+                          }}
+                        >
+                          Analyze
+                        </Button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingReq(req);
+                          }}
+                          className="p-2 text-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-colors"
+                          title="Edit Requirement"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteClick(e, req.id)}
+                          disabled={isDeleting}
+                          className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Delete Requirement"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                    {isViewer && (
+                      <span className="text-xs text-muted font-medium px-2 py-1 bg-slate-100 rounded-lg">Read-only</span>
+                    )}
                   </div>
                 </td>
               </tr>

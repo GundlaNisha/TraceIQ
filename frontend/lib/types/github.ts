@@ -12,7 +12,10 @@ export interface GitHubPullRequest {
   created_at: string;
   updated_at: string;
   draft: boolean;
+  repository_id?: string | null;
   repository_url: string;
   repository_name: string;
+  workspace_id?: string | null;
+  workspace_name?: string | null;
   user: GitHubUser;
 }

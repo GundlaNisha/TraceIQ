@@ -1,5 +1,6 @@
 import { useAuth } from "@clerk/nextjs";
 import { API_BASE_URL } from "./config";
+import { useWorkspaceStore } from "@/stores/workspace";
 
 export function useApiClient() {
   const { getToken } = useAuth();
@@ -10,6 +11,11 @@ export function useApiClient() {
     
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    const activeWorkspaceId = useWorkspaceStore.getState().activeWorkspaceId;
+    if (activeWorkspaceId && !headers.has("X-Workspace-Id")) {
+      headers.set("X-Workspace-Id", activeWorkspaceId);
     }
     
     // Ensure we send content-type for POST/PUT if not explicitly set

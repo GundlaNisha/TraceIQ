@@ -6,7 +6,12 @@ from app.modules.requirement.models.req import Requirement, RequirementVersion
 
 
 async def create_requirement(
-    db: AsyncSession, user_id: str, repository_id: uuid.UUID, title: str, text: str
+    db: AsyncSession,
+    user_id: str,
+    repository_id: uuid.UUID,
+    title: str,
+    text: str,
+    workspace_id: uuid.UUID | None = None,
 ) -> Requirement:
     req = Requirement(
         user_id=user_id,
@@ -14,6 +19,7 @@ async def create_requirement(
         title=title,
         text=text,
         version_number=1,
+        workspace_id=workspace_id,
     )
     db.add(req)
     await db.flush()  # get ID before inserting version

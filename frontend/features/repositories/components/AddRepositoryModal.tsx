@@ -145,8 +145,8 @@ export function AddRepositoryModal() {
         <Plus className="w-4 h-4" />
         Add Repository
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl bg-white p-0 overflow-hidden rounded-2xl border border-border/80 shadow-2xl">
-        <div className="px-6 pt-6 pb-4 border-b border-border/60 bg-gradient-to-b from-slate-50/80 to-white">
+      <DialogContent className="sm:max-w-2xl w-full max-w-[95vw] bg-white p-0 rounded-2xl border border-border/80 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+        <div className="px-6 pt-6 pb-4 border-b border-border/60 bg-gradient-to-b from-slate-50/80 to-white shrink-0">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               <GitBranch className="w-5 h-5 text-accent" />
@@ -184,7 +184,7 @@ export function AddRepositoryModal() {
         </div>
 
         {errorMessage && (
-          <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium flex items-center justify-between gap-2">
+          <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium flex items-center justify-between gap-2 shrink-0">
             <span>{errorMessage}</span>
             <button
               type="button"
@@ -198,7 +198,7 @@ export function AddRepositoryModal() {
 
         {/* Tab 1: 1-Click GitHub Repositories */}
         {activeTab === "github" && (
-          <div className="p-6 flex flex-col gap-4">
+          <div className="p-6 flex flex-col gap-4 overflow-y-auto flex-1 min-w-0">
             {!githubStatus?.connected ? (
               <div className="flex flex-col gap-4 py-4 px-5 border border-dashed border-border rounded-xl bg-slate-50/60 text-center">
                 <GitBranch className="w-10 h-10 text-accent/80 mx-auto" />
@@ -251,10 +251,10 @@ export function AddRepositoryModal() {
             ) : (
               <>
                 {/* Friction-Removal Pro-Tip Banner */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-indigo-50/90 border border-indigo-100 text-xs text-indigo-950">
-                  <div className="flex items-start gap-2.5 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-indigo-50/90 border border-indigo-100 text-xs text-indigo-950 min-w-0 w-full">
+                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     <span className="text-base leading-none shrink-0 mt-0.5">💡</span>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="font-bold text-indigo-900 leading-snug">
                         Can't find a repository or tired of 2FA prompts?
                       </p>
@@ -276,18 +276,18 @@ export function AddRepositoryModal() {
                 </div>
 
                 {/* Search Bar */}
-                <div className="relative">
+                <div className="relative w-full">
                   <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                   <Input
                     placeholder="Search your GitHub repositories..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 text-xs bg-slate-50/70 border-border/70 h-9"
+                    className="pl-9 text-xs bg-slate-50/70 border-border/70 h-9 w-full"
                   />
                 </div>
 
                 {/* Repository List */}
-                <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
+                <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto overflow-x-hidden pr-1 w-full">
                   {isLoadingRepos ? (
                     <div className="flex items-center justify-center py-10 gap-2 text-xs text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin text-accent" />
@@ -303,54 +303,56 @@ export function AddRepositoryModal() {
                       return (
                         <div
                           key={repo.id}
-                          className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-border hover:bg-slate-50/80 transition-all gap-3"
+                          className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-border hover:bg-slate-50/80 transition-all gap-3 w-full min-w-0 bg-white"
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-xs text-foreground truncate">
+                          <div className="min-w-0 flex-1 overflow-hidden pr-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-xs text-foreground truncate max-w-[280px]">
                                 {repo.full_name}
                               </span>
                               {repo.private ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
                                   <Lock className="w-2.5 h-2.5" />
                                   Private
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                                   <Globe className="w-2.5 h-2.5" />
                                   Public
                                 </span>
                               )}
                             </div>
                             {repo.description && (
-                              <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                              <p className="text-[11px] text-muted-foreground truncate mt-0.5 max-w-full">
                                 {repo.description}
                               </p>
                             )}
                           </div>
 
-                          {repo.is_imported ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 shrink-0">
-                              <Check className="w-3.5 h-3.5" />
-                              Added
-                            </span>
-                          ) : (
-                            <Button
-                              size="sm"
-                              disabled={isImporting || isManualPending}
-                              onClick={() => handleImportRepo(repo)}
-                              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shrink-0 h-8 px-3 rounded-lg"
-                            >
-                              {isImporting ? (
-                                <>
-                                  <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
-                                  Importing...
-                                </>
-                              ) : (
-                                "Import"
-                              )}
-                            </Button>
-                          )}
+                          <div className="shrink-0 flex items-center">
+                            {repo.is_imported ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 shrink-0">
+                                <Check className="w-3.5 h-3.5" />
+                                Added
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                disabled={isImporting || isManualPending}
+                                onClick={() => handleImportRepo(repo)}
+                                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shrink-0 h-8 px-3 rounded-lg shadow-sm"
+                              >
+                                {isImporting ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                                    Importing...
+                                  </>
+                                ) : (
+                                  "Import"
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       );
                     })

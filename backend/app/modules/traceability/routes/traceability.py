@@ -1,16 +1,17 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_active_workspace_id, get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
 from app.modules.impact.models.impact import AnalysisJob, ImpactResult
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
 from app.modules.review.models.rev_models import PRReview, PRReviewFinding
+from app.modules.workspace.models.workspace import WorkspaceMember
 from app.modules.traceability.schemas.traceability import (
     TraceabilityAnalysisItem,
     TraceabilityFindingSummary,
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/api/v1/traceability", tags=["traceability"])
 
 @router.get("", response_model=TraceabilityMatrixResponse)
 async def get_traceability_matrix(
+    request: Request,
     repository_id: str | None = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -33,21 +35,39 @@ async def get_traceability_matrix(
     Returns the comprehensive Traceability Matrix linking Requirements,
     Impact Analyses, PR Reviews, and Compliance Verification.
     """
+    target_ws = get_active_workspace_id(request)
+
     # 1. Query Requirements with Repository
     req_stmt = (
         select(Requirement, Repository.name)
         .join(Repository, Requirement.repository_id == Repository.id)
-        .where(Requirement.user_id == current_user.id)
-        .order_by(desc(Requirement.updated_at))
     )
 
-    if repository_id:
+    if target_ws:
+        req_stmt = req_stmt.where(Requirement.workspace_id == target_ws)
+    elif repository_id:
+        try:
+            repo_uuid = uuid.UUID(repository_id)
+            req_stmt = req_stmt.where(Requirement.repository_id == repo_uuid)
+        except ValueError:
+            pass
+    else:
+        user_ws_subq = select(WorkspaceMember.workspace_id).where(
+            WorkspaceMember.user_id == current_user.id
+        )
+        req_stmt = req_stmt.where(
+            (Requirement.user_id == current_user.id)
+            | (Requirement.workspace_id.in_(user_ws_subq))
+        )
+
+    if repository_id and target_ws:
         try:
             repo_uuid = uuid.UUID(repository_id)
             req_stmt = req_stmt.where(Requirement.repository_id == repo_uuid)
         except ValueError:
             pass
 
+    req_stmt = req_stmt.order_by(desc(Requirement.updated_at))
     req_res = await db.execute(req_stmt)
     requirements_data = req_res.all()
 

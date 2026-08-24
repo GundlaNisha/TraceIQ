@@ -20,16 +20,19 @@ type FormData = z.infer<typeof schema>;
 
 interface Props {
   initialData?: Requirement;
+  preselectedRepoId?: string | null;
   onSuccess?: () => void;
 }
 
-export function RequirementForm({ initialData, onSuccess }: Props) {
+export function RequirementForm({ initialData, preselectedRepoId, onSuccess }: Props) {
   const { activeRepositoryId } = useWorkspaceStore();
   const { data: repos } = useRepositories();
   const { mutateAsync: createReq, isPending: isCreating } = useCreateRequirement();
   const { mutateAsync: updateReq, isPending: isUpdating } = useUpdateRequirement();
   
   const isPending = isCreating || isUpdating;
+
+  const defaultRepoId = initialData?.repository_id ?? preselectedRepoId ?? activeRepositoryId ?? "";
 
   const {
     register,
@@ -39,7 +42,7 @@ export function RequirementForm({ initialData, onSuccess }: Props) {
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { 
-      repository_id: initialData?.repository_id ?? activeRepositoryId ?? "",
+      repository_id: defaultRepoId,
       title: initialData?.title ?? "",
       text: initialData?.text ?? "",
     },

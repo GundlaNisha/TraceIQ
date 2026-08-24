@@ -79,3 +79,18 @@ async def get_current_user(
         # Treat any of those as a 401 — never a 500 — so a bad token from
         # the client doesn't take the API down.
         raise HTTPException(status_code=401, detail=f"Malformed token: {e!s}")
+
+
+import uuid
+
+
+def get_active_workspace_id(request: Request) -> uuid.UUID | None:
+    """Extract optional X-Workspace-Id header from incoming request."""
+    ws_header = request.headers.get("X-Workspace-Id")
+    if not ws_header:
+        return None
+    try:
+        return uuid.UUID(ws_header)
+    except ValueError:
+        return None
+

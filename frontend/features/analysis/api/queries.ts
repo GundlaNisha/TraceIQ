@@ -1,15 +1,20 @@
 import { useApiClient } from "@/lib/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { API_BASE_URL } from "@/lib/api/config";
 import { AnalysisJob } from "@/lib/types/api";
 
-export function useAnalysisJobs() {
+export function useAnalysisJobs(repoId?: string | null, requirementId?: string | null) {
   const { fetchApi } = useApiClient();
 
   return useQuery({
-    queryKey: ["analysis"],
+    queryKey: ["analysis", repoId || "all", requirementId || "all"],
     queryFn: async () => {
-      const res = await fetchApi(`/api/v1/analysis`);
+      const params = new URLSearchParams();
+      if (repoId) params.set("repo_id", repoId);
+      if (requirementId) params.set("requirement_id", requirementId);
+      const qs = params.toString();
+      const url = qs ? `/api/v1/analysis?${qs}` : `/api/v1/analysis`;
+
+      const res = await fetchApi(url);
       if (!res.ok) throw new Error("Failed to fetch analysis jobs");
       return res.json() as Promise<AnalysisJob[]>;
     },
@@ -24,9 +29,7 @@ export function useImpactResult(analysisId: string | null) {
     queryKey: ["analysis", analysisId],
     enabled: !!analysisId,
     queryFn: async () => {
-      
-      const res = await fetchApi(`/api/v1/analysis/${analysisId}`, {
-      });
+      const res = await fetchApi(`/api/v1/analysis/${analysisId}`, {});
       if (!res.ok) throw new Error("Failed to fetch analysis result");
       return res.json();
     },
@@ -40,11 +43,9 @@ export function useTriggerAnalysis() {
 
   return useMutation({
     mutationFn: async (requirementId: string) => {
-      
       const res = await fetchApi(
         `/api/v1/requirements/${requirementId}/analyze`,
-        { method: "POST",
- },
+        { method: "POST" }
       );
       if (res.status !== 202) throw new Error("Failed to trigger analysis");
       return res.json(); // { job_id: "..." }

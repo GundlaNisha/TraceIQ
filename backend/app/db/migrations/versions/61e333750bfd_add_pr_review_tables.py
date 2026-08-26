@@ -51,9 +51,10 @@ def upgrade() -> None:
             ["users.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
+        if_not_exists=True,
     )
     op.create_index(
-        op.f("ix_pr_reviews_user_id"), "pr_reviews", ["user_id"], unique=False
+        op.f("ix_pr_reviews_user_id"), "pr_reviews", ["user_id"], unique=False, if_not_exists=True
     )
     op.create_table(
         "pr_review_findings",
@@ -77,12 +78,14 @@ def upgrade() -> None:
             ["pr_reviews.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
+        if_not_exists=True,
     )
     op.create_index(
         op.f("ix_pr_review_findings_pr_review_id"),
         "pr_review_findings",
         ["pr_review_id"],
         unique=False,
+        if_not_exists=True,
     )
     # ### end Alembic commands ###
 

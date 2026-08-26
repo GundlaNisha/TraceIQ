@@ -8,9 +8,16 @@ from sentence_transformers import SentenceTransformer
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore")
 
-# Load model globally so it stays in RAM between celery tasks.
+# Load model lazily so import time is instantaneous and memory is only allocated on-demand.
 # all-MiniLM-L6-v2 produces 384-dimensional vector embeddings locally
-model = SentenceTransformer("all-MiniLM-L6-v2")
+_model: SentenceTransformer | None = None
+
+
+def get_embed_model() -> SentenceTransformer:
+    global _model
+    if _model is None:
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
 
 def embed_chunks(texts: list[str], batch_size: int = 64) -> list[list[float]]:
@@ -18,6 +25,7 @@ def embed_chunks(texts: list[str], batch_size: int = 64) -> list[list[float]]:
     if not texts:
         return []
 
+    model = get_embed_model()
     embeddings = model.encode(
         texts,
         batch_size=batch_size,

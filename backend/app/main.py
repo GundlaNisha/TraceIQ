@@ -45,7 +45,7 @@ app = FastAPI(title="TraceIQ API", version="1.0.0", lifespan=lifespan)
 
 cors_origins = list(dict.fromkeys(
     ([settings.frontend_url] if settings.frontend_url else [])
-    + (settings.allowed_origins or ["http://localhost:3000", "http://127.0.0.1:3000"])
+    + (settings.allowed_origins if isinstance(settings.allowed_origins, list) else [settings.allowed_origins] if settings.allowed_origins else [])
 ))
 
 app.add_middleware(

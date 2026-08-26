@@ -1,7 +1,10 @@
 # Environment variables
 .env
+.env.*
 .env.local
-.env.*.local
+.env.development
+.env.production
+!.env.*.example
 
 plan-docs/
 .agents/

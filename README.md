@@ -20,9 +20,10 @@ TraceIQ is an enterprise-grade developer platform that bridges product requireme
 - **Scoped Intelligence**: All PR reviews, requirements, blast radius analyses, and traceability records automatically scope to the active workspace (`X-Workspace-Id`).
 
 ### 2. High-Throughput Code Indexing & Dependency Graph
-- **Multi-Language AST Parsing**: Extracts symbols (classes, methods, functions) and import statements across Python, TypeScript, JavaScript, Go, Rust, Java, and C/C++ using Tree-sitter.
+- **Multi-Language AST Parsing**: Deep symbol extraction (classes, methods, functions, types, interfaces) and import analysis across Python, TypeScript, JavaScript, Go, Rust, Java/Kotlin, and C/C++ using Tree-sitter and resilient language grammars.
+- **AST-Aware Semantic Code Chunking**: Preserves whole function and class declarations as intact semantic units and injects hierarchical context breadcrumbs (`// Context: path/file.ts > ClassName > methodName`) to anchor vectors in the architectural tree.
+- **100% Free Enterprise Embeddings (Google Gemini `gemini-embedding-2`)**: Generates dense 384-dimensional matryoshka vector embeddings using Google's premier embedding model (0 MB server RAM overhead) with automatic offline local fallback.
 - **Dependency Graph Mapping**: Persists directed code dependencies to map out structural relations, upstream modules, and downstream callers.
-- **Lazy-Loaded Vector Tensor Embeddings**: Computes dense 384-dimensional code embeddings using `all-MiniLM-L6-v2` with on-demand loading and `pgvector` persistence.
 - **Bulk Database Ingestion**: Executes high-throughput bulk SQL transactions to index large codebases in seconds.
 
 ### 3. Sub-15ms Hybrid Code Search (RRF)
@@ -174,11 +175,20 @@ TraceIQ/
    ```env
    DATABASE_URL=postgresql+asyncpg://user:password@host:5432/dbname
    REDIS_URL=redis://localhost:6379/0
-   CELERY_ALWAYS_EAGER=false # Set to true if running without a separate Celery worker
+   CELERY_ALWAYS_EAGER=true # Set to true to run tasks in-process without separate Celery workers
+
+   # 100% Free AI & Embedding Configuration (Google AI Studio)
+   GEMINI_API_KEY=your-free-gemini-api-key # Get free key from https://aistudio.google.com/
+   EMBEDDING_MODEL=gemini/gemini-embedding-2
+   EMBEDDING_DIMENSIONS=384
+   LLM_MODEL=gemini/gemini-1.5-flash
+
+   # Optional OpenAI / Custom LiteLLM routing
+   OPENAI_API_KEY=
+   LLM_BASE_URL=
+
    CLERK_SECRET_KEY=sk_test_...
    CLERK_PUBLISHABLE_KEY=pk_test_...
-   OPENAI_API_KEY=sk-...
-   LLM_BASE_URL=https://api.openai.com/v1 # Optional custom LLM base URL
    GITHUB_APP_ID=...
    GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
    GITHUB_WEBHOOK_SECRET=...

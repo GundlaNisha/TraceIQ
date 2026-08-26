@@ -34,18 +34,8 @@ dependencies = [
     "uvicorn[standard]>=0.29.0",
 ]
 
-[project.scripts]
-backend = "backend:main"
-
-[tool.ruff.lint]
-ignore = ["B008", "BLE001", "SIM103", "RUF012", "S112", "TRY201", "ASYNC230", "E722", "PIE810"]
-
-[tool.mypy]
-ignore_missing_imports = true
-
-[build-system]
-requires = ["uv_build>=0.12.1,<0.13.0"]
-build-backend = "uv_build"
+[tool.uv]
+package = false
 
 [dependency-groups]
 dev = [

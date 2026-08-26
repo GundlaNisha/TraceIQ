@@ -27,10 +27,11 @@ from app.modules.workspace.models.workspace import Workspace, WorkspaceMember
 async def list_repositories(
     request: Request,
     workspace_id: uuid.UUID | None = None,
+    all: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    target_ws = workspace_id or get_active_workspace_id(request)
+    target_ws = None if all else (workspace_id or get_active_workspace_id(request))
 
     base_query = (
         select(
@@ -116,18 +117,22 @@ async def add_repository(
 
     # Resolve target workspace
     target_ws = body.workspace_id or get_active_workspace_id(request)
+    ws_name = None
     if target_ws:
-        from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
+        from app.modules.workspace.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 
         member_res = await db.execute(
-            select(WorkspaceMember).where(
+            select(WorkspaceMember, Workspace.name).join(
+                Workspace, WorkspaceMember.workspace_id == Workspace.id
+            ).where(
                 WorkspaceMember.workspace_id == target_ws,
                 WorkspaceMember.user_id == current_user.id,
             )
         )
-        mem = member_res.scalar_one_or_none()
-        if not mem:
+        mem_row = member_res.first()
+        if not mem_row:
             raise HTTPException(status_code=403, detail="Not authorized to add repository to this workspace")
+        mem, ws_name = mem_row
         if mem.role == WorkspaceRole.viewer:
             raise HTTPException(status_code=403, detail="Viewers cannot add repositories to a workspace")
 
@@ -143,7 +148,21 @@ async def add_repository(
     await db.refresh(repo)
 
     sync_repository.delay(str(repo.id), str(current_user.id))
-    return repo
+    return RepoResponse(
+        id=repo.id,
+        repo_url=repo.repo_url,
+        name=repo.name,
+        sync_status=repo.sync_status,
+        default_branch=repo.default_branch,
+        github_installation_id=repo.github_installation_id,
+        is_private=repo.is_private,
+        auto_review_prs=repo.auto_review_prs,
+        auto_post_comments=repo.auto_post_comments,
+        default_requirement_id=repo.default_requirement_id,
+        workspace_id=repo.workspace_id,
+        workspace_name=ws_name,
+        created_at=repo.created_at,
+    )
 
 
 @router.get("/{repo_id}", response_model=RepoResponse)
@@ -157,10 +176,17 @@ async def get_repository(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid repo UUID")
 
-    repo = await db.get(Repository, repo_uuid)
-    if not repo:
+    stmt = (
+        select(Repository, Workspace.name.label("workspace_name"))
+        .outerjoin(Workspace, Repository.workspace_id == Workspace.id)
+        .where(Repository.id == repo_uuid)
+    )
+    res = await db.execute(stmt)
+    row = res.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    repo, ws_name = row
     is_owner = repo.user_id == current_user.id
     if not is_owner and repo.workspace_id:
         from app.modules.workspace.models.workspace import WorkspaceMember
@@ -176,7 +202,21 @@ async def get_repository(
     elif not is_owner:
         raise HTTPException(status_code=403, detail="Not authorized to view this repository")
 
-    return repo
+    return RepoResponse(
+        id=repo.id,
+        repo_url=repo.repo_url,
+        name=repo.name,
+        sync_status=repo.sync_status,
+        default_branch=repo.default_branch,
+        github_installation_id=repo.github_installation_id,
+        is_private=repo.is_private,
+        auto_review_prs=repo.auto_review_prs,
+        auto_post_comments=repo.auto_post_comments,
+        default_requirement_id=repo.default_requirement_id,
+        workspace_id=repo.workspace_id,
+        workspace_name=ws_name,
+        created_at=repo.created_at,
+    )
 
 
 @router.patch("/{repo_id}/settings", response_model=RepoResponse)
@@ -220,11 +260,47 @@ async def update_repository_settings(
         repo.auto_post_comments = body.auto_post_comments
 
     if "workspace_id" in body.model_fields_set:
-        repo.workspace_id = body.workspace_id
+        if body.workspace_id is not None:
+            from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
+            member_res = await db.execute(
+                select(WorkspaceMember).where(
+                    WorkspaceMember.workspace_id == body.workspace_id,
+                    WorkspaceMember.user_id == current_user.id,
+                )
+            )
+            mem = member_res.scalar_one_or_none()
+            if not mem:
+                raise HTTPException(status_code=403, detail="You are not a member of the target workspace")
+            if mem.role == WorkspaceRole.viewer:
+                raise HTTPException(status_code=403, detail="Viewers cannot transfer repositories into a workspace")
+            repo.workspace_id = body.workspace_id
+        else:
+            repo.workspace_id = None
 
     await db.commit()
     await db.refresh(repo)
-    return repo
+
+    ws_name = None
+    if repo.workspace_id:
+        from app.modules.workspace.models.workspace import Workspace
+        ws = await db.get(Workspace, repo.workspace_id)
+        ws_name = ws.name if ws else None
+
+    return RepoResponse(
+        id=repo.id,
+        repo_url=repo.repo_url,
+        name=repo.name,
+        sync_status=repo.sync_status,
+        default_branch=repo.default_branch,
+        github_installation_id=repo.github_installation_id,
+        is_private=repo.is_private,
+        auto_review_prs=repo.auto_review_prs,
+        auto_post_comments=repo.auto_post_comments,
+        default_requirement_id=repo.default_requirement_id,
+        workspace_id=repo.workspace_id,
+        workspace_name=ws_name,
+        created_at=repo.created_at,
+    )
 
 
 @router.delete("/{repo_id}", status_code=204)

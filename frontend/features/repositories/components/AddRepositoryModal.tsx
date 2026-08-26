@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,6 +21,8 @@ import {
   useLinkGithubInstallation,
   AvailableGithubRepo,
 } from "../api/queries";
+import { useWorkspaceStore } from "@/stores/workspace";
+import { useWorkspaces } from "@/features/workspace/api/queries";
 import {
   GitBranch,
   Lock,
@@ -33,6 +35,8 @@ import {
   Sparkles,
   Settings,
   Link as LinkIcon,
+  Building2,
+  User,
 } from "lucide-react";
 
 const schema = z.object({
@@ -56,6 +60,16 @@ export function AddRepositoryModal() {
   const [importingUrl, setImportingUrl] = useState<string | null>(null);
   const [manualInstId, setManualInstId] = useState("153250411");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { activeWorkspaceId } = useWorkspaceStore();
+  const { data: workspaces = [] } = useWorkspaces();
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>(activeWorkspaceId || "");
+
+  useEffect(() => {
+    if (open) {
+      setTargetWorkspaceId(activeWorkspaceId || "");
+    }
+  }, [open, activeWorkspaceId]);
 
   const { data: githubStatus, refetch: refetchStatus } = useGithubStatus();
   const {
@@ -91,7 +105,10 @@ export function AddRepositoryModal() {
     setErrorMessage(null);
     try {
       setImportingUrl(repo.html_url);
-      await addRepo(repo.html_url);
+      await addRepo({
+        repo_url: repo.html_url,
+        workspace_id: targetWorkspaceId ? targetWorkspaceId : null,
+      });
       await refetchAvailable();
       setOpen(false);
     } catch (err: unknown) {
@@ -121,7 +138,10 @@ export function AddRepositoryModal() {
   async function onSubmitManual(data: FormData) {
     setErrorMessage(null);
     try {
-      await addRepo(data.repo_url);
+      await addRepo({
+        repo_url: data.repo_url,
+        workspace_id: targetWorkspaceId ? targetWorkspaceId : null,
+      });
       reset();
       setOpen(false);
     } catch (err: unknown) {
@@ -154,32 +174,55 @@ export function AddRepositoryModal() {
             </DialogTitle>
           </DialogHeader>
 
-          {/* Navigation Tabs */}
-          <div className="flex items-center gap-2 mt-4">
-            <button
-              type="button"
-              onClick={() => setActiveTab("github")}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "github"
-                  ? "bg-accent text-white shadow-sm"
-                  : "bg-slate-100 text-muted-foreground hover:text-foreground hover:bg-slate-200"
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              1-Click GitHub Import
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("manual")}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "manual"
-                  ? "bg-accent text-white shadow-sm"
-                  : "bg-slate-100 text-muted-foreground hover:text-foreground hover:bg-slate-200"
-              }`}
-            >
-              <Globe className="w-3.5 h-3.5" />
-              Custom / Public URL
-            </button>
+          {/* Navigation Tabs & Workspace Selector */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("github")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === "github"
+                    ? "bg-accent text-white shadow-sm"
+                    : "bg-slate-100 text-muted-foreground hover:text-foreground hover:bg-slate-200"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                1-Click GitHub Import
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("manual")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === "manual"
+                    ? "bg-accent text-white shadow-sm"
+                    : "bg-slate-100 text-muted-foreground hover:text-foreground hover:bg-slate-200"
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                Custom / Public URL
+              </button>
+            </div>
+
+            {/* Target Workspace Selector */}
+            <div className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-100/90 rounded-xl border border-border/60 shrink-0">
+              <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <label htmlFor="modal-target-workspace" className="text-[11px] font-semibold text-foreground whitespace-nowrap">
+                Save to:
+              </label>
+              <select
+                id="modal-target-workspace"
+                value={targetWorkspaceId}
+                onChange={(e) => setTargetWorkspaceId(e.target.value)}
+                className="text-xs bg-white border border-border/70 rounded-lg px-2 py-1 font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="">Personal Workspace</option>
+                {workspaces.map((ws: any) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.name} ({ws.user_role ? ws.user_role.toUpperCase() : "Member"})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 

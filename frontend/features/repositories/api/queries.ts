@@ -3,13 +3,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/lib/api/config";
 
 // LIST
-export function useRepositories() {
+export function useRepositories(options?: { all?: boolean; workspaceId?: string | null }) {
   const { fetchApi } = useApiClient();
 
   return useQuery({
-    queryKey: ["repositories"],
+    queryKey: ["repositories", options],
     queryFn: async () => {
-      const res = await fetchApi(`/api/v1/repositories`, {});
+      const params = new URLSearchParams();
+      if (options?.all) params.set("all", "true");
+      if (options?.workspaceId) params.set("workspace_id", options.workspaceId);
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetchApi(`/api/v1/repositories${qs}`, {});
       if (!res.ok) throw new Error("Failed to fetch repositories");
       return res.json();
     },
@@ -51,12 +55,12 @@ export function useAddRepository() {
 
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (repo_url: string) => {
-      
+    mutationFn: async (payload: string | { repo_url: string; workspace_id?: string | null }) => {
+      const body = typeof payload === "string" ? { repo_url: payload } : payload;
       const res = await fetchApi(`/api/v1/repositories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo_url }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
@@ -68,7 +72,11 @@ export function useAddRepository() {
       }
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["repositories"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["repositories"] });
+      qc.invalidateQueries({ queryKey: ["github_available_repos"] });
+      qc.invalidateQueries({ queryKey: ["workspace_summary"] });
+    },
   });
 }
 
@@ -175,6 +183,7 @@ export function useUpdateRepoSettings() {
         auto_review_prs?: boolean;
         auto_post_comments?: boolean;
         default_requirement_id?: string | null;
+        workspace_id?: string | null;
       };
     }) => {
       const res = await fetchApi(`/api/v1/repositories/${id}/settings`, {
@@ -182,13 +191,17 @@ export function useUpdateRepoSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
       });
-      if (!res.ok) throw new Error("Failed to update repository settings");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update repository settings");
+      }
       return res.json();
     },
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["repositories"] });
       qc.invalidateQueries({ queryKey: ["repositories", variables.id] });
       qc.invalidateQueries({ queryKey: ["traceability"] });
+      qc.invalidateQueries({ queryKey: ["workspace_summary"] });
     },
   });
 }

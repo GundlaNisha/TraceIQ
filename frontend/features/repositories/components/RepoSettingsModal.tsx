@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { useUpdateRepoSettings } from "../api/queries";
 import { useRequirements } from "@/features/requirements/api/queries";
+import { useWorkspaces } from "@/features/workspace/api/queries";
 import type { Repository, Requirement } from "@/lib/types/api";
-import { Settings, Sparkles, MessageSquare, Target, Check, Loader2, AlertCircle } from "lucide-react";
+import { Settings, Sparkles, MessageSquare, Target, Check, Loader2, AlertCircle, Building2, User } from "lucide-react";
 
 interface RepoSettingsModalProps {
   repo: Repository | null;
@@ -18,9 +19,11 @@ export function RepoSettingsModal({ repo, isOpen, onClose }: RepoSettingsModalPr
   const [autoReview, setAutoReview] = useState(false);
   const [autoPost, setAutoPost] = useState(false);
   const [defaultReqId, setDefaultReqId] = useState<string>("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const { data: requirements = [] } = useRequirements();
+  const { data: workspaces = [] } = useWorkspaces();
   const { mutate: updateSettings, isPending, isError } = useUpdateRepoSettings();
 
   // Filter requirements belonging to this repository
@@ -33,6 +36,7 @@ export function RepoSettingsModal({ repo, isOpen, onClose }: RepoSettingsModalPr
       setAutoReview(Boolean(repo.auto_review_prs));
       setAutoPost(Boolean(repo.auto_post_comments));
       setDefaultReqId(repo.default_requirement_id || "");
+      setSelectedWorkspaceId(repo.workspace_id || "");
       setSaveSuccess(false);
     }
   }, [repo, isOpen]);
@@ -47,6 +51,7 @@ export function RepoSettingsModal({ repo, isOpen, onClose }: RepoSettingsModalPr
           auto_review_prs: autoReview,
           auto_post_comments: autoPost,
           default_requirement_id: defaultReqId ? defaultReqId : null,
+          workspace_id: selectedWorkspaceId ? selectedWorkspaceId : null,
         },
       },
       {
@@ -176,6 +181,45 @@ export function RepoSettingsModal({ repo, isOpen, onClose }: RepoSettingsModalPr
                 <AlertCircle className="w-3.5 h-3.5" /> No requirements found for this repository yet. Create one in Requirements.
               </p>
             )}
+          </div>
+
+          {/* Workspace Placement & Transfer */}
+          <div className="p-4 rounded-xl bg-slate-50/80 border border-border/50 space-y-2">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-indigo-600" />
+                <label htmlFor="workspace-transfer-select" className="text-sm font-semibold text-foreground">
+                  Workspace Location & Access
+                </label>
+              </div>
+              {repo.workspace_name ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-full">
+                  <Building2 className="w-3 h-3" />
+                  {repo.workspace_name}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                  <User className="w-3 h-3" />
+                  Personal Workspace
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Move this repository to a team workspace to share code indexing, requirements, impact analysis, and PR reviews with team members, or transfer it back to your Personal Workspace.
+            </p>
+            <select
+              id="workspace-transfer-select"
+              value={selectedWorkspaceId}
+              onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+              className="w-full mt-2 px-3 py-2 text-sm bg-white border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50 text-foreground"
+            >
+              <option value="">Personal Workspace (Private to you)</option>
+              {workspaces.map((ws: any) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name} ({ws.user_role ? `${ws.user_role.toUpperCase()}` : "Member"})
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

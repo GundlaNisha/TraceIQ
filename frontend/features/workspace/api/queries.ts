@@ -14,6 +14,7 @@ export interface Workspace {
   created_by: string;
   created_at: string;
   updated_at: string;
+  user_role?: "owner" | "admin" | "member" | "viewer" | string | null;
 }
 
 export interface WorkspaceMember {

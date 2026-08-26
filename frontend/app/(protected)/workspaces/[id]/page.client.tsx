@@ -194,49 +194,53 @@ export default function WorkspaceDetailClient({
             value: repos?.length ?? 0,
             icon: FolderGit2,
             color: "text-blue-600",
-            bg: "bg-blue-50/60 border-blue-100",
+            bg: "bg-blue-50 border-blue-100",
+            accent: "from-blue-500/20 to-blue-500/5",
           },
           {
             label: "Team Requirements",
             value: requirements?.length ?? 0,
             icon: Layers,
             color: "text-purple-600",
-            bg: "bg-purple-50/60 border-purple-100",
+            bg: "bg-purple-50 border-purple-100",
+            accent: "from-purple-500/20 to-purple-500/5",
           },
           {
             label: "Team Members",
             value: members?.length ?? 0,
             icon: Users,
             color: "text-emerald-600",
-            bg: "bg-emerald-50/60 border-emerald-100",
+            bg: "bg-emerald-50 border-emerald-100",
+            accent: "from-emerald-500/20 to-emerald-500/5",
           },
           {
             label: "Pending Invites",
             value: invites?.length ?? 0,
             icon: Sparkles,
             color: "text-amber-600",
-            bg: "bg-amber-50/60 border-amber-100",
+            bg: "bg-amber-50 border-amber-100",
+            accent: "from-amber-500/20 to-amber-500/5",
           },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div
             key={label}
-            className={`rounded-2xl border p-4 shadow-sm bg-white flex flex-col justify-between`}
+            className="rounded-2xl border border-border/60 p-5 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 bg-white flex flex-col justify-between"
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-muted-foreground">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
                 {label}
               </span>
-              <div className={`p-1.5 rounded-lg ${bg}`}>
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${bg}`}>
                 <Icon className={`w-4 h-4 ${color}`} />
               </div>
             </div>
-            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className="text-3xl font-bold font-serif text-foreground tracking-tight">{value}</p>
           </div>
         ))}
       </div>
 
       {/* Navigation Tabs */}
-      <div className="border-b border-border/50 flex items-center gap-2 overflow-x-auto">
+      <div className="border-b border-border/60 flex items-center gap-1 overflow-x-auto">
         {[
           {
             id: "repositories" as ActiveTab,
@@ -269,19 +273,19 @@ export default function WorkspaceDetailClient({
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-all whitespace-nowrap -mb-px ${
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap -mb-px rounded-t-lg ${
                 isCurrent
-                  ? "border-accent text-accent"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "border-accent text-accent bg-accent/5"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-slate-50/60"
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-3.5 h-3.5" />
               {tab.label}
               {tab.count !== undefined && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                     isCurrent
-                      ? "bg-accent/10 text-accent"
+                      ? "bg-accent text-white"
                       : "bg-slate-100 text-slate-600"
                   }`}
                 >

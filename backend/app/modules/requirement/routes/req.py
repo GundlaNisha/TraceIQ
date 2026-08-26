@@ -19,12 +19,9 @@ from app.modules.requirement.services.req_service import (
     create_requirement,
     update_requirement,
 )
-from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
+from app.modules.workspace.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 
 router = APIRouter(prefix="/api/v1/requirements", tags=["requirements"])
-
-
-from app.modules.workspace.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 
 
 @router.get("", response_model=list[ReqResponse])

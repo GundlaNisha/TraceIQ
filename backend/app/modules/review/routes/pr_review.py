@@ -23,7 +23,7 @@ from app.modules.review.schemas.rev_schemas import (
     PRReviewFindingResponse,
     PRReviewResponse,
 )
-from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
+from app.modules.workspace.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 from app.workers.pr_review import (
     _extract_full_name,
     _post_pr_review_to_github,
@@ -113,13 +113,6 @@ async def create_pr_review(
     run_pr_review.delay(str(pr_review.id))
 
     return {"id": str(pr_review.id)}
-
-
-from app.modules.workspace.models.workspace import (
-    Workspace,
-    WorkspaceMember,
-    WorkspaceRole,
-)
 
 
 @router.get("", response_model=list[PRReviewResponse])

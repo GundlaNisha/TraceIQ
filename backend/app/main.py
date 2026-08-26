@@ -1,7 +1,11 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from alembic.config import Config
+from alembic import command
 
 from app.core.config import settings
 from app.modules.auth.routes.auth import router as auth_router
@@ -20,7 +24,24 @@ from app.modules.workspace.routes.workspace import router as workspace_router
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="TraceIQ API", version="1.0.0")
+
+def _run_migrations() -> None:
+    try:
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Alembic database migrations applied successfully.")
+    except Exception as e:
+        logger.warning(f"Alembic auto-migration notice: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.database_url:
+        asyncio.create_task(asyncio.to_thread(_run_migrations))
+    yield
+
+
+app = FastAPI(title="TraceIQ API", version="1.0.0", lifespan=lifespan)
 
 cors_origins = list(dict.fromkeys(
     ([settings.frontend_url] if settings.frontend_url else [])

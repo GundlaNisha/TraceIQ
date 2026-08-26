@@ -35,9 +35,13 @@ INDEXABLE_EXTENSIONS = {
     ".go",
     ".rs",
     ".java",
+    ".kt",
     ".cpp",
+    ".cc",
     ".c",
     ".h",
+    ".hpp",
+    ".cs",
     ".html",
     ".css",
     ".sql",
@@ -45,6 +49,18 @@ INDEXABLE_EXTENSIONS = {
     ".yaml",
     ".yml",
     ".md",
+}
+
+# Specific lockfiles and minified patterns to ignore
+IGNORED_FILE_PATTERNS = {
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "uv.lock",
+    "poetry.lock",
+    "cargo.lock",
+    "go.sum",
+    "composer.lock",
 }
 
 # Directories to skip during indexing walk
@@ -62,6 +78,8 @@ IGNORED_DIRS = {
     ".pytest_cache",
     ".turbo",
     ".coverage",
+    ".cache",
+    "vendor",
 }
 
 BULK_BATCH_SIZE = 500
@@ -138,6 +156,10 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
             for root, dirs, files in os.walk(tmpdir):
                 dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
                 for file in files:
+                    file_lower = file.lower()
+                    if file_lower in IGNORED_FILE_PATTERNS or file_lower.endswith((".min.js", ".min.css", ".bundle.js", ".map")):
+                        continue
+
                     ext = os.path.splitext(file)[1].lower()
                     if ext not in INDEXABLE_EXTENSIONS:
                         continue
@@ -212,8 +234,8 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                         )
                     )
 
-                # Chunk file
-                chunks = chunk_file(source, symbols)
+                # AST-Aware Chunking with hierarchical context breadcrumbs
+                chunks = chunk_file(source, symbols, file_path=rel_path)
                 for c in chunks:
                     all_chunks_metadata.append((file_id, c))
                     all_chunk_texts.append(c["text"])

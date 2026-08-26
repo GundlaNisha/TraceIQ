@@ -1,5 +1,4 @@
 import os
-from typing import Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -32,11 +31,15 @@ class Settings(BaseSettings):
     r2_bucket_name: str = ""
     r2_endpoint_url: str = ""
 
-    # OpenAI / LLM
+    # AI & Embeddings (Google Gemini, OpenCode Zen, or custom LiteLLM provider)
     openai_api_key: str = ""
     openai_api_base: str = ""
-    llm_model: str = "gpt-4o-mini"
-    embedding_model: str = "text-embedding-3-small"
+    gemini_api_key: str = ""
+    google_api_key: str = ""
+    llm_base_url: str = ""
+    llm_model: str = ""
+    embedding_model: str = ""
+    embedding_dimensions: int = 384
 
     # Auth
     clerk_secret_key: str = ""
@@ -50,9 +53,9 @@ class Settings(BaseSettings):
     github_webhook_secret: str = ""
 
     # Deployment
-    frontend_url: str = "http://localhost:3000"
-    # Comma-separated list or JSON array of allowed CORS origins; defaults to localhost dev
-    allowed_origins: Union[str, list[str]] = ["http://localhost:3000"]
+    frontend_url: str = ""
+    # Comma-separated list or JSON array of allowed CORS origins
+    allowed_origins: str | list[str] = []
 
     # Snapshot storage — path where repo tarballs are written by repo_sync
     snapshot_dir: str = "data/snapshots"
@@ -75,7 +78,7 @@ class Settings(BaseSettings):
 
     @field_validator("allowed_origins", mode="after")
     @classmethod
-    def assemble_cors_origins(cls, v: Union[str, list[str]]) -> list[str]:
+    def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             v_stripped = v.strip()
             if v_stripped.startswith("[") and v_stripped.endswith("]"):
@@ -89,7 +92,7 @@ class Settings(BaseSettings):
             return [i.strip() for i in v_stripped.split(",") if i.strip()]
         elif isinstance(v, list):
             return [str(i).strip() for i in v if i]
-        return ["http://localhost:3000"]
+        return []
 
 
 settings = Settings()

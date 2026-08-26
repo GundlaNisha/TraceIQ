@@ -15,13 +15,14 @@ class LiteLLMAdapter(ProviderAdapter):
         self, system_prompt: str, user_prompt: str, response_model: type[BaseModel]
     ) -> BaseModel:
         extra_kwargs: dict = {}
+        api_base = settings.llm_base_url or settings.openai_api_base
         if settings.openai_api_key:
             extra_kwargs["api_key"] = settings.openai_api_key
-        if settings.openai_api_base:
-            extra_kwargs["api_base"] = settings.openai_api_base
+        if api_base:
+            extra_kwargs["api_base"] = api_base
 
         model = settings.llm_model
-        if settings.openai_api_base and not ("/" in model):
+        if api_base and not ("/" in model):
             model = f"openai/{model}"
 
         return await self.client.chat.completions.create(

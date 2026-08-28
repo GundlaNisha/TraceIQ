@@ -1,0 +1,56 @@
+services:
+  - type: web
+    name: traceiq-backend
+    repo: https://github.com/GundlaNisha/TraceIQ
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: "pip install uv && uv sync --no-dev --frozen"
+    startCommand: "uv run --no-dev uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: CELERY_ALWAYS_EAGER
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_API_BASE
+        value: "https://opencode.ai/zen/v1"
+      - key: LLM_MODEL
+        value: "big-pickle"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: EMBEDDING_MODEL
+        value: "gemini/gemini-embedding-2"
+      - key: EMBEDDING_DIMENSIONS
+        value: "384"
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_JWKS_URL
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        value: "https://traceiqoffi.vercel.app"
+      - key: ALLOWED_ORIGINS
+        value: "https://traceiqoffi.vercel.app,http://localhost:3000"
+      - key: SNAPSHOT_DIR
+        value: "data/snapshots"

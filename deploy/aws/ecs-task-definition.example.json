@@ -1,0 +1,81 @@
+{
+  "family": "traceiq-production",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::123456789012:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::123456789012:role/traceiqTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/traceiq-backend:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "ENVIRONMENT", "value": "production" },
+        { "name": "PORT", "value": "8000" },
+        { "name": "CELERY_ALWAYS_EAGER", "value": "true" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:traceiq/DATABASE_URL" },
+        { "name": "OPENAI_API_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:traceiq/OPENAI_API_KEY" },
+        { "name": "GEMINI_API_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:traceiq/GEMINI_API_KEY" },
+        { "name": "CLERK_SECRET_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:traceiq/CLERK_SECRET_KEY" },
+        { "name": "GITHUB_PRIVATE_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:traceiq/GITHUB_PRIVATE_KEY" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://127.0.0.1:8000/api/v1/health/liveness || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/traceiq-production",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "backend"
+        }
+      }
+    },
+    {
+      "name": "frontend",
+      "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/traceiq-frontend:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "3000" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000 || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 10
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/traceiq-production",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "frontend"
+        }
+      }
+    }
+  ]
+}

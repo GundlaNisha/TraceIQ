@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     snapshot_dir: str = "data/snapshots"
 
     # Celery & Background Task Execution Mode
-    use_celery: bool = True
+    use_celery: bool = False
     celery_always_eager: bool | None = None
     celery_task_soft_time_limit: int = 600  # 10 min warning
     celery_task_time_limit: int = 900  # 15 min hard kill

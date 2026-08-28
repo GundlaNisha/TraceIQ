@@ -1,0 +1,131 @@
+services:
+  # -------------------------------------------------------------
+  # Frontend: Next.js 16 Standalone Runner
+  # -------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: traceiq-frontend:latest
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.production
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    networks:
+      - traceiq-network
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # -------------------------------------------------------------
+  # Backend: FastAPI Async API Gateway
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: traceiq-backend:latest
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.production
+    environment:
+      - PORT=8000
+      - ENVIRONMENT=production
+    networks:
+      - traceiq-network
+    expose:
+      - "8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/api/v1/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # -------------------------------------------------------------
+  # Celery Worker: Background AST Indexing & PR Reviews
+  # -------------------------------------------------------------
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: traceiq-celery-worker:latest
+    restart: unless-stopped
+    command: ["uv", "run", "celery", "-A", "app.workers.celery_app.celery", "worker", "--loglevel=info", "--concurrency=2"]
+    env_file:
+      - ./backend/.env.production
+    networks:
+      - traceiq-network
+    depends_on:
+      - redis
+      - backend
+
+  # -------------------------------------------------------------
+  # Redis: Task Broker & In-Memory Cache
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - traceiq-network
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # Nginx: Production Reverse Proxy & SSL Termination
+  # -------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./data/certbot/conf:/etc/letsencrypt:ro
+      - ./data/certbot/www:/var/www/certbot:ro
+    networks:
+      - traceiq-network
+    depends_on:
+      - frontend
+      - backend
+
+  # -------------------------------------------------------------
+  # Certbot: Automated Let's Encrypt SSL Certificate Renewal
+  # -------------------------------------------------------------
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - traceiq-network
+
+networks:
+  traceiq-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local

@@ -14,6 +14,8 @@ services:
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: USE_CELERY
+        value: "false"
       - key: CELERY_ALWAYS_EAGER
         value: "true"
       - key: DATABASE_URL

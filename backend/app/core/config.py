@@ -60,9 +60,22 @@ class Settings(BaseSettings):
     # Snapshot storage — path where repo tarballs are written by repo_sync
     snapshot_dir: str = "data/snapshots"
 
-    # Celery task timeouts (seconds)
+    # Celery & Background Task Execution Mode
+    use_celery: bool = True
+    celery_always_eager: bool | None = None
     celery_task_soft_time_limit: int = 600  # 10 min warning
     celery_task_time_limit: int = 900  # 15 min hard kill
+
+    @property
+    def is_celery_eager(self) -> bool:
+        """Determines if Celery executes in eager (in-process) mode or distributed worker queue mode.
+
+        - USE_CELERY=true  -> is_celery_eager=False (Distributed Redis Worker Queue)
+        - USE_CELERY=false -> is_celery_eager=True  (In-process Direct Execution)
+        """
+        if self.celery_always_eager is not None:
+            return self.celery_always_eager
+        return not self.use_celery
 
     @field_validator("database_url", mode="after")
     @classmethod

@@ -43,6 +43,8 @@ celery_conf = {
     # Timezone
     "timezone": "UTC",
     "enable_utc": True,
+    # Eager mode: if True, tasks execute in-process; if False, tasks queue to Celery workers via Redis
+    "task_always_eager": settings.is_celery_eager,
 }
 
 # Automatically configure SSL when connecting to Upstash / Cloud Redis (rediss://)

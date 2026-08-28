@@ -15,12 +15,59 @@ const dmSans = DM_Sans({
   display: "swap",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://traceiqoffi.vercel.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     template: "%s | TraceIQ",
     default: "TraceIQ — Autonomous Code Impact & PR Review Intelligence",
   },
-  description: "AI-powered requirement traceability, impact blast radius analysis, and automated GitHub PR code reviews.",
+  description:
+    "Enterprise AI platform for code impact blast radius analysis, AST code graph indexing, and automated GitHub pull request reviews.",
+  keywords: [
+    "code impact analysis",
+    "AST code graph",
+    "pull request code review",
+    "traceability matrix",
+    "automated code reviews",
+    "Tree-sitter indexing",
+    "developer productivity",
+  ],
+  authors: [{ name: "TraceIQ Engineering" }],
+  creator: "TraceIQ",
+  publisher: "TraceIQ",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    title: "TraceIQ — Autonomous Code Impact & PR Review Intelligence",
+    description:
+      "Enterprise AI platform for code impact blast radius analysis, AST code graph indexing, and automated GitHub pull request reviews.",
+    siteName: "TraceIQ",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TraceIQ — Autonomous Code Impact & PR Review Intelligence",
+    description:
+      "Enterprise AI platform for code impact blast radius analysis, AST code graph indexing, and automated GitHub pull request reviews.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   icons: {
     icon: "/favicon.ico",
   },

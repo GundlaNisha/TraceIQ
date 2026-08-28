@@ -20,6 +20,7 @@ COPY . .
 # Set production environment flags for build time
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV DOCKER_BUILD=1
 
 RUN npm run build
 

@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { PullRequestList } from "@/features/github/components/PullRequestList";
+import { Loader2 } from "lucide-react";
 
 export const metadata = {
   title: "Pull Requests",
@@ -16,7 +18,16 @@ export default function PullRequestsPage() {
           </p>
         </div>
       </header>
-      <PullRequestList />
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center p-12 text-muted">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+            Loading pull requests...
+          </div>
+        }
+      >
+        <PullRequestList />
+      </Suspense>
     </div>
   );
 }

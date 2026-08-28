@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { RequirementsView } from "@/features/requirements/components/RequirementsView";
+import { Loader2 } from "lucide-react";
 
 export const metadata = {
   title: "Requirements",
@@ -6,5 +8,16 @@ export const metadata = {
 };
 
 export default function RequirementsPage() {
-  return <RequirementsView />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center p-12 text-muted">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          Loading requirements...
+        </div>
+      }
+    >
+      <RequirementsView />
+    </Suspense>
+  );
 }

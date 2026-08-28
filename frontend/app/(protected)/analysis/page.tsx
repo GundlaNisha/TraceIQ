@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { AnalysisList } from "@/features/analysis/components/AnalysisList";
+import { Loader2 } from "lucide-react";
 
 export const metadata = {
   title: "Analysis Jobs | TraceIQ",
@@ -13,7 +15,16 @@ export default function AnalysisPage() {
           Track the blast radius and impact of your requirements.
         </p>
       </header>
-      <AnalysisList />
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center p-12 text-muted">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+            Loading analysis jobs...
+          </div>
+        }
+      >
+        <AnalysisList />
+      </Suspense>
     </div>
   );
 }

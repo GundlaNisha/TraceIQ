@@ -34,9 +34,17 @@ export interface Requirement {
   workspace_id?: string | null;
   workspace_name?: string | null;
   repository_name?: string | null;
+  jira_issue_key?: string | null;
+  jira_issue_id?: string | null;
+  jira_issue_url?: string | null;
+  jira_status?: string | null;
+  jira_priority?: string | null;
+  jira_issue_type?: string | null;
+  jira_synced_at?: string | null;
   created_at: string;
   updated_at: string;
 }
+
 
 export interface AnalysisJob {
   id: string;
@@ -141,3 +149,144 @@ export interface TraceabilityMatrixResponse {
   summary: TraceabilitySummary;
   items: TraceabilityRow[];
 }
+
+export interface JiraConfig {
+  id?: string | null;
+  workspace_id?: string | null;
+  jira_domain: string;
+  jira_email: string;
+  default_project_key?: string | null;
+  is_active: boolean;
+  is_configured: boolean;
+  token_preview: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface JiraProject {
+  id: string;
+  key: string;
+  name: string;
+  project_type_key: string;
+  avatar_url: string;
+}
+
+export interface JiraIssueType {
+  id: string;
+  name: string;
+  description: string;
+  subtask: boolean;
+  icon_url: string;
+}
+
+export interface JiraStatus {
+  id: string;
+  name: string;
+  category_key: string;
+  category_name: string;
+}
+
+export interface JiraBoard {
+  id: number | string;
+  name: string;
+  type: "kanban" | "scrum";
+  project_key?: string | null;
+  project_name?: string | null;
+}
+
+export interface JiraSprint {
+  id: number | string;
+  name: string;
+  state: "active" | "future" | "closed";
+  goal?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+
+export interface JiraIssue {
+  id: string;
+  key: string;
+  summary: string;
+  url: string;
+  status: string;
+  status_category: string;
+  issue_type: string;
+  issue_type_icon_url: string;
+  priority: string;
+  priority_icon_url: string;
+  project_key: string;
+  project_name: string;
+  assignee_name?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+  labels: string[];
+  description_preview: string;
+}
+
+export interface JiraIssueDetail {
+  id: string;
+  key: string;
+  summary: string;
+  url: string;
+  description_markdown: string;
+  raw_description?: string;
+  status: string;
+  status_category: string;
+  issue_type: string;
+  issue_type_icon_url: string;
+  priority: string;
+  priority_icon_url: string;
+  project_key: string;
+  project_name: string;
+  assignee_name?: string | null;
+  reporter_name?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+  labels: string[];
+  components: string[];
+}
+
+export interface JiraSearchResponse {
+  total: number;
+  start_at: number;
+  max_results: number;
+  issues: JiraIssue[];
+}
+
+export interface JiraImportResult {
+  requirement_id: string;
+  title: string;
+  jira_issue_key: string;
+  jira_issue_url: string;
+  jira_status?: string | null;
+  jira_issue_type?: string | null;
+  version_number: number;
+}
+
+export interface JiraBatchImportResponse {
+  imported: JiraImportResult[];
+  failed: Array<{ key: string; error: string }>;
+  total_imported: number;
+  total_requested: number;
+}
+
+export interface JiraTestConnectionResult {
+  success: boolean;
+  account_id?: string | null;
+  display_name?: string | null;
+  email_address?: string | null;
+  jira_url?: string | null;
+  message: string;
+}
+
+export interface JiraSyncResult {
+  requirement_id: string;
+  title: string;
+  version_number: number;
+  jira_issue_key: string;
+  jira_status?: string | null;
+  was_updated: boolean;
+  message: string;
+}
+

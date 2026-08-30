@@ -1,3 +1,4 @@
+from datetime import datetime
 import uuid
 
 from sqlalchemy import ForeignKey, Integer, String, Text
@@ -23,6 +24,16 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("workspaces.id", ondelete="SET NULL"),
         nullable=True,
     )
+    jira_issue_key: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    jira_issue_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    jira_issue_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    jira_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    jira_priority: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    jira_issue_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    jira_synced_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
 
 
 

@@ -102,6 +102,13 @@ async def list_requirements(
                 repository_id=req_obj.repository_id,
                 version_number=req_obj.version_number,
                 workspace_id=req_obj.workspace_id,
+                jira_issue_key=req_obj.jira_issue_key,
+                jira_issue_id=req_obj.jira_issue_id,
+                jira_issue_url=req_obj.jira_issue_url,
+                jira_status=req_obj.jira_status,
+                jira_priority=req_obj.jira_priority,
+                jira_issue_type=req_obj.jira_issue_type,
+                jira_synced_at=req_obj.jira_synced_at,
                 created_at=req_obj.created_at,
                 updated_at=req_obj.updated_at,
                 repository_name=repo_name,
@@ -158,6 +165,12 @@ async def add_requirement(
         body.title,
         body.text,
         workspace_id=repo.workspace_id,
+        jira_issue_key=body.jira_issue_key,
+        jira_issue_id=body.jira_issue_id,
+        jira_issue_url=body.jira_issue_url,
+        jira_status=body.jira_status,
+        jira_priority=body.jira_priority,
+        jira_issue_type=body.jira_issue_type,
     )
 
 

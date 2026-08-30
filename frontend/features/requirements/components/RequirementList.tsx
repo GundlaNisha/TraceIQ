@@ -3,13 +3,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRequirements, useRequirementVersions } from "../api/queries";
 import { useTriggerAnalysis } from "@/features/analysis/api/queries";
+import { useSyncJiraRequirement } from "@/features/jira/api/queries";
 import { type Requirement, type RequirementVersion } from "@/lib/types/api";
 import { Button } from "@/components/ui/button";
 
 import { RequirementForm } from "./RequirementForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDeleteRequirement } from "../api/queries";
-import { Trash2, Edit2, Building2, FolderGit2 } from "lucide-react";
+import { Trash2, Edit2, Building2, FolderGit2, RefreshCw, ExternalLink, Zap, Loader2 } from "lucide-react";
 import { parseUTCDate, formatTimeAgo, formatDateTime } from "@/lib/utils";
 
 interface Props {
@@ -22,9 +23,12 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingReq, setEditingReq] = useState<Requirement | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+
   const { data: versions } = useRequirementVersions(selectedId);
   const { mutate: triggerAnalysis, isPending: isAnalyzing } = useTriggerAnalysis();
   const { mutate: deleteRequirement, isPending: isDeleting } = useDeleteRequirement();
+  const { mutateAsync: syncJira } = useSyncJiraRequirement();
   const router = useRouter();
 
   if (isLoading)
@@ -43,6 +47,18 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     setDeleteConfirmId(id);
+  };
+
+  const handleSyncJira = async (e: React.MouseEvent, reqId: string) => {
+    e.stopPropagation();
+    setSyncingId(reqId);
+    try {
+      await syncJira({ requirement_id: reqId });
+    } catch (err: any) {
+      console.error("Failed to sync Jira requirement", err);
+    } finally {
+      setSyncingId(null);
+    }
   };
 
   return (
@@ -74,7 +90,7 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
                 }
               >
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-foreground">{req.title}</span>
                     {selectedId === req.id && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-white uppercase tracking-wider">
@@ -83,6 +99,27 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    {/* Jira Badge */}
+                    {req.jira_issue_key && (
+                      <a
+                        href={req.jira_issue_url || `https://atlassian.net/browse/${req.jira_issue_key}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200/80 transition-colors"
+                        title="Open issue in Jira"
+                      >
+                        <Zap className="w-3 h-3 text-blue-600" />
+                        <span>Jira: {req.jira_issue_key}</span>
+                        <ExternalLink className="w-2.5 h-2.5 opacity-60 ml-0.5" />
+                      </a>
+                    )}
+                    {/* Jira Status */}
+                    {req.jira_status && (
+                      <span className="inline-flex items-center text-[10px] font-semibold text-blue-800 bg-blue-100/60 px-2 py-0.5 rounded-md border border-blue-200/60">
+                        {req.jira_status}
+                      </span>
+                    )}
                     {/* Workspace Badge */}
                     <span
                       className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
@@ -113,6 +150,16 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {!isViewer && (
                       <>
+                        {req.jira_issue_key && (
+                          <button
+                            onClick={(e) => handleSyncJira(e, req.id)}
+                            disabled={syncingId === req.id}
+                            className="p-2 text-muted hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                            title="Sync latest changes from Jira"
+                          >
+                            <RefreshCw className={`w-4 h-4 ${syncingId === req.id ? "animate-spin text-blue-600" : ""}`} />
+                          </button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"

@@ -5,6 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.requirement.models.req import Requirement, RequirementVersion
 
 
+from datetime import datetime
+
+
 async def create_requirement(
     db: AsyncSession,
     user_id: str,
@@ -12,6 +15,13 @@ async def create_requirement(
     title: str,
     text: str,
     workspace_id: uuid.UUID | None = None,
+    jira_issue_key: str | None = None,
+    jira_issue_id: str | None = None,
+    jira_issue_url: str | None = None,
+    jira_status: str | None = None,
+    jira_priority: str | None = None,
+    jira_issue_type: str | None = None,
+    jira_synced_at: datetime | None = None,
 ) -> Requirement:
     req = Requirement(
         user_id=user_id,
@@ -20,6 +30,13 @@ async def create_requirement(
         text=text,
         version_number=1,
         workspace_id=workspace_id,
+        jira_issue_key=jira_issue_key,
+        jira_issue_id=jira_issue_id,
+        jira_issue_url=jira_issue_url,
+        jira_status=jira_status,
+        jira_priority=jira_priority,
+        jira_issue_type=jira_issue_type,
+        jira_synced_at=jira_synced_at,
     )
     db.add(req)
     await db.flush()  # get ID before inserting version

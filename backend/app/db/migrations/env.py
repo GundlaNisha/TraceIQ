@@ -31,6 +31,7 @@ import app.modules.requirement.models.req  # noqa: F401
 import app.modules.review.models.rev_models  # noqa: F401
 import app.modules.impact.models.impact  # noqa: F401
 import app.modules.workspace.models.workspace  # noqa: F401
+import app.modules.jira.models.jira_integration  # noqa: F401
 
 target_metadata = Base.metadata
 

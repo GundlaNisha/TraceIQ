@@ -11,12 +11,15 @@ import {
 } from "@/components/ui/dialog";
 import { RequirementList } from "@/features/requirements/components/RequirementList";
 import { RequirementForm } from "@/features/requirements/components/RequirementForm";
+import { JiraImportDialog } from "@/features/jira/components/JiraImportDialog";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useWorkspaceSummary } from "@/features/workspace/api/queries";
-import { ShieldAlert, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ShieldAlert, Plus, Zap } from "lucide-react";
 
 export function RequirementsView() {
   const [open, setOpen] = useState(false);
+  const [jiraOpen, setJiraOpen] = useState(false);
   const searchParams = useSearchParams();
   const repoId = searchParams.get("repo_id");
 
@@ -43,23 +46,43 @@ export function RequirementsView() {
           </p>
         </div>
         {!isViewer && (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger className="inline-flex items-center gap-1.5 justify-center rounded-xl bg-accent text-white px-4 py-2.5 text-sm font-semibold hover:bg-accent/90 transition-all shadow-sm">
-              <Plus className="w-4 h-4" />
-              New Requirement
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg bg-white p-6 rounded-2xl">
-              <DialogHeader>
-                <DialogTitle>Create Requirement</DialogTitle>
-              </DialogHeader>
-              <RequirementForm
-                preselectedRepoId={repoId}
-                onSuccess={() => setOpen(false)}
-              />
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setJiraOpen(true)}
+              className="inline-flex items-center gap-1.5 justify-center rounded-xl border border-blue-200/80 bg-blue-50/50 hover:bg-blue-100/70 text-blue-700 px-4 py-2.5 text-sm font-semibold transition-all shadow-2xs"
+            >
+              <Zap className="w-4 h-4 text-blue-600" />
+              Import from Jira
+            </Button>
+
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger className="inline-flex items-center gap-1.5 justify-center rounded-xl bg-accent text-white px-4 py-2.5 text-sm font-semibold hover:bg-accent/90 transition-all shadow-sm">
+                <Plus className="w-4 h-4" />
+                New Requirement
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg bg-white p-6 rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create Requirement</DialogTitle>
+                </DialogHeader>
+                <RequirementForm
+                  preselectedRepoId={repoId}
+                  onSuccess={() => setOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         )}
       </header>
+
+      {/* Jira Import Dialog */}
+      <JiraImportDialog
+        open={jiraOpen}
+        onOpenChange={setJiraOpen}
+        preselectedRepoId={repoId}
+      />
+
       <RequirementList repoId={repoId} isViewer={Boolean(isViewer)} />
     </div>
   );

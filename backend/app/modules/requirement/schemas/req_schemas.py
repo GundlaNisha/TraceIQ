@@ -12,6 +12,12 @@ class ReqBase(BaseModel):
 class ReqCreate(ReqBase):
     repository_id: str
     workspace_id: uuid.UUID | None = None
+    jira_issue_key: str | None = None
+    jira_issue_id: str | None = None
+    jira_issue_url: str | None = None
+    jira_status: str | None = None
+    jira_priority: str | None = None
+    jira_issue_type: str | None = None
 
 
 class ReqUpdate(ReqBase):
@@ -40,16 +46,25 @@ class ReqResponse(ReqBase):
     repository_id: uuid.UUID
     version_number: int
     workspace_id: uuid.UUID | None = None
+    jira_issue_key: str | None = None
+    jira_issue_id: str | None = None
+    jira_issue_url: str | None = None
+    jira_status: str | None = None
+    jira_priority: str | None = None
+    jira_issue_type: str | None = None
+    jira_synced_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     repository_name: str | None = None
     workspace_name: str | None = None
 
-
-    @field_serializer("created_at", "updated_at")
-    def serialize_dates(self, dt: datetime, _info):
+    @field_serializer("created_at", "updated_at", "jira_synced_at")
+    def serialize_dates(self, dt: datetime | None, _info):
+        if dt is None:
+            return None
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
         return dt.isoformat()
 
     model_config = ConfigDict(from_attributes=True)
+

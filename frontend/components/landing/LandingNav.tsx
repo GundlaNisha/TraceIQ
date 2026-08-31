@@ -20,12 +20,12 @@ export function LandingNav() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const navLinks = [
+  const navLinks: { name: string; href: string; external?: boolean }[] = [
     { name: "Capabilities", href: "#capabilities" },
     { name: "Architecture", href: "#architecture" },
     { name: "Workflow", href: "#workflow" },
     { name: "Tech Stack", href: "#stack" },
-    { name: "Docs", href: "http://localhost:8000/docs", external: true },
+    { name: "Docs", href: "/docs" },
   ];
 
   return (

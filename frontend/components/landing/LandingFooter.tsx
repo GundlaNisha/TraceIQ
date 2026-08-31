@@ -76,6 +76,11 @@ export function LandingFooter() {
             </h4>
             <ul className="space-y-2 text-slate-300">
               <li>
+                <Link href="/docs" className="hover:text-white transition-colors font-semibold text-white">
+                  Documentation Portal
+                </Link>
+              </li>
+              <li>
                 <a href="#architecture" className="hover:text-white transition-colors">
                   System Architecture
                 </a>

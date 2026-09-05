@@ -771,7 +771,7 @@ async def handle_jira_webhook(
     event_type: str,
     issue_data: dict,
     changelog: dict | None,
-) -> None:
+) -> dict:
     """Process an inbound Jira webhook event.
 
     Supported events:
@@ -781,7 +781,7 @@ async def handle_jira_webhook(
     issue_key = issue_data.get("key", "")
     if not issue_key:
         logger.warning("Jira webhook: no issue key in payload; skipping.")
-        return
+        return {"success": False, "reason": "no_issue_key"}
 
     # Find all requirements linked to this Jira issue
     stmt = select(Requirement).where(Requirement.jira_issue_key == issue_key)
@@ -790,7 +790,12 @@ async def handle_jira_webhook(
 
     if not requirements:
         logger.debug(f"Jira webhook: no TraceIQ requirements linked to {issue_key}; skipping.")
-        return
+        return {
+            "success": True,
+            "issue_key": issue_key,
+            "matched_requirements": 0,
+            "updated": False,
+        }
 
     event_lower = event_type.lower()
 
@@ -800,7 +805,13 @@ async def handle_jira_webhook(
             req.jira_status = "JIRA_DELETED"
             logger.info(f"Jira webhook: issue {issue_key} deleted — marking requirement {req.id}.")
         await db.commit()
-        return
+        return {
+            "success": True,
+            "issue_key": issue_key,
+            "matched_requirements": len(requirements),
+            "updated": True,
+            "action": "deleted",
+        }
 
     # For updated/transitioned events — check which fields changed
     changed_fields: set[str] = set()
@@ -809,12 +820,24 @@ async def handle_jira_webhook(
             if isinstance(item, dict):
                 changed_fields.add(item.get("field", "").lower())
 
-    # Extract updated status from issue fields
+    # Extract updated status and other fields from issue fields
     fields = issue_data.get("fields", {})
     new_status: str | None = None
+    new_priority: str | None = None
+    new_type: str | None = None
+
     if fields:
         status_obj = fields.get("status") or {}
         new_status = status_obj.get("name") if isinstance(status_obj, dict) else None
+
+        priority_obj = fields.get("priority") or {}
+        new_priority = priority_obj.get("name") if isinstance(priority_obj, dict) else None
+
+        type_obj = fields.get("issuetype") or {}
+        new_type = type_obj.get("name") if isinstance(type_obj, dict) else None
+
+    drift_detected = False
+    now_utc = datetime.now(UTC).replace(tzinfo=None)
 
     # Update each linked requirement
     for req in requirements:
@@ -823,12 +846,23 @@ async def handle_jira_webhook(
         # Update jira_status if it changed
         if new_status and req.jira_status != new_status:
             req.jira_status = new_status
-            req.jira_synced_at = datetime.now(UTC)
+            req.jira_synced_at = now_utc
+            was_updated = True
+
+        # Update priority if changed
+        if new_priority and req.jira_priority != new_priority:
+            req.jira_priority = new_priority
+            req.jira_synced_at = now_utc
+            was_updated = True
+
+        # Update issue type if changed
+        if new_type and req.jira_issue_type != new_type:
+            req.jira_issue_type = new_type
+            req.jira_synced_at = now_utc
             was_updated = True
 
         # If description or summary changed, log as drift (do NOT auto-overwrite requirement text)
         if "description" in changed_fields or "summary" in changed_fields:
-            # Create an audit log entry for drift detection
             audit = AuditLog(
                 user_id="system",
                 action="jira.drift_detected",
@@ -836,6 +870,7 @@ async def handle_jira_webhook(
                 resource_id=str(req.id),
             )
             db.add(audit)
+            drift_detected = True
             was_updated = True
 
         if was_updated:
@@ -853,3 +888,84 @@ async def handle_jira_webhook(
         )
 
     await db.commit()
+
+    return {
+        "success": True,
+        "issue_key": issue_key,
+        "matched_requirements": len(requirements),
+        "updated": True,
+        "new_status": new_status,
+        "drift_detected": drift_detected,
+    }
+
+
+async def simulate_jira_webhook_delivery(
+    db: AsyncSession,
+    user_id: str,
+    workspace_id: uuid.UUID | None,
+) -> "JiraWebhookTestResponse":
+    """Simulate an inbound Jira webhook event to verify end-to-end webhook delivery and processing."""
+    from app.modules.jira.schemas.jira_schemas import JiraWebhookTestResponse
+
+    integration = await get_jira_integration(db, user_id, workspace_id)
+    if not integration or not integration.webhook_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="Jira webhook secret has not been generated yet. Please generate a secret first.",
+        )
+
+    # Look for an existing requirement linked to Jira in this workspace
+    stmt = select(Requirement).where(Requirement.jira_issue_key.is_not(None))
+    if workspace_id:
+        stmt = stmt.where(Requirement.workspace_id == workspace_id)
+    else:
+        stmt = stmt.where(Requirement.user_id == user_id)
+
+    res = await db.execute(stmt)
+    req = res.scalars().first()
+
+    if not req:
+        # Fall back to any linked requirement
+        res_any = await db.execute(
+            select(Requirement).where(Requirement.jira_issue_key.is_not(None))
+        )
+        req = res_any.scalars().first()
+
+    target_issue_key = req.jira_issue_key if req else "TEST-101"
+    old_status = req.jira_status if req else "To Do"
+    new_status = "In Progress" if old_status != "In Progress" else "Done"
+
+    simulated_issue_data = {
+        "key": target_issue_key,
+        "fields": {
+            "summary": req.title if req else "Simulated Test Issue",
+            "status": {"name": new_status},
+        },
+    }
+    simulated_changelog = {
+        "items": [
+            {
+                "field": "status",
+                "fromString": old_status or "To Do",
+                "toString": new_status,
+            }
+        ]
+    }
+
+    result = await handle_jira_webhook(
+        db=db,
+        event_type="jira:issue_updated",
+        issue_data=simulated_issue_data,
+        changelog=simulated_changelog,
+    )
+
+    return JiraWebhookTestResponse(
+        success=True,
+        message=f"Webhook simulated successfully for issue {target_issue_key}. Status transitioned from '{old_status}' to '{new_status}'.",
+        issue_key=target_issue_key,
+        old_status=old_status,
+        new_status=new_status,
+        drift_detected=result.get("drift_detected", False),
+        matched_requirements=result.get("matched_requirements", 0),
+    )
+

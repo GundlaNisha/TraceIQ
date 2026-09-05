@@ -268,3 +268,16 @@ class JiraWebhookPayload(BaseModel):
     timestamp: int | None = None
     user: dict[str, Any] | None = None
     comment: dict[str, Any] | None = None
+
+
+class JiraWebhookTestResponse(BaseModel):
+    """Result of a simulated webhook test execution."""
+
+    success: bool
+    message: str
+    issue_key: str
+    old_status: str | None = None
+    new_status: str | None = None
+    drift_detected: bool = False
+    matched_requirements: int = 0
+

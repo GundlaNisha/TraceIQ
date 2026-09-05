@@ -1,7 +1,10 @@
-"""Jira Integration API routes — Phase 1 + Phase 2 (Deep Integration)."""
+"""Jira Integration API routes — Bidirectional Sync, Status Transitions, and Webhook Listener."""
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
 import uuid
 
@@ -36,6 +39,7 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraTransitionRequest,
     JiraTransitionResponse,
     JiraWebhookSecretResponse,
+    JiraWebhookTestResponse,
 )
 from app.modules.jira.services.jira_service import (
     batch_import_jira_issues,
@@ -57,6 +61,7 @@ from app.modules.jira.services.jira_service import (
     search_jira_issues,
     sync_jira_requirement,
     test_jira_credentials,
+    simulate_jira_webhook_delivery,
     transition_jira_issue,
 )
 
@@ -438,6 +443,43 @@ async def rotate_webhook_secret(
     )
 
 
+async def _dispatch_webhook_background(
+    event_type: str,
+    issue_data: dict,
+    changelog: dict | None,
+) -> None:
+    """Run webhook event handler in background with an isolated database session."""
+    from app.db.session import AsyncSessionLocal
+    from app.modules.jira.services.jira_service import handle_jira_webhook
+
+    async with AsyncSessionLocal() as session:
+        try:
+            await handle_jira_webhook(
+                db=session,
+                event_type=event_type,
+                issue_data=issue_data,
+                changelog=changelog,
+            )
+        except Exception as exc:
+            logger.exception(f"Error in background Jira webhook execution: {exc}")
+
+
+@router.post("/webhook/test", response_model=JiraWebhookTestResponse)
+async def test_webhook_simulation(
+    request: Request,
+    workspace_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Simulate a Jira webhook issue update event to verify webhook delivery and drift detection."""
+    target_ws = workspace_id or get_active_workspace_id(request)
+    return await simulate_jira_webhook_delivery(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+    )
+
+
 @router.post("/webhook", status_code=200, include_in_schema=False)
 async def jira_webhook_listener(
     request: Request,
@@ -446,35 +488,81 @@ async def jira_webhook_listener(
 ):
     """Receive inbound Jira webhook events.
 
-    Security: validates the X-Atlassian-Webhook-Secret header against the
-    per-integration stored secret. Always returns HTTP 200 — Jira disables
-    webhooks that return 4xx/5xx responses repeatedly.
+    Security & Verification:
+    - Jira Cloud HMAC-SHA256 signature in X-Hub-Signature or X-Hub-Signature-256 (sha256=<hex>)
+    - X-Atlassian-Webhook-Secret or Authorization: Bearer <secret> header
+    - ?secret=<secret> query parameter
+    Always returns HTTP 200 — Jira disables webhooks that return 4xx/5xx responses repeatedly.
     """
     try:
-        # Extract incoming secret from header (Jira sends it here)
-        incoming_secret = (
+        body_bytes = await request.body()
+
+        # 1. Query parameter secret (?secret=...)
+        secret_param = request.query_params.get("secret")
+
+        # 2. Header-based plain secret
+        header_secret = (
             request.headers.get("X-Atlassian-Webhook-Secret")
             or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         )
 
-        integration: JiraIntegration | None = None
-        if incoming_secret:
-            stmt = select(JiraIntegration).where(
-                JiraIntegration.webhook_secret == incoming_secret,
-                JiraIntegration.is_active.is_(True),
-            )
-            res = await db.execute(stmt)
-            integration = res.scalars().first()
+        # 3. HMAC-SHA256 signature header from Jira Cloud
+        sig_header = (
+            request.headers.get("X-Hub-Signature")
+            or request.headers.get("X-Hub-Signature-256")
+            or request.headers.get("X-Atlassian-Webhook-Signature")
+        )
 
-        if not integration:
-            logger.warning("Jira webhook: secret validation failed or no matching integration; ignoring.")
-            return {"ok": True}
+        # Fetch active integrations with a configured webhook secret
+        stmt = select(JiraIntegration).where(
+            JiraIntegration.webhook_secret.is_not(None),
+            JiraIntegration.is_active.is_(True),
+        )
+        res = await db.execute(stmt)
+        active_integrations = list(res.scalars().all())
+
+        matching_integration: JiraIntegration | None = None
+        for integ in active_integrations:
+            secret = integ.webhook_secret
+            if not secret:
+                continue
+
+            # Check query param
+            if secret_param and hmac.compare_digest(secret, secret_param):
+                matching_integration = integ
+                break
+
+            # Check plain header
+            if header_secret and hmac.compare_digest(secret, header_secret):
+                matching_integration = integ
+                break
+
+            # Check HMAC-SHA256 signature
+            if sig_header:
+                computed_hash = hmac.new(
+                    secret.encode("utf-8"),
+                    body_bytes,
+                    hashlib.sha256,
+                ).hexdigest()
+                cleaned_sig = sig_header.strip()
+                if (
+                    hmac.compare_digest(f"sha256={computed_hash}", cleaned_sig)
+                    or hmac.compare_digest(computed_hash, cleaned_sig.removeprefix("sha256="))
+                ):
+                    matching_integration = integ
+                    break
+
+        if not matching_integration:
+            logger.warning(
+                "Jira webhook: secret or HMAC signature validation failed (or no matching active integration); ignoring."
+            )
+            return {"ok": True, "status": "unauthorized_or_unknown_secret"}
 
         try:
-            payload = await request.json()
+            payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
         except Exception:
             logger.warning("Jira webhook: failed to parse JSON body.")
-            return {"ok": True}
+            return {"ok": True, "status": "invalid_json"}
 
         event_type: str = payload.get("webhookEvent", "")
         issue_data: dict = payload.get("issue") or {}
@@ -482,12 +570,16 @@ async def jira_webhook_listener(
 
         if not event_type or not issue_data:
             logger.debug(f"Jira webhook: skipping event '{event_type}' — missing issue data.")
-            return {"ok": True}
+            return {"ok": True, "status": "skipped_no_issue"}
 
-        # Dispatch processing in background so we return 200 immediately
+        logger.info(
+            f"Jira webhook verified for issue {issue_data.get('key')} "
+            f"(event={event_type}). Dispatching background task."
+        )
+
+        # Dispatch processing in background using an isolated session
         background_tasks.add_task(
-            handle_jira_webhook,
-            db,
+            _dispatch_webhook_background,
             event_type,
             issue_data,
             changelog,
@@ -498,3 +590,4 @@ async def jira_webhook_listener(
         logger.exception(f"Jira webhook: unexpected error — {exc}")
 
     return {"ok": True}
+

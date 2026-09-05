@@ -14,7 +14,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useJiraConfig, useSaveJiraConfig, useDeleteJiraConfig, useTestJiraConnection, useRotateWebhookSecret } from "../api/queries";
+import {
+  useJiraConfig,
+  useSaveJiraConfig,
+  useDeleteJiraConfig,
+  useTestJiraConnection,
+  useRotateWebhookSecret,
+  useTestJiraWebhook,
+} from "../api/queries";
 import {
   CheckCircle2,
   AlertCircle,
@@ -26,6 +33,9 @@ import {
   Webhook,
   Copy,
   RefreshCw,
+  Send,
+  Terminal,
+  Info,
 } from "lucide-react";
 
 const schema = z.object({
@@ -56,11 +66,21 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
   const { mutateAsync: deleteConfig, isPending: isDeleting } = useDeleteJiraConfig();
   const { mutateAsync: testConnection, isPending: isTesting } = useTestJiraConnection();
   const { mutateAsync: rotateSecret, isPending: isRotating } = useRotateWebhookSecret();
+  const { mutateAsync: testWebhook, isPending: isTestingWebhook } = useTestJiraWebhook();
 
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [webhookResult, setWebhookResult] = useState<{ webhook_url: string; webhook_secret: string } | null>(null);
   const [copiedField, setCopiedField] = useState<"url" | "secret" | null>(null);
+  const [testWebhookResult, setTestWebhookResult] = useState<{
+    success: boolean;
+    message: string;
+    issue_key?: string;
+    old_status?: string | null;
+    new_status?: string | null;
+  } | null>(null);
+  const [testWebhookError, setTestWebhookError] = useState<string | null>(null);
+  const [showCurlCommand, setShowCurlCommand] = useState(false);
 
   const {
     register,
@@ -338,23 +358,37 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
               </div>
             </form>
 
-            {/* Phase 2: Webhook Configuration Panel */}
+            {/* Webhook Configuration & Auto-Sync Panel */}
             {config?.is_configured && (
-              <div className="mt-6 border-t border-border/40 pt-5 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Webhook className="w-4 h-4 text-violet-600" />
-                  <h3 className="font-semibold text-sm text-foreground">Jira to TraceIQ Webhooks</h3>
-                  <span className="text-[10px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                    Phase 2
+              <div className="mt-6 border-t border-border/40 pt-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Webhook className="w-4 h-4 text-violet-600" />
+                    <h3 className="font-semibold text-sm text-foreground">Jira to TraceIQ Webhook Sync</h3>
+                  </div>
+                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Auto-Sync
                   </span>
                 </div>
+
                 <p className="text-xs text-muted-foreground">
-                  Register a Jira webhook to automatically sync requirement status and detect drift
-                  when issues are updated in Jira.
+                  TraceIQ listens for Jira issue updates in real time to automatically sync requirement status and detect specification drift.
                 </p>
 
+                {/* Localhost & Jira Cloud Guidance */}
+                <div className="rounded-xl bg-amber-50/80 border border-amber-200/80 p-3 text-[11px] text-amber-900 space-y-1.5">
+                  <p className="font-semibold flex items-center gap-1.5 text-amber-950">
+                    <Info className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    Testing with Jira Cloud on Localhost?
+                  </p>
+                  <p className="text-amber-800 leading-relaxed">
+                    Jira Cloud servers cannot deliver webhooks to private <code className="font-mono bg-amber-100/90 px-1 py-0.5 rounded text-amber-950 font-bold">localhost</code> addresses. For local testing, run <code className="font-mono bg-amber-100/90 px-1 py-0.5 rounded text-amber-950 font-bold">ngrok http 8000</code> and use your public HTTPS ngrok URL in Jira.
+                  </p>
+                </div>
+
                 {webhookResult ? (
-                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-3">
+                  <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4 space-y-3">
                     <p className="text-xs font-semibold text-violet-800 uppercase tracking-wider">
                       Copy these into Jira Webhook settings:
                     </p>
@@ -376,7 +410,7 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                           title="Copy URL"
                         >
                           {copiedField === "url" ? (
-                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                           ) : (
                             <Copy className="w-3.5 h-3.5" />
                           )}
@@ -404,7 +438,7 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                           title="Copy secret"
                         >
                           {copiedField === "secret" ? (
-                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                           ) : (
                             <Copy className="w-3.5 h-3.5" />
                           )}
@@ -413,12 +447,13 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                     </div>
 
                     <p className="text-[11px] text-muted-foreground">
-                      In Jira: Settings - System - WebHooks - Create WebHook. Paste the URL and
-                      secret above. Select events: <strong>Issue Updated</strong>,{" "}
-                      <strong>Issue Deleted</strong>.
+                      In Jira: <strong>Settings &rarr; System &rarr; WebHooks &rarr; Create a WebHook</strong>. Paste URL and secret, and select: <strong>Issue Updated</strong> and <strong>Issue Deleted</strong>.
                     </p>
                   </div>
-                ) : (
+                ) : null}
+
+                {/* Actions & Verification Toolbar */}
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <Button
                     type="button"
                     variant="outline"
@@ -435,15 +470,102 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                         setSaveError(err.message || "Failed to generate webhook secret");
                       }
                     }}
-                    className="text-xs gap-2 border-violet-300 text-violet-700 hover:bg-violet-50"
+                    className="text-xs gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
                   >
                     {isRotating ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <RefreshCw className="w-3.5 h-3.5" />
                     )}
-                    {isRotating ? "Generating..." : "Generate Webhook Secret"}
+                    {isRotating ? "Generating..." : webhookResult ? "Regenerate Secret" : "Show / Generate Webhook Secret"}
                   </Button>
+
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    disabled={isTestingWebhook}
+                    onClick={async () => {
+                      setTestWebhookResult(null);
+                      setTestWebhookError(null);
+                      try {
+                        const res = await testWebhook(workspaceId);
+                        setTestWebhookResult(res);
+                      } catch (err: any) {
+                        setTestWebhookError(err.message || "Failed to test webhook simulation");
+                      }
+                    }}
+                    className="text-xs gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+                  >
+                    {isTestingWebhook ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    {isTestingWebhook ? "Testing Delivery..." : "Send Test Ping"}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCurlCommand(!showCurlCommand)}
+                    className="text-xs gap-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <Terminal className="w-3.5 h-3.5" />
+                    {showCurlCommand ? "Hide cURL" : "Test via cURL"}
+                  </Button>
+                </div>
+
+                {/* Verification Feedback Banner */}
+                {testWebhookResult && (
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900 space-y-1">
+                    <div className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      Webhook Verified &amp; Operational!
+                    </div>
+                    <p className="text-[11px] text-emerald-700 leading-relaxed">
+                      Simulated webhook event for issue <strong>{testWebhookResult.issue_key}</strong>: status transitioned from &apos;{testWebhookResult.old_status || "To Do"}&apos; to &apos;{testWebhookResult.new_status}&apos;. Check your Requirements dashboard to see the live update!
+                    </p>
+                  </div>
+                )}
+
+                {testWebhookError && (
+                  <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-semibold text-rose-900">Webhook Test Error</p>
+                      <p className="text-[11px]">{testWebhookError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* cURL Command Helper */}
+                {showCurlCommand && (
+                  <div className="rounded-xl bg-slate-900 text-slate-100 p-3.5 text-[11px] font-mono space-y-2">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span>Terminal Test Command</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const secretVal = webhookResult?.webhook_secret || "YOUR_SECRET";
+                          const cmd = `curl -X POST "http://localhost:8000/api/v1/jira/webhook?secret=${secretVal}" -H "Content-Type: application/json" -d '{"webhookEvent":"jira:issue_updated","issue":{"key":"SAM1-1","fields":{"status":{"name":"In Progress"}}}}'`;
+                          navigator.clipboard.writeText(cmd);
+                          setCopiedField("secret");
+                          setTimeout(() => setCopiedField(null), 2000);
+                        }}
+                        className="hover:text-white flex items-center gap-1 text-[10px] text-slate-300"
+                      >
+                        <Copy className="w-3 h-3" />
+                        {copiedField === "secret" ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="break-all whitespace-pre-wrap text-emerald-400 leading-relaxed bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
+                      curl -X POST &quot;http://localhost:8000/api/v1/jira/webhook?secret={webhookResult?.webhook_secret || "YOUR_SECRET"}&quot; \<br />
+                      &nbsp;&nbsp;-H &quot;Content-Type: application/json&quot; \<br />
+                      &nbsp;&nbsp;-d &apos;&#123;&quot;webhookEvent&quot;:&quot;jira:issue_updated&quot;,&quot;issue&quot;:&#123;&quot;key&quot;:&quot;SAM1-1&quot;,&quot;fields&quot;:&#123;&quot;status&quot;:&#123;&quot;name&quot;:&quot;In Progress&quot;&#125;&#125;&#125;&#125;&apos;
+                    </div>
+                  </div>
                 )}
               </div>
             )}

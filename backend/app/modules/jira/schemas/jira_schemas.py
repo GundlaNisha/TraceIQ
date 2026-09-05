@@ -193,3 +193,78 @@ class JiraSyncResponse(BaseModel):
     jira_status: str | None = None
     was_updated: bool
     message: str
+
+
+# -----------------------------------------------------------------------
+# Phase 2: Transitions, Comment Posting, Webhook
+# -----------------------------------------------------------------------
+
+
+class JiraTransitionItem(BaseModel):
+    """A single available workflow transition for a Jira issue."""
+
+    id: str
+    name: str
+    to_status: str
+    to_status_category: str = "undefined"
+
+
+class JiraTransitionRequest(BaseModel):
+    """Request body for transitioning a Jira issue status from TraceIQ."""
+
+    transition_id: str = Field(..., description="Transition ID from GET /issues/{key}/transitions")
+    post_comment: bool = Field(
+        False, description="Whether to post a comment confirming the transition on Jira"
+    )
+    comment: str | None = Field(
+        None, description="Custom comment text (auto-generated if omitted and post_comment=True)"
+    )
+
+
+class JiraTransitionResponse(BaseModel):
+    """Result of a Jira issue status transition."""
+
+    success: bool
+    issue_key: str
+    new_status: str | None = None
+    message: str
+
+
+class JiraPostCommentRequest(BaseModel):
+    """Request body for posting a TraceIQ summary comment to a Jira issue."""
+
+    comment_body: str | None = Field(
+        None,
+        description="Custom comment Markdown text. If omitted, auto-generates from latest impact analysis.",
+    )
+
+
+class JiraPostCommentResponse(BaseModel):
+    """Result of posting a comment to a Jira issue."""
+
+    success: bool
+    issue_key: str
+    comment_id: str | None = None
+    author: str | None = None
+    message: str
+
+
+class JiraWebhookSecretResponse(BaseModel):
+    """Webhook secret configuration for the workspace Jira integration."""
+
+    webhook_url: str = Field(..., description="Endpoint URL to register in Jira webhook settings")
+    webhook_secret: str = Field(..., description="Shared secret to paste in Jira (shown once)")
+    message: str = "Copy the secret above and paste it as the 'Secret' in Jira Webhook settings."
+
+
+class JiraWebhookPayload(BaseModel):
+    """Inbound Jira webhook event payload (permissive — handles many event shapes)."""
+
+    model_config = {"extra": "allow"}
+
+    webhookEvent: str = ""
+    issue: dict[str, Any] | None = None
+    changelog: dict[str, Any] | None = None
+    timestamp: int | None = None
+    user: dict[str, Any] | None = None
+    comment: dict[str, Any] | None = None

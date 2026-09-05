@@ -555,3 +555,301 @@ async def sync_jira_requirement(
         was_updated=was_updated,
         message=msg,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Transitions, Comment Posting, Webhook Handling
+# ---------------------------------------------------------------------------
+
+import secrets as _secrets
+
+
+def _build_auto_comment(req: Requirement) -> str:
+    """Build a structured TraceIQ summary comment for posting to Jira."""
+    lines = [
+        "## 🔍 TraceIQ Analysis Update",
+        "",
+        f"**Requirement**: {req.title}",
+        f"**Version**: v{req.version_number}",
+    ]
+    if req.jira_status:
+        lines.append(f"**Jira Status (TraceIQ)**: {req.jira_status}")
+    lines += [
+        "",
+        "---",
+        "_This comment was automatically posted by [TraceIQ](https://github.com/GundlaNisha/TraceIQ) "
+        "— Autonomous Code Impact Analysis & Traceability Platform._",
+    ]
+    return "\n".join(lines)
+
+
+async def get_issue_transitions(
+    db: AsyncSession,
+    user_id: str,
+    workspace_id: uuid.UUID | None,
+    issue_key: str,
+) -> list:
+    """Fetch available workflow transitions for a Jira issue.
+
+    Returns:
+        List of JiraTransitionItem dicts.
+    """
+    from app.modules.jira.schemas.jira_schemas import JiraTransitionItem
+
+    client, _ = await get_active_jira_client(db, user_id, workspace_id)
+    try:
+        transitions = await client.get_issue_transitions(issue_key)
+        return [JiraTransitionItem(**t) for t in transitions]
+    except JiraApiError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
+
+
+async def transition_jira_issue(
+    db: AsyncSession,
+    user_id: str,
+    workspace_id: uuid.UUID | None,
+    requirement_id: uuid.UUID,
+    transition_id: str,
+    post_comment_flag: bool = False,
+    comment_text: str | None = None,
+) -> "JiraTransitionResponse":
+    """Transition a linked Jira issue status from TraceIQ.
+
+    Optionally posts a comment confirming the transition.
+    Updates requirement.jira_status in the database.
+    """
+    from app.modules.jira.schemas.jira_schemas import JiraTransitionResponse
+
+    # Load requirement and ensure Jira key exists
+    stmt = select(Requirement).where(Requirement.id == requirement_id)
+    res = await db.execute(stmt)
+    req: Requirement | None = res.scalars().first()
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found.")
+    if not req.jira_issue_key:
+        raise HTTPException(
+            status_code=400,
+            detail="This requirement is not linked to a Jira issue.",
+        )
+
+    client, _ = await get_active_jira_client(db, user_id, workspace_id)
+
+    try:
+        await client.transition_issue(req.jira_issue_key, transition_id)
+    except JiraApiError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
+
+    # Fetch updated issue to get the new status name
+    try:
+        updated_issue = await client.get_issue(req.jira_issue_key)
+        new_status = updated_issue.get("status", "")
+    except JiraApiError:
+        new_status = ""
+
+    # Persist updated Jira status on the requirement
+    if new_status:
+        req.jira_status = new_status
+        req.jira_synced_at = datetime.now(UTC)
+
+    # Optionally post a confirmation comment on Jira
+    if post_comment_flag:
+        body = comment_text or (
+            f"✅ **TraceIQ** transitioned this issue to **{new_status}** "
+            f"after completing code impact analysis for requirement: _{req.title}_."
+        )
+        try:
+            await client.post_comment(req.jira_issue_key, body)
+        except JiraApiError as e:
+            logger.warning(f"Failed to post comment after transition on {req.jira_issue_key}: {e}")
+
+    # AuditLog
+    audit = AuditLog(
+        user_id=str(user_id),
+        action="jira.issue_transition",
+        resource_type="requirement",
+        resource_id=str(req.id),
+    )
+    db.add(audit)
+    await db.commit()
+
+    return JiraTransitionResponse(
+        success=True,
+        issue_key=req.jira_issue_key,
+        new_status=new_status or None,
+        message=f"Jira issue {req.jira_issue_key} transitioned successfully."
+        + (f" New status: {new_status}." if new_status else ""),
+    )
+
+
+async def post_jira_comment(
+    db: AsyncSession,
+    user_id: str,
+    workspace_id: uuid.UUID | None,
+    requirement_id: uuid.UUID,
+    comment_body: str | None = None,
+) -> "JiraPostCommentResponse":
+    """Post a TraceIQ impact analysis summary (or custom text) to the linked Jira issue.
+
+    If comment_body is omitted, auto-generates a structured comment from the requirement.
+    """
+    from app.modules.jira.schemas.jira_schemas import JiraPostCommentResponse
+
+    stmt = select(Requirement).where(Requirement.id == requirement_id)
+    res = await db.execute(stmt)
+    req: Requirement | None = res.scalars().first()
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found.")
+    if not req.jira_issue_key:
+        raise HTTPException(
+            status_code=400,
+            detail="This requirement is not linked to a Jira issue.",
+        )
+
+    client, _ = await get_active_jira_client(db, user_id, workspace_id)
+
+    body = comment_body or _build_auto_comment(req)
+
+    try:
+        result = await client.post_comment(req.jira_issue_key, body)
+    except JiraApiError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
+
+    # AuditLog
+    audit = AuditLog(
+        user_id=str(user_id),
+        action="jira.comment_posted",
+        resource_type="requirement",
+        resource_id=str(req.id),
+    )
+    db.add(audit)
+    await db.commit()
+
+    return JiraPostCommentResponse(
+        success=True,
+        issue_key=req.jira_issue_key,
+        comment_id=result.get("comment_id"),
+        author=result.get("author"),
+        message=f"Comment posted to Jira issue {req.jira_issue_key} successfully.",
+    )
+
+
+async def generate_webhook_secret(
+    db: AsyncSession,
+    user_id: str,
+    workspace_id: uuid.UUID | None,
+    base_url: str,
+) -> "JiraWebhookSecretResponse":
+    """Generate (or rotate) the per-integration webhook shared secret.
+
+    The secret is stored on the JiraIntegration record and returned ONCE
+    in plain text. Subsequent GET /config calls return a masked version.
+    """
+    from app.modules.jira.schemas.jira_schemas import JiraWebhookSecretResponse
+
+    integration = await get_jira_integration(db, user_id, workspace_id)
+    if not integration:
+        raise HTTPException(
+            status_code=400,
+            detail="No Jira integration configured. Save your Jira connection first.",
+        )
+
+    new_secret = _secrets.token_urlsafe(32)
+    integration.webhook_secret = new_secret
+    await db.commit()
+
+    webhook_url = f"{base_url.rstrip('/')}/api/v1/jira/webhook"
+    return JiraWebhookSecretResponse(
+        webhook_url=webhook_url,
+        webhook_secret=new_secret,
+    )
+
+
+async def handle_jira_webhook(
+    db: AsyncSession,
+    event_type: str,
+    issue_data: dict,
+    changelog: dict | None,
+) -> None:
+    """Process an inbound Jira webhook event.
+
+    Supported events:
+    - jira:issue_updated / issue_updated — re-sync requirement if relevant fields changed.
+    - jira:issue_deleted / issue_deleted — unlink jira_issue_key from requirement.
+    """
+    issue_key = issue_data.get("key", "")
+    if not issue_key:
+        logger.warning("Jira webhook: no issue key in payload; skipping.")
+        return
+
+    # Find all requirements linked to this Jira issue
+    stmt = select(Requirement).where(Requirement.jira_issue_key == issue_key)
+    res = await db.execute(stmt)
+    requirements: list[Requirement] = list(res.scalars().all())
+
+    if not requirements:
+        logger.debug(f"Jira webhook: no TraceIQ requirements linked to {issue_key}; skipping.")
+        return
+
+    event_lower = event_type.lower()
+
+    if "deleted" in event_lower:
+        # Unlink from TraceIQ requirements
+        for req in requirements:
+            req.jira_status = "JIRA_DELETED"
+            logger.info(f"Jira webhook: issue {issue_key} deleted — marking requirement {req.id}.")
+        await db.commit()
+        return
+
+    # For updated/transitioned events — check which fields changed
+    changed_fields: set[str] = set()
+    if changelog:
+        for item in changelog.get("items", []):
+            if isinstance(item, dict):
+                changed_fields.add(item.get("field", "").lower())
+
+    # Extract updated status from issue fields
+    fields = issue_data.get("fields", {})
+    new_status: str | None = None
+    if fields:
+        status_obj = fields.get("status") or {}
+        new_status = status_obj.get("name") if isinstance(status_obj, dict) else None
+
+    # Update each linked requirement
+    for req in requirements:
+        was_updated = False
+
+        # Update jira_status if it changed
+        if new_status and req.jira_status != new_status:
+            req.jira_status = new_status
+            req.jira_synced_at = datetime.now(UTC)
+            was_updated = True
+
+        # If description or summary changed, log as drift (do NOT auto-overwrite requirement text)
+        if "description" in changed_fields or "summary" in changed_fields:
+            # Create an audit log entry for drift detection
+            audit = AuditLog(
+                user_id="system",
+                action="jira.drift_detected",
+                resource_type="requirement",
+                resource_id=str(req.id),
+            )
+            db.add(audit)
+            was_updated = True
+
+        if was_updated:
+            audit_update = AuditLog(
+                user_id="system",
+                action="jira.webhook_sync",
+                resource_type="requirement",
+                resource_id=str(req.id),
+            )
+            db.add(audit_update)
+
+        logger.info(
+            f"Jira webhook: processed {event_type} for {issue_key} "
+            f"→ requirement {req.id} (updated={was_updated})"
+        )
+
+    await db.commit()

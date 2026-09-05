@@ -528,3 +528,207 @@ class JiraClient:
             "labels": labels,
             "components": components,
         }
+
+    # ------------------------------------------------------------------
+    # Phase 2: Bidirectional Sync — Comment posting, Transitions
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _markdown_to_adf(text: str) -> dict:
+        """Convert plain text / light Markdown to minimal Atlassian Document Format (ADF).
+
+        Supports paragraphs, **bold**, *italic*, `code`, [links](url),
+        fenced code blocks (with optional language), blockquotes (>),
+        bullet lists (- / *), and headings (# / ## / ###).
+        """
+        import re
+
+        def parse_inline(line: str) -> list[dict]:
+            nodes: list[dict] = []
+            pattern = re.compile(
+                r"(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[(.+?)\]\((https?://[^\s)]+)\))"
+            )
+            last = 0
+            for m in pattern.finditer(line):
+                if m.start() > last:
+                    nodes.append({"type": "text", "text": line[last : m.start()]})
+                raw = m.group(0)
+                if raw.startswith("**"):
+                    nodes.append({"type": "text", "text": m.group(2), "marks": [{"type": "strong"}]})
+                elif raw.startswith("*"):
+                    nodes.append({"type": "text", "text": m.group(3), "marks": [{"type": "em"}]})
+                elif raw.startswith("`"):
+                    nodes.append({"type": "text", "text": m.group(4), "marks": [{"type": "code"}]})
+                elif raw.startswith("["):
+                    link_text = m.group(5)
+                    link_url = m.group(6)
+                    nodes.append({
+                        "type": "text",
+                        "text": link_text,
+                        "marks": [{"type": "link", "attrs": {"href": link_url}}],
+                    })
+                last = m.end()
+            if last < len(line):
+                nodes.append({"type": "text", "text": line[last:]})
+            return nodes or [{"type": "text", "text": line}]
+
+        content: list[dict] = []
+        lines = text.split("\n")
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # Fenced code block
+            if line.strip().startswith("```"):
+                lang = line.strip()[3:].strip()
+                code_lines: list[str] = []
+                i += 1
+                while i < len(lines) and not lines[i].strip().startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                attrs = {"language": lang} if lang else {}
+                content.append({
+                    "type": "codeBlock",
+                    "attrs": attrs,
+                    "content": [{"type": "text", "text": "\n".join(code_lines)}],
+                })
+
+            # Blockquote
+            elif line.startswith(">"):
+                quote_text = re.sub(r"^>\s*", "", line)
+                content.append({
+                    "type": "blockquote",
+                    "content": [{"type": "paragraph", "content": parse_inline(quote_text)}],
+                })
+
+            # Heading
+            elif re.match(r"^#{1,3} ", line):
+                heading_match = re.match(r"^(#+)", line)
+                level = len(heading_match.group(1)) if heading_match else 1
+                heading_text = re.sub(r"^#+\s+", "", line)
+                content.append({
+                    "type": "heading",
+                    "attrs": {"level": min(level, 3)},
+                    "content": parse_inline(heading_text),
+                })
+
+            # Bullet list item — collect consecutive items
+            elif re.match(r"^[-*] ", line):
+                list_items: list[dict] = []
+                while i < len(lines) and re.match(r"^[-*] ", lines[i]):
+                    item_text = re.sub(r"^[-*] ", "", lines[i])
+                    list_items.append({
+                        "type": "listItem",
+                        "content": [{"type": "paragraph", "content": parse_inline(item_text)}],
+                    })
+                    i += 1
+                content.append({"type": "bulletList", "content": list_items})
+                continue  # already advanced i
+
+            # Blank line
+            elif line.strip() == "":
+                pass
+
+            # Regular paragraph
+            else:
+                content.append({"type": "paragraph", "content": parse_inline(line)})
+
+            i += 1
+
+        if not content:
+            content = [{"type": "paragraph", "content": [{"type": "text", "text": text}]}]
+
+        return {"type": "doc", "version": 1, "content": content}
+
+    async def post_comment(self, issue_key: str, body_text: str) -> dict[str, Any]:
+        """Post a comment on a Jira issue.
+
+        Args:
+            issue_key: Jira issue key (e.g. PROJ-123).
+            body_text: Plain text or Markdown comment body.
+
+        Returns:
+            dict with comment_id, author, created timestamp.
+        """
+        key = issue_key.strip()
+        if not key:
+            raise JiraApiError("Issue key is required", status_code=400)
+        if not body_text.strip():
+            raise JiraApiError("Comment body cannot be empty", status_code=400)
+
+        adf_body = self._markdown_to_adf(body_text)
+        payload: dict[str, Any] = {"body": adf_body}
+
+        try:
+            data = await self._request("POST", f"/rest/api/3/issue/{key}/comment", json_data=payload)
+        except JiraApiError as e:
+            if e.status_code in (400, 404, 405):
+                # Fallback: Jira v2 accepts plain-text body string
+                v2_payload: dict[str, Any] = {"body": body_text}
+                data = await self._request("POST", f"/rest/api/2/issue/{key}/comment", json_data=v2_payload)
+            else:
+                raise
+
+        author = data.get("author") or {}
+        return {
+            "comment_id": str(data.get("id", "")),
+            "author": author.get("displayName") or author.get("emailAddress") or self.email,
+            "created": data.get("created"),
+            "self_url": data.get("self", ""),
+        }
+
+    async def get_issue_transitions(self, issue_key: str) -> list[dict[str, Any]]:
+        """List available workflow transitions for a Jira issue.
+
+        Args:
+            issue_key: Jira issue key (e.g. PROJ-123).
+
+        Returns:
+            List of transition dicts with id, name, to_status, to_status_category.
+        """
+        key = issue_key.strip()
+        if not key:
+            raise JiraApiError("Issue key is required", status_code=400)
+
+        try:
+            data = await self._request("GET", f"/rest/api/3/issue/{key}/transitions")
+        except JiraApiError as e:
+            if e.status_code in (400, 404):
+                data = await self._request("GET", f"/rest/api/2/issue/{key}/transitions")
+            else:
+                raise
+
+        transitions = []
+        for t in data.get("transitions", []):
+            if not isinstance(t, dict):
+                continue
+            to = t.get("to") or {}
+            status_cat = to.get("statusCategory") or {}
+            transitions.append({
+                "id": str(t.get("id", "")),
+                "name": t.get("name", ""),
+                "to_status": to.get("name", ""),
+                "to_status_category": status_cat.get("key", "undefined"),
+            })
+        return transitions
+
+    async def transition_issue(self, issue_key: str, transition_id: str) -> None:
+        """Apply a workflow transition to a Jira issue.
+
+        Args:
+            issue_key: Jira issue key (e.g. PROJ-123).
+            transition_id: Transition ID from get_issue_transitions().
+        """
+        key = issue_key.strip()
+        if not key or not transition_id.strip():
+            raise JiraApiError("Issue key and transition_id are required", status_code=400)
+
+        payload: dict[str, Any] = {"transition": {"id": str(transition_id).strip()}}
+
+        try:
+            await self._request("POST", f"/rest/api/3/issue/{key}/transitions", json_data=payload)
+        except JiraApiError as e:
+            if e.status_code in (400, 404, 405):
+                await self._request("POST", f"/rest/api/2/issue/{key}/transitions", json_data=payload)
+            else:
+                raise

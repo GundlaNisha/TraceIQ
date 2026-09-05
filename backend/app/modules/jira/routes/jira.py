@@ -1,15 +1,18 @@
-"""Jira Integration API routes."""
+"""Jira Integration API routes — Phase 1 + Phase 2 (Deep Integration)."""
 
 from __future__ import annotations
 
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_active_workspace_id, get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
+from app.modules.jira.models.jira_integration import JiraIntegration
 from app.modules.jira.schemas.jira_schemas import (
     JiraBatchImportRequest,
     JiraBatchImportResponse,
@@ -20,6 +23,8 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraImportResult,
     JiraIssueDetailResponse,
     JiraIssueTypeItem,
+    JiraPostCommentRequest,
+    JiraPostCommentResponse,
     JiraProjectItem,
     JiraSearchResponse,
     JiraSprintItem,
@@ -27,25 +32,41 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraSyncResponse,
     JiraTestConnectionRequest,
     JiraTestConnectionResponse,
+    JiraTransitionItem,
+    JiraTransitionRequest,
+    JiraTransitionResponse,
+    JiraWebhookSecretResponse,
 )
 from app.modules.jira.services.jira_service import (
     batch_import_jira_issues,
     delete_jira_config,
+    generate_webhook_secret,
+    get_issue_transitions,
     get_jira_config_response,
+    get_jira_integration,
     get_jira_issue_detail,
+    handle_jira_webhook,
     import_jira_issue,
     list_jira_boards,
     list_jira_issue_types,
     list_jira_projects,
     list_jira_sprints,
     list_jira_statuses,
+    post_jira_comment,
     save_jira_config,
     search_jira_issues,
     sync_jira_requirement,
     test_jira_credentials,
+    transition_jira_issue,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/jira", tags=["jira"])
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: Configuration
+# ---------------------------------------------------------------------------
 
 
 @router.get("/config", response_model=JiraConfigResponse)
@@ -109,10 +130,7 @@ async def test_connection(
             api_token=body.jira_api_token,
         )
 
-    # Test with saved configuration
     target_ws = workspace_id or get_active_workspace_id(request)
-    from app.modules.jira.services.jira_service import get_jira_integration
-
     integration = await get_jira_integration(db, current_user.id, target_ws)
     if not integration:
         return JiraTestConnectionResponse(
@@ -125,6 +143,11 @@ async def test_connection(
         email=integration.jira_email,
         api_token=integration.jira_api_token,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: Browse Jira Metadata
+# ---------------------------------------------------------------------------
 
 
 @router.get("/projects", response_model=list[JiraProjectItem])
@@ -189,6 +212,11 @@ async def get_board_sprints(
     return await list_jira_sprints(db, current_user.id, board_id=board_id, workspace_id=target_ws)
 
 
+# ---------------------------------------------------------------------------
+# Phase 1: Issue Search + Detail
+# ---------------------------------------------------------------------------
+
+
 @router.get("/issues", response_model=JiraSearchResponse)
 async def search_issues(
     request: Request,
@@ -225,6 +253,28 @@ async def search_issues(
     )
 
 
+@router.get("/issues/{issue_key}/transitions", response_model=list[JiraTransitionItem])
+async def get_transitions(
+    issue_key: str,
+    request: Request,
+    workspace_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List available workflow transitions for a Jira issue.
+
+    Use the returned transition IDs to change the issue's status via
+    POST /requirements/{req_id}/transition.
+    """
+    target_ws = workspace_id or get_active_workspace_id(request)
+    return await get_issue_transitions(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+        issue_key=issue_key,
+    )
+
+
 @router.get("/issues/{issue_key}", response_model=JiraIssueDetailResponse)
 async def get_issue_detail(
     issue_key: str,
@@ -241,6 +291,11 @@ async def get_issue_detail(
         issue_key=issue_key,
         workspace_id=target_ws,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: Import
+# ---------------------------------------------------------------------------
 
 
 @router.post("/import", response_model=JiraImportResult, status_code=status.HTTP_201_CREATED)
@@ -283,6 +338,11 @@ async def import_batch_issues(
     )
 
 
+# ---------------------------------------------------------------------------
+# Phase 1 + 2: Requirement-linked operations
+# ---------------------------------------------------------------------------
+
+
 @router.post("/requirements/{req_id}/sync", response_model=JiraSyncResponse)
 async def sync_requirement(
     req_id: uuid.UUID,
@@ -299,3 +359,142 @@ async def sync_requirement(
         requirement_id=req_id,
         workspace_id=target_ws,
     )
+
+
+@router.post("/requirements/{req_id}/transition", response_model=JiraTransitionResponse)
+async def transition_requirement_issue(
+    req_id: uuid.UUID,
+    body: JiraTransitionRequest,
+    request: Request,
+    workspace_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Transition the linked Jira issue status directly from TraceIQ.
+
+    Obtain transition IDs from GET /issues/{key}/transitions.
+    Optionally post a confirmation comment to Jira after transitioning.
+    """
+    target_ws = workspace_id or get_active_workspace_id(request)
+    return await transition_jira_issue(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+        requirement_id=req_id,
+        transition_id=body.transition_id,
+        post_comment_flag=body.post_comment,
+        comment_text=body.comment,
+    )
+
+
+@router.post("/requirements/{req_id}/post-comment", response_model=JiraPostCommentResponse)
+async def post_comment_to_jira(
+    req_id: uuid.UUID,
+    body: JiraPostCommentRequest,
+    request: Request,
+    workspace_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Post a TraceIQ impact analysis summary (or custom text) as a comment to the linked Jira issue.
+
+    If comment_body is omitted, an auto-generated TraceIQ summary is posted.
+    """
+    target_ws = workspace_id or get_active_workspace_id(request)
+    return await post_jira_comment(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+        requirement_id=req_id,
+        comment_body=body.comment_body,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Webhook Configuration
+# ---------------------------------------------------------------------------
+
+
+@router.post("/config/webhook-secret", response_model=JiraWebhookSecretResponse)
+async def rotate_webhook_secret(
+    request: Request,
+    workspace_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate or rotate the Jira webhook shared secret for this workspace.
+
+    The secret is returned ONCE in plain text — copy it into the
+    'Secret' field of your Jira Webhook configuration.
+    The webhook endpoint URL is also included for convenience.
+    """
+    target_ws = workspace_id or get_active_workspace_id(request)
+    base_url = str(request.base_url)
+    return await generate_webhook_secret(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+        base_url=base_url,
+    )
+
+
+@router.post("/webhook", status_code=200, include_in_schema=False)
+async def jira_webhook_listener(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Receive inbound Jira webhook events.
+
+    Security: validates the X-Atlassian-Webhook-Secret header against the
+    per-integration stored secret. Always returns HTTP 200 — Jira disables
+    webhooks that return 4xx/5xx responses repeatedly.
+    """
+    try:
+        # Extract incoming secret from header (Jira sends it here)
+        incoming_secret = (
+            request.headers.get("X-Atlassian-Webhook-Secret")
+            or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        )
+
+        integration: JiraIntegration | None = None
+        if incoming_secret:
+            stmt = select(JiraIntegration).where(
+                JiraIntegration.webhook_secret == incoming_secret,
+                JiraIntegration.is_active.is_(True),
+            )
+            res = await db.execute(stmt)
+            integration = res.scalars().first()
+
+        if not integration:
+            logger.warning("Jira webhook: secret validation failed or no matching integration; ignoring.")
+            return {"ok": True}
+
+        try:
+            payload = await request.json()
+        except Exception:
+            logger.warning("Jira webhook: failed to parse JSON body.")
+            return {"ok": True}
+
+        event_type: str = payload.get("webhookEvent", "")
+        issue_data: dict = payload.get("issue") or {}
+        changelog: dict | None = payload.get("changelog")
+
+        if not event_type or not issue_data:
+            logger.debug(f"Jira webhook: skipping event '{event_type}' — missing issue data.")
+            return {"ok": True}
+
+        # Dispatch processing in background so we return 200 immediately
+        background_tasks.add_task(
+            handle_jira_webhook,
+            db,
+            event_type,
+            issue_data,
+            changelog,
+        )
+
+    except Exception as exc:
+        # Catch-all: never propagate errors to Jira
+        logger.exception(f"Jira webhook: unexpected error — {exc}")
+
+    return {"ok": True}

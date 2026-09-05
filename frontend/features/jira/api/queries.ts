@@ -423,6 +423,7 @@ import type {
   JiraTransitionResponse,
   JiraPostCommentResponse,
   JiraWebhookSecretResponse,
+  JiraWebhookTestResponse,
 } from "@/lib/types/api";
 
 export function useJiraIssueTransitions(
@@ -525,3 +526,26 @@ export function useRotateWebhookSecret() {
     },
   });
 }
+
+export function useTestJiraWebhook() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (workspaceId?: string | null) => {
+      const url = workspaceId
+        ? `/api/v1/jira/webhook/test?workspace_id=${encodeURIComponent(workspaceId)}`
+        : `/api/v1/jira/webhook/test`;
+      const res = await fetchApi(url, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to test webhook simulation");
+      }
+      return res.json() as Promise<JiraWebhookTestResponse>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["requirements"] });
+    },
+  });
+}
+

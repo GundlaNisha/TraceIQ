@@ -1,12 +1,12 @@
 # TraceIQ
 
-Autonomous Code Impact Analysis, AST Code Graph Indexing, and Pull Request Review Intelligence.
+Autonomous Code Impact Analysis, AST Code Graph Indexing, Jira Bidirectional Sync, and Pull Request Review Intelligence.
 
 ---
 
 ## Overview
 
-TraceIQ is an enterprise-grade developer platform that bridges product requirements, codebase architecture, and pull request reviews. By combining Abstract Syntax Tree (AST) code graph traversal, Reciprocal Rank Fusion (RRF) hybrid retrieval, multi-tenant team workspaces, and large language models, TraceIQ automatically determines the blast radius of proposed requirements, conducts automated pull request code reviews, and enforces an end-to-end Traceability Matrix across the engineering lifecycle.
+TraceIQ is an enterprise-grade developer platform that bridges product requirements, codebase architecture, Jira issues, and pull request reviews. By combining Abstract Syntax Tree (AST) code graph traversal, Reciprocal Rank Fusion (RRF) hybrid retrieval, bidirectional Jira synchronization, multi-tenant team workspaces, and large language models, TraceIQ automatically determines the blast radius of proposed requirements, conducts automated pull request code reviews, and enforces an end-to-end Traceability Matrix across the engineering lifecycle.
 
 ---
 
@@ -45,11 +45,24 @@ TraceIQ is an enterprise-grade developer platform that bridges product requireme
 - **Direct GitHub Integration**: Automatically posts structured review comments, severity summaries, and line-level recommendations to GitHub PR comment timelines.
 - **In-Place Rerun & Deletion**: Re-trigger reviews with custom requirement benchmarks on demand.
 
-### 6. Traceability Matrix & Audit Inspection
+### 6. Deep Jira Bidirectional Synchronization & Webhook Drift Detection
+- **Issue Browsing & 1-Click Import**: Filter Jira issues by project, issue type, workflow status, board, sprint, or custom JQL, and import single or batch issues directly as linked requirements.
+- **Live Inbound Webhooks**: Receives real-time Jira webhook events (`jira:issue_updated`, `jira:issue_deleted`) with support for Jira Cloud native HMAC-SHA256 signature verification (`X-Hub-Signature`), authorization headers, and secret query parameters.
+- **Non-Destructive Requirement Drift Detection**: Detects when product managers modify issue descriptions or summaries in Jira, automatically creating an audit log entry (`jira.drift_detected`) without destructively overwriting engineering specs.
+- **Status Workflow Transitions**: Fetch valid Jira workflow transitions on-the-fly and transition issue statuses (e.g., *To Do* &rarr; *In Progress* &rarr; *Done*) directly from TraceIQ with optional audit comments.
+- **ADF Auto-Comment Posting**: Automatically converts Markdown impact analysis summaries into Atlassian Document Format (ADF) and posts rich comments directly to linked Jira issues.
+- **In-App Webhook Verification**: 1-click **"Send Test Ping"** simulator and copyable terminal cURL commands to immediately test delivery and status transitions.
+
+### 7. Interactive Requirement Management & Inspector Drawer
+- **Instant Search & Filter**: Real-time filtering across requirement titles, Jira ticket keys (e.g. `SAM1-4`), and repository names.
+- **Always-Visible Action Toolbar**: Instant access on every row to **Analyze** (primary CTA), Jira quick tools (Sync, Transition, Comment), Edit, and Delete—with zero hover delay.
+- **Requirement Inspector Drawer**: Slide-in inspection panel with tabs for **Specification** (full document view with 1-click Markdown copy and quick actions) and **Version History** (interactive revision timeline with exact timestamps).
+
+### 8. Traceability Matrix & Audit Inspection
 - **End-to-End Compliance**: Aggregates product requirements, predicted impact blast radius, and pull request review verdicts into a unified audit view.
 - **Health Scoring**: Computes repository-level compliance scores based on requirement test coverage and critical finding resolutions.
 
-### 7. Executive AI Command Center & Dashboard
+### 9. Executive AI Command Center & Dashboard
 - **Contextual Greeting & Quick Actions**: Real-time time-of-day greeting, active workspace indicator, and 1-click triggers for Analysis, Requirements, and Repo Import.
 - **Live Interactive KPI Deck**: Track Indexed Repositories, AI PR Reviews, Requirements, and Blast Radius runs with visual progress bars.
 - **Realtime Activity Timeline Feed**: Live stream of background indexing, PR reviews, and analysis jobs with status badges.
@@ -80,9 +93,11 @@ graph TD
     end
 
     subgraph External Integrations
-        J --> K[LLM Providers / OpenAI / DeepSeek / Custom Base URLs]
+        J --> K[LLM Providers / Google Gemini / OpenAI]
         G --> L[GitHub App API & Webhooks]
         D --> L
+        D --> M[Jira REST API v3 & Inbound Webhooks]
+        G --> M
     end
 
     A --> D
@@ -97,11 +112,12 @@ graph TD
 | **Frontend** | Next.js 16 (App Router), React 19, TypeScript | Server and client rendering, routing, and metadata |
 | **Styling** | Vanilla CSS / Tailwind CSS v4, Base UI | Custom design system, typography (Fraunces & DM Sans), and responsive layouts |
 | **State & Data** | TanStack Query v5, Zustand | Asynchronous server-state caching and active workspace/repo context |
-| **Backend** | FastAPI, Python 3.11, Pydantic v2 | High-throughput asynchronous REST API with non-blocking lifespan migrations |
+| **Backend** | FastAPI, Python 3.11/3.12, Pydantic v2 | High-throughput asynchronous REST API with non-blocking lifespan migrations |
 | **Database** | PostgreSQL with `pgvector` (Neon / Supabase) | Relational persistence, full-text search, and vector distance indexing |
 | **Task Queue** | Celery / In-Memory Eager Execution, Redis | Background repository synchronization, indexing, and AI reviews |
-| **Code Intelligence** | Tree-sitter, SentenceTransformers (`all-MiniLM-L6-v2`) | AST symbol extraction, dependency graph generation, and vector embeddings |
+| **Code Intelligence** | Tree-sitter, Google Gemini Embedding 2 / SentenceTransformers | AST symbol extraction, dependency graph generation, and vector embeddings |
 | **AI Layer** | LiteLLM, Instructor | Structured schema validation, custom LLM base URLs, and multi-model dispatching |
+| **Integrations** | GitHub App API & Jira Cloud REST API v3 | GitHub PR automation and bidirectional Jira issue synchronization with ADF |
 | **Authentication** | Clerk | Multi-tenant user authentication, profile sync, and session verification |
 
 ---
@@ -115,12 +131,17 @@ TraceIQ/
 │   │   ├── ai/                      # AI prompts, context builders, and LiteLLM adapters
 │   │   ├── core/                    # Application settings, exceptions, and dependencies
 │   │   ├── db/                      # SQLAlchemy async sessions and Alembic migrations
+│   │   ├── integrations/
+│   │   │   ├── github/              # GitHub REST API client and webhook parsers
+│   │   │   └── jira/                # Jira REST API client and ADF Markdown converter
 │   │   ├── modules/
+│   │   │   ├── audit/               # Audit log models and drift tracking
 │   │   │   ├── auth/                # User sync, profile editing, and Clerk webhooks
 │   │   │   ├── dashboard/           # Summary statistics and activity feeds
 │   │   │   ├── github/              # GitHub App installation, PR syncing, and webhooks
 │   │   │   ├── impact/              # Impact analysis job management and schemas
 │   │   │   ├── indexing/            # Tree-sitter AST parsers, chunkers, and embedders
+│   │   │   ├── jira/                # Jira integration CRUD, transitions, comments, webhooks
 │   │   │   ├── repository/          # Repository CRUD, settings, and sync endpoints
 │   │   │   ├── requirement/         # Requirements and version management
 │   │   │   ├── retrieval/           # Hybrid search (pgvector + Text + Symbols RRF)
@@ -131,18 +152,26 @@ TraceIQ/
 │   ├── Dockerfile                   # Optimized multi-stage Docker deployment image
 │   ├── pyproject.toml               # Python dependencies managed via uv
 │   └── tests/                       # Pytest unit and integration test suite
+│       ├── ai/                      # AI integration tests
+│       ├── indexing/                # AST parser & chunker tests
+│       └── jira/                    # Jira client, ADF converter, and webhook tests
 ├── frontend/
 │   ├── app/                         # Next.js App Router pages and layouts
 │   │   └── (protected)/
 │   │       ├── analysis/            # Impact blast radius analysis UI
 │   │       ├── dashboard/           # Executive intelligence dashboard
+│   │       ├── docs/                # Comprehensive open-source documentation
 │   │       ├── pr-reviews/          # AI PR review feed, reruns, and diff inspection
 │   │       ├── pull-requests/       # GitHub pull requests view
 │   │       ├── repositories/        # Repository management and automation settings
-│   │       ├── requirements/        # Requirement specification management
+│   │       ├── requirements/        # Requirement specification management & Inspector drawer
 │   │       ├── traceability/        # Traceability matrix and compliance score
 │   │       └── workspaces/          # Team workspace management & invite onboarding
 │   ├── features/                    # Domain-driven feature components and API queries
+│   │   ├── analysis/                # Blast radius UI and polling hooks
+│   │   ├── jira/                    # Jira config, transition, comment, and import modals
+│   │   ├── requirements/            # Requirement list, inspector drawer, and form
+│   │   └── workspace/               # Workspace management and invite links
 │   ├── lib/                         # API client, utilities, and TypeScript types
 │   ├── stores/                      # Zustand state stores (workspace selection)
 │   └── package.json                 # Frontend dependencies and scripts
@@ -238,11 +267,33 @@ TraceIQ/
 
 ---
 
+### Jira Cloud Webhook Setup (Local Development)
+
+Because Jira Cloud sends webhooks from Atlassian's public servers, it cannot directly reach `http://localhost:8000`. To test webhooks locally:
+
+1. **Start an HTTPS tunnel**:
+   ```bash
+   ngrok http 8000
+   ```
+2. **Configure in Jira**:
+   - Navigate to **Settings ⚙️ &rarr; System &rarr; WebHooks &rarr; Create a WebHook**.
+   - URL: `https://<your-ngrok-subdomain>.ngrok-free.app/api/v1/jira/webhook`
+   - Secret: Paste the secret generated from the TraceIQ Jira Configuration modal.
+   - Events: Select **Issue Updated** and **Issue Deleted**.
+3. **Verify Delivery**:
+   - Click **"Send Test Ping"** in TraceIQ's Jira modal, or transition an issue in Jira to see live updates reflected immediately in TraceIQ!
+
+---
+
 ## Testing & Quality Assurance
 
 ### Backend Tests
 ```bash
 cd backend
+# Run Jira integration tests (ADF converter, client, webhooks & HMAC verification)
+uv run pytest tests/jira/
+
+# Run AI and indexing test suite
 uv run pytest tests/ai/ tests/indexing/
 ```
 
@@ -268,16 +319,46 @@ The interactive OpenAPI documentation is generated automatically by FastAPI and 
 `http://localhost:8000/docs`
 
 ### Primary Endpoints:
+
+#### Dashboard & Workspaces
 - `GET /api/v1/dashboard/summary`: Retrieve aggregated workspace metrics and recent activity.
-- `GET /api/v1/repositories`: List tracked repositories (supports `?all=true` or scoped by `X-Workspace-Id`).
-- `POST /api/v1/repositories`: Connect a new repository and specify target workspace.
-- `PATCH /api/v1/repositories/{id}/settings`: Update automation settings and transfer between workspaces.
 - `GET /api/v1/workspaces`: List accessible Personal and Team Workspaces.
 - `POST /api/v1/workspaces`: Create a new Team Workspace.
 - `POST /api/v1/workspaces/{id}/invites`: Generate secure team invite links.
 - `POST /api/v1/workspaces/join/{token}`: Accept team workspace invitation.
+
+#### Repositories & Code Search
+- `GET /api/v1/repositories`: List tracked repositories (supports `?all=true` or scoped by `X-Workspace-Id`).
+- `POST /api/v1/repositories`: Connect a new repository and specify target workspace.
+- `PATCH /api/v1/repositories/{id}/settings`: Update automation settings and transfer between workspaces.
 - `GET /api/v1/search/code`: Execute sub-15ms hybrid RRF code search.
+
+#### Requirements & Impact Analysis
+- `GET /api/v1/requirements`: List requirements with linked Jira metadata.
+- `POST /api/v1/requirements`: Create a new engineering requirement.
+- `GET /api/v1/requirements/{id}/versions`: Fetch version history for a requirement.
 - `POST /api/v1/requirements/{id}/analyze`: Run graph-augmented impact blast radius analysis.
+
+#### Jira Integration & Webhooks
+- `GET /api/v1/jira/config`: Retrieve Jira integration configuration status for active workspace.
+- `POST /api/v1/jira/config`: Connect or update Jira domain, email, and API token.
+- `POST /api/v1/jira/config/test`: Test Jira credentials on-the-fly.
+- `POST /api/v1/jira/config/webhook-secret`: Generate or rotate shared webhook secret.
+- `GET /api/v1/jira/projects`: List accessible Jira projects.
+- `GET /api/v1/jira/issue-types`: List Jira issue types.
+- `GET /api/v1/jira/statuses`: List Jira workflow statuses.
+- `GET /api/v1/jira/boards`: List Kanban and Scrum boards.
+- `GET /api/v1/jira/issues`: Search and filter Jira issues by JQL, project, type, sprint, or board.
+- `GET /api/v1/jira/issues/{issue_key}/transitions`: Fetch dynamic workflow transitions for an issue.
+- `POST /api/v1/jira/import`: Import a single Jira issue as a tracked requirement.
+- `POST /api/v1/jira/import-batch`: Batch import multiple Jira issues.
+- `POST /api/v1/jira/requirements/{id}/sync`: Re-sync requirement content from Jira.
+- `POST /api/v1/jira/requirements/{id}/transition`: Transition Jira issue status directly with optional comment.
+- `POST /api/v1/jira/requirements/{id}/post-comment`: Post Markdown/ADF analysis summary comment to Jira issue.
+- `POST /api/v1/jira/webhook`: Receive inbound Jira webhooks (HMAC-SHA256 verified).
+- `POST /api/v1/jira/webhook/test`: Simulate inbound Jira webhook delivery for verification.
+
+#### Pull Request Reviews & Traceability
 - `GET /api/v1/pr-reviews`: List AI PR reviews scoped by active workspace.
 - `POST /api/v1/pr-reviews/{id}/rerun`: Rerun AI code review on demand.
 - `GET /api/v1/traceability`: Fetch repository compliance and acceptance criteria mappings.

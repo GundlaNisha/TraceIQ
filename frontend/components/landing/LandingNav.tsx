@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Menu, X, Terminal, Shield, Network, Cpu, FileCode2, Layers } from "lucide-react";
 
 export function LandingNav() {
@@ -37,32 +38,18 @@ export function LandingNav() {
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-        {/* Brand Logo with Bespoke AST Graph Mark */}
+        {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="relative w-9 h-9 rounded-lg bg-[#1B2A4A] flex items-center justify-center shadow-md transition-transform group-hover:scale-105">
-            {/* Custom AST Graph SVG Mark */}
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-5 h-5 text-[#F8F6F2]"
-            >
-              {/* Nodes */}
-              <circle cx="6" cy="6" r="2.5" fill="currentColor" fillOpacity="0.9" />
-              <circle cx="18" cy="7" r="2.5" fill="currentColor" fillOpacity="0.9" />
-              <circle cx="12" cy="14" r="2.8" fill="#10B981" />
-              <circle cx="6" cy="19" r="2" fill="currentColor" fillOpacity="0.7" />
-              <circle cx="18" cy="19" r="2" fill="currentColor" fillOpacity="0.7" />
-              {/* Directed Edges */}
-              <path
-                d="M7.5 7.5L10.5 12M16.5 8.2L13.5 12M12 16.8V18M10.5 15.5L7.5 18M13.5 15.5L16.5 18"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#F8F6F2] animate-pulse" />
+          <div className="relative w-9 h-9 flex items-center justify-center transition-transform group-hover:scale-105">
+            <Image
+              src="/logo.png"
+              alt="TraceIQ Logo"
+              width={36}
+              height={36}
+              className="w-9 h-9 object-contain drop-shadow-sm"
+              priority
+            />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#F8F6F2] animate-pulse" />
           </div>
           <div className="flex items-center gap-2">
             <span className="font-serif font-bold text-xl tracking-tight text-[#111111] group-hover:text-[#1B2A4A] transition-colors">

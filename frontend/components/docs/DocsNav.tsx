@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Search, ArrowRight, Menu, X } from "lucide-react";
 import { DOCS_NAV_GROUPS } from "./DocsSidebar";
 
@@ -30,16 +31,14 @@ export function DocsNav({ onOpenSearch, activeSection, onSelectSection }: Props)
         {/* Brand & Docs Badge */}
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-[#1B2A4A] flex items-center justify-center shadow-xs text-white">
-              {/* AST SVG Mark */}
-              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-[#F8F6F2]">
-                <circle cx="6" cy="6" r="2.5" fill="currentColor" />
-                <circle cx="18" cy="7" r="2.5" fill="currentColor" />
-                <circle cx="12" cy="14" r="2.8" fill="#10B981" />
-                <circle cx="6" cy="19" r="2" fill="currentColor" />
-                <circle cx="18" cy="19" r="2" fill="currentColor" />
-                <path d="M7.5 7.5L10.5 12M16.5 8.2L13.5 12M12 16.8V18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
+            <div className="w-8 h-8 flex items-center justify-center shrink-0">
+              <Image
+                src="/logo.png"
+                alt="TraceIQ Logo"
+                width={32}
+                height={32}
+                className="w-8 h-8 object-contain drop-shadow-xs transition-transform group-hover:scale-105"
+              />
             </div>
             <span className="font-serif font-bold text-lg text-[#111111] group-hover:text-accent transition-colors">
               Trace<span className="text-accent">IQ</span>

@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Terminal, Shield, FileCode2, ExternalLink } from "lucide-react";
 
 export function LandingFooter() {
@@ -15,8 +16,14 @@ export function LandingFooter() {
           {/* Col 1: Brand & Synopsis */}
           <div className="md:col-span-2 space-y-4">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#F8F6F2] text-[#1B2A4A] flex items-center justify-center font-serif font-bold text-base shadow-sm">
-                TIQ
+              <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                <Image
+                  src="/logo.png"
+                  alt="TraceIQ Logo"
+                  width={32}
+                  height={32}
+                  className="w-8 h-8 object-contain drop-shadow-xs"
+                />
               </div>
               <span className="font-serif font-bold text-lg text-white">
                 TraceIQ

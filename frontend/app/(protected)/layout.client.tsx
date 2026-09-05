@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { GlobalSearchBar } from "@/features/search/components/GlobalSearchBar";
 import { useEnsureBackendUser } from "@/features/auth/api/queries";
@@ -58,9 +59,16 @@ export default function ProtectedLayoutClient({
       <aside className="w-64 bg-slate-50/60 backdrop-blur-md border-r border-border/50 flex flex-col py-6 px-4 gap-2 shrink-0 h-full overflow-y-auto z-30 select-none justify-between">
         <div className="flex flex-col">
           {/* Brand Logo Header */}
-          <div className="flex items-center gap-2.5 px-3 mb-8">
-            <div className="w-8 h-8 rounded-xl bg-accent flex items-center justify-center text-white shadow-sm shadow-accent/30">
-              <Sparkles className="w-4 h-4" />
+          <Link href="/dashboard" className="flex items-center gap-2.5 px-3 mb-8 group transition-opacity hover:opacity-90">
+            <div className="w-8 h-8 flex items-center justify-center shrink-0">
+              <Image
+                src="/logo.png"
+                alt="TraceIQ"
+                width={32}
+                height={32}
+                className="w-8 h-8 object-contain drop-shadow-xs transition-transform group-hover:scale-105"
+                priority
+              />
             </div>
             <div>
               <div className="text-xl font-bold font-serif text-foreground tracking-tight leading-none">
@@ -70,7 +78,7 @@ export default function ProtectedLayoutClient({
                 Code Intelligence
               </div>
             </div>
-          </div>
+          </Link>
 
           {/* Navigation Items */}
           <nav className="flex flex-col gap-1">

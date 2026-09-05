@@ -50,12 +50,21 @@ export const metadata: Metadata = {
     description:
       "Enterprise AI platform for code impact blast radius analysis, AST code graph indexing, and automated GitHub pull request reviews.",
     siteName: "TraceIQ",
+    images: [
+      {
+        url: "/logo.png",
+        width: 1200,
+        height: 1200,
+        alt: "TraceIQ Logo",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "TraceIQ — Autonomous Code Impact & PR Review Intelligence",
     description:
       "Enterprise AI platform for code impact blast radius analysis, AST code graph indexing, and automated GitHub pull request reviews.",
+    images: ["/logo.png"],
   },
   robots: {
     index: true,
@@ -69,7 +78,11 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: "/icon.png",
   },
 };
 

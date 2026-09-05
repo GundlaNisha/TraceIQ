@@ -290,3 +290,34 @@ export interface JiraSyncResult {
   message: string;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 2: Transitions, Comment Posting, Webhook
+// ---------------------------------------------------------------------------
+
+export interface JiraTransitionItem {
+  id: string;
+  name: string;
+  to_status: string;
+  to_status_category: string;
+}
+
+export interface JiraTransitionResponse {
+  success: boolean;
+  issue_key: string;
+  new_status?: string | null;
+  message: string;
+}
+
+export interface JiraPostCommentResponse {
+  success: boolean;
+  issue_key: string;
+  comment_id?: string | null;
+  author?: string | null;
+  message: string;
+}
+
+export interface JiraWebhookSecretResponse {
+  webhook_url: string;
+  webhook_secret: string;
+  message: string;
+}

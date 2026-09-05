@@ -413,3 +413,115 @@ export function useSyncJiraRequirement() {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2: Transitions, Comment Posting, Webhook Secret
+// ---------------------------------------------------------------------------
+
+import type {
+  JiraTransitionItem,
+  JiraTransitionResponse,
+  JiraPostCommentResponse,
+  JiraWebhookSecretResponse,
+} from "@/lib/types/api";
+
+export function useJiraIssueTransitions(
+  issueKey: string | null | undefined,
+  workspaceId?: string | null
+) {
+  const { fetchApi } = useApiClient();
+
+  return useQuery({
+    queryKey: ["jira_transitions", issueKey, workspaceId || "default"],
+    enabled: !!issueKey,
+    queryFn: async () => {
+      const url = workspaceId
+        ? `/api/v1/jira/issues/${encodeURIComponent(issueKey!)}/transitions?workspace_id=${encodeURIComponent(workspaceId)}`
+        : `/api/v1/jira/issues/${encodeURIComponent(issueKey!)}/transitions`;
+      const res = await fetchApi(url, {});
+      if (!res.ok) throw new Error("Failed to fetch issue transitions");
+      return res.json() as Promise<JiraTransitionItem[]>;
+    },
+  });
+}
+
+export function useTransitionJiraIssue() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      requirement_id: string;
+      transition_id: string;
+      post_comment?: boolean;
+      comment?: string | null;
+      workspace_id?: string | null;
+    }) => {
+      const url = data.workspace_id
+        ? `/api/v1/jira/requirements/${data.requirement_id}/transition?workspace_id=${encodeURIComponent(data.workspace_id)}`
+        : `/api/v1/jira/requirements/${data.requirement_id}/transition`;
+      const res = await fetchApi(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transition_id: data.transition_id,
+          post_comment: data.post_comment ?? false,
+          comment: data.comment ?? null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to transition Jira issue");
+      }
+      return res.json() as Promise<JiraTransitionResponse>;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["requirements"] });
+      qc.invalidateQueries({ queryKey: ["jira_transitions"] });
+    },
+  });
+}
+
+export function usePostJiraComment() {
+  const { fetchApi } = useApiClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      requirement_id: string;
+      comment_body?: string | null;
+      workspace_id?: string | null;
+    }) => {
+      const url = data.workspace_id
+        ? `/api/v1/jira/requirements/${data.requirement_id}/post-comment?workspace_id=${encodeURIComponent(data.workspace_id)}`
+        : `/api/v1/jira/requirements/${data.requirement_id}/post-comment`;
+      const res = await fetchApi(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment_body: data.comment_body ?? null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to post comment to Jira");
+      }
+      return res.json() as Promise<JiraPostCommentResponse>;
+    },
+  });
+}
+
+export function useRotateWebhookSecret() {
+  const { fetchApi } = useApiClient();
+
+  return useMutation({
+    mutationFn: async (workspaceId?: string | null) => {
+      const url = workspaceId
+        ? `/api/v1/jira/config/webhook-secret?workspace_id=${encodeURIComponent(workspaceId)}`
+        : `/api/v1/jira/config/webhook-secret`;
+      const res = await fetchApi(url, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to generate webhook secret");
+      }
+      return res.json() as Promise<JiraWebhookSecretResponse>;
+    },
+  });
+}

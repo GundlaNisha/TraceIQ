@@ -18,29 +18,26 @@ export function HeroSection() {
         
         {/* Status Pill */}
         <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/90 border border-[#1B2A4A]/15 shadow-xs text-xs font-medium text-[#1B2A4A] backdrop-blur-sm">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/95 border border-[#1B2A4A]/15 shadow-xs text-xs font-medium text-[#1B2A4A] backdrop-blur-sm">
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
-            <span className="font-semibold">TraceIQ 2.0</span>
-            <span className="text-[#6B7280]">•</span>
-            <span className="text-[#6B7280]">Autonomous Code Impact &amp; PR Intelligence</span>
+            <span className="font-semibold text-[#1B2A4A]">TraceIQ 2.0</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-slate-600 font-medium">AST Code Graph &amp; Bidirectional Jira Sync</span>
           </div>
         </div>
 
         {/* Hero Title & Concise Value Prop */}
         <div className="max-w-3xl mx-auto text-center mb-10">
           <h1 className="text-4xl sm:text-6xl font-bold font-serif text-[#111111] tracking-tight leading-[1.1] mb-5">
-            Know the exact{" "}
-            <span className="text-[#1B2A4A] italic underline decoration-[#1B2A4A]/20 underline-offset-8">
-              blast radius
-            </span>{" "}
-            before you merge.
+            Know the exact blast radius{" "}
+            <span className="text-[#1B2A4A] italic font-serif">before you merge.</span>
           </h1>
 
-          <p className="max-w-xl mx-auto text-base sm:text-lg text-[#6B7280] font-sans leading-relaxed">
-            TraceIQ traverses your codebase&apos;s AST dependency graph to predict downstream breaking changes, automate PR reviews, and enforce continuous traceability.
+          <p className="max-w-xl mx-auto text-base sm:text-lg text-[#555E6D] font-sans leading-relaxed">
+            Traverse whole-repo AST code graphs to predict downstream breaking changes, automate PR reviews, and sync Jira in real time.
           </p>
         </div>
 

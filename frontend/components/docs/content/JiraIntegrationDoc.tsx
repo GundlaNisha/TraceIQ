@@ -130,6 +130,79 @@ Response:
         />
       </section>
 
+      {/* Phase 2: Bidirectional Sync & Auto-Comments */}
+      <section className="space-y-4 pt-4">
+        <h2 id="bidirectional-comments" className="text-xl sm:text-2xl font-serif font-bold text-[#111111]">
+          Bidirectional Sync &amp; Auto-Comments
+        </h2>
+        <p>
+          TraceIQ can post code impact analysis summaries and traceability metrics directly back onto the linked Jira issue (e.g. <code className="font-mono bg-slate-100 px-1">PROJ-123</code>) as formatted comments converted to Atlassian Document Format (ADF).
+        </p>
+        <p className="text-xs text-[#6B7280]">
+          In the requirements table, click the <strong>&quot;Post to Jira&quot;</strong> icon on any linked requirement to either auto-generate an impact summary or supply custom Markdown notes.
+        </p>
+        <DocsCodeBlock
+          code={`POST /api/v1/jira/requirements/{requirement_id}/post-comment
+Content-Type: application/json
+
+{
+  "comment_body": "## 🔍 TraceIQ Analysis Complete\\n- **Impacted Files**: 4\\n- **Risk Level**: Medium"
+}`}
+          language="json"
+          filename="Post Comment to Jira"
+        />
+      </section>
+
+      {/* Phase 2: Jira Status Transitions */}
+      <section className="space-y-4 pt-4">
+        <h2 id="status-transitions" className="text-xl sm:text-2xl font-serif font-bold text-[#111111]">
+          Jira Status Transitions
+        </h2>
+        <p>
+          Transition Jira issue statuses directly from the TraceIQ dashboard (e.g. move a ticket from <em>In Progress</em> to <em>In Review</em> or <em>Done</em> once code impact analysis confirms complete test coverage).
+        </p>
+        <ul className="space-y-1.5 text-xs text-[#111111]">
+          <li>• <strong>Dynamic Transitions:</strong> TraceIQ queries Jira for valid workflow transitions for the specific issue.</li>
+          <li>• <strong>Audit Trail:</strong> Each transition is logged in TraceIQ&apos;s append-only audit trail and can optionally post a confirmation comment to Jira.</li>
+        </ul>
+        <DocsCodeBlock
+          code={`POST /api/v1/jira/requirements/{requirement_id}/transition
+Content-Type: application/json
+
+{
+  "transition_id": "31",
+  "post_comment": true,
+  "comment": "Transitioned to In Review after automated TraceIQ verification."
+}`}
+          language="json"
+          filename="Transition Jira Issue"
+        />
+      </section>
+
+      {/* Phase 2: Webhooks & Drift Detection */}
+      <section className="space-y-4 pt-4">
+        <h2 id="jira-webhooks" className="text-xl sm:text-2xl font-serif font-bold text-[#111111]">
+          Jira Webhooks &amp; Requirement Drift Detection
+        </h2>
+        <p>
+          Register an incoming webhook in Jira to enable autonomous bidirectional sync. When a Jira issue status changes or description is edited, Jira notifies TraceIQ in real time.
+        </p>
+        <ol className="list-decimal pl-5 space-y-2 text-xs text-[#111111]">
+          <li>Open the Jira Connection Modal in TraceIQ and click <strong>&quot;Generate Webhook Secret&quot;</strong>.</li>
+          <li>Copy the generated <strong>Webhook URL</strong> and <strong>Shared Secret</strong>.</li>
+          <li>In Jira Settings &rarr; System &rarr; WebHooks &rarr; <em>Create a WebHook</em>:</li>
+          <li className="pl-4 list-none text-slate-600">
+            • <strong>URL:</strong> <code className="font-mono bg-slate-100 px-1">https://your-domain.com/api/v1/jira/webhook</code><br />
+            • <strong>Secret:</strong> Paste your shared secret<br />
+            • <strong>Events:</strong> Check <code className="font-mono">Issue: updated</code> and <code className="font-mono">Issue: deleted</code>
+          </li>
+        </ol>
+        <DocsCallout type="note" title="Requirement Drift Protection">
+          If a product manager modifies the Jira issue description or summary while development is ongoing, TraceIQ flags the requirement with a <strong>Drift Detected</strong> audit event rather than silently overwriting your active requirement document.
+        </DocsCallout>
+      </section>
+
     </article>
   );
 }
+

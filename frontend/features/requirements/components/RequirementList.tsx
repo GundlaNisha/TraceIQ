@@ -6,11 +6,13 @@ import { useTriggerAnalysis } from "@/features/analysis/api/queries";
 import { useSyncJiraRequirement } from "@/features/jira/api/queries";
 import { type Requirement, type RequirementVersion } from "@/lib/types/api";
 import { Button } from "@/components/ui/button";
+import { JiraTransitionModal } from "@/features/jira/components/JiraTransitionModal";
+import { JiraPostCommentModal } from "@/features/jira/components/JiraPostCommentModal";
 
 import { RequirementForm } from "./RequirementForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDeleteRequirement } from "../api/queries";
-import { Trash2, Edit2, Building2, FolderGit2, RefreshCw, ExternalLink, Zap, Loader2 } from "lucide-react";
+import { Trash2, Edit2, Building2, FolderGit2, RefreshCw, ExternalLink, Zap, Loader2, GitBranch, MessageSquare } from "lucide-react";
 import { parseUTCDate, formatTimeAgo, formatDateTime } from "@/lib/utils";
 
 interface Props {
@@ -24,6 +26,9 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
   const [editingReq, setEditingReq] = useState<Requirement | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  // Phase 2 modal state
+  const [transitionModalReq, setTransitionModalReq] = useState<Requirement | null>(null);
+  const [commentModalReq, setCommentModalReq] = useState<Requirement | null>(null);
 
   const { data: versions } = useRequirementVersions(selectedId);
   const { mutate: triggerAnalysis, isPending: isAnalyzing } = useTriggerAnalysis();
@@ -158,6 +163,24 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
                             title="Sync latest changes from Jira"
                           >
                             <RefreshCw className={`w-4 h-4 ${syncingId === req.id ? "animate-spin text-blue-600" : ""}`} />
+                          </button>
+                        )}
+                        {req.jira_issue_key && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setTransitionModalReq(req); }}
+                            className="p-2 text-muted hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                            title="Transition Jira issue status"
+                          >
+                            <GitBranch className="w-4 h-4" />
+                          </button>
+                        )}
+                        {req.jira_issue_key && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setCommentModalReq(req); }}
+                            className="p-2 text-muted hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Post analysis summary to Jira"
+                          >
+                            <MessageSquare className="w-4 h-4" />
                           </button>
                         )}
                         <Button
@@ -295,6 +318,30 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Phase 2: Transition Modal */}
+      {transitionModalReq && (
+        <JiraTransitionModal
+          open={!!transitionModalReq}
+          onOpenChange={(open) => !open && setTransitionModalReq(null)}
+          requirementId={transitionModalReq.id}
+          jiraIssueKey={transitionModalReq.jira_issue_key!}
+          currentStatus={transitionModalReq.jira_status}
+          onSuccess={() => setTransitionModalReq(null)}
+        />
+      )}
+
+      {/* Phase 2: Post Comment Modal */}
+      {commentModalReq && (
+        <JiraPostCommentModal
+          open={!!commentModalReq}
+          onOpenChange={(open) => !open && setCommentModalReq(null)}
+          requirementId={commentModalReq.id}
+          requirementTitle={commentModalReq.title}
+          jiraIssueKey={commentModalReq.jira_issue_key!}
+          onSuccess={() => setCommentModalReq(null)}
+        />
+      )}
     </div>
   );
 }

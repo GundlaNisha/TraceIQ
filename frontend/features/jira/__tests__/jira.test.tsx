@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { JiraImportDialog } from "../components/JiraImportDialog";
+import { JiraTransitionModal } from "../components/JiraTransitionModal";
+import { JiraPostCommentModal } from "../components/JiraPostCommentModal";
 
 // Mock Clerk user/auth
 vi.mock("@clerk/nextjs", () => ({
@@ -30,3 +32,44 @@ describe("JiraImportDialog", () => {
     expect(screen.getByText("Import from Jira")).toBeDefined();
   });
 });
+
+describe("JiraTransitionModal", () => {
+  it("renders transition modal with issue key and status", () => {
+    render(
+      <JiraTransitionModal
+        open={true}
+        onOpenChange={() => {}}
+        requirementId="req-123"
+        jiraIssueKey="PROJ-456"
+        currentStatus="In Progress"
+      />,
+      { wrapper: makeWrapper() }
+    );
+
+    expect(screen.getByText("Transition Jira Issue")).toBeDefined();
+    expect(screen.getByText("PROJ-456")).toBeDefined();
+    expect(screen.getByText("In Progress")).toBeDefined();
+  });
+});
+
+describe("JiraPostCommentModal", () => {
+  it("renders post comment modal with auto-generate preview and issue key", () => {
+    render(
+      <JiraPostCommentModal
+        open={true}
+        onOpenChange={() => {}}
+        requirementId="req-123"
+        requirementTitle="Implement User Auth"
+        jiraIssueKey="PROJ-456"
+      />,
+      { wrapper: makeWrapper() }
+    );
+
+    expect(screen.getAllByText("Post to Jira").length).toBeGreaterThan(0);
+    expect(screen.getByText("PROJ-456")).toBeDefined();
+    expect(screen.getByText("Auto-generate")).toBeDefined();
+    expect(screen.getByText("Custom text")).toBeDefined();
+  });
+});
+
+

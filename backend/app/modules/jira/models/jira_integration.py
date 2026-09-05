@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base.mixins import TimestampMixin, UUIDPrimaryKeyMixin
@@ -34,3 +34,5 @@ class JiraIntegration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     jira_api_token: Mapped[str] = mapped_column(Text, nullable=False)
     default_project_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Webhook shared secret for validating inbound Jira webhook events
+    webhook_secret: Mapped[str | None] = mapped_column(Text, nullable=True)

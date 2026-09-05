@@ -111,18 +111,18 @@ interface Props {
 
 export function DocsSidebar({ activeSection, onSelectSection, onOpenSearch }: Props) {
   return (
-    <aside className="w-64 shrink-0 border-r border-[#1B2A4A]/10 bg-white/70 backdrop-blur-md p-4 hidden lg:flex flex-col gap-6 sticky top-16 h-[calc(100vh-64px)] overflow-y-auto">
+    <aside className="w-64 lg:w-72 shrink-0 border-r border-[#1B2A4A]/10 bg-white/70 backdrop-blur-md p-5 hidden lg:flex flex-col gap-6 sticky top-16 h-[calc(100vh-64px)] overflow-y-auto">
       
       {/* Quick Search Button */}
       <button
         onClick={onOpenSearch}
-        className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[#F8F6F2] hover:bg-slate-100 border border-[#1B2A4A]/10 text-xs text-muted hover:text-foreground transition-all shadow-2xs group"
+        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#F8F6F2] hover:bg-slate-100 border border-[#1B2A4A]/10 text-xs text-muted hover:text-foreground transition-all shadow-2xs group"
       >
-        <span className="flex items-center gap-2">
-          <Search className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground" />
-          <span>Quick search docs...</span>
+        <span className="flex items-center gap-2.5">
+          <Search className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+          <span className="font-medium">Quick search docs...</span>
         </span>
-        <kbd className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-[#1B2A4A]/15 text-[#1B2A4A] shadow-2xs font-semibold">
+        <kbd className="font-mono text-[10px] px-2 py-0.5 rounded bg-white border border-[#1B2A4A]/15 text-[#1B2A4A] shadow-2xs font-semibold">
           ⌘K
         </kbd>
       </button>
@@ -131,17 +131,17 @@ export function DocsSidebar({ activeSection, onSelectSection, onOpenSearch }: Pr
       <div className="space-y-6">
         {DOCS_NAV_GROUPS.map((group) => (
           <div key={group.title} className="space-y-1.5">
-            <h4 className="font-mono text-[10px] font-bold uppercase tracking-wider text-muted px-2">
+            <h4 className="font-mono text-[10px] font-bold uppercase tracking-wider text-muted px-2.5">
               {group.title}
             </h4>
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {group.items.map((item) => {
                 const isActive = activeSection === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => onSelectSection(item.id)}
-                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-all text-left ${
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                       isActive
                         ? "bg-accent text-white font-semibold shadow-xs"
                         : "text-[#111111] hover:bg-[#F8F6F2] hover:text-[#1B2A4A]"

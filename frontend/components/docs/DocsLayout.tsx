@@ -30,8 +30,8 @@ const TOC_MAP: Record<string, TOCItem[]> = {
   ],
   architecture: [
     { id: "architecture-overview", label: "Architecture Overview", level: 2 },
+    { id: "architecture-diagram", label: "System Topology & Pipeline", level: 2 },
     { id: "four-tier-model", label: "The 4-Tier Model", level: 2 },
-    { id: "architecture-diagram", label: "Data Pipeline Topology", level: 2 },
     { id: "technology-stack", label: "Technology Stack", level: 2 },
   ],
   "core-concepts": [
@@ -42,10 +42,12 @@ const TOC_MAP: Record<string, TOCItem[]> = {
     { id: "workspaces-and-rbac", label: "5. Multi-Tenant RBAC Matrix", level: 2 },
   ],
   "jira-integration": [
+    { id: "jira-integration-guide", label: "Overview", level: 2 },
+    { id: "jira-sync-pipeline", label: "Sync Architecture", level: 2 },
     { id: "jira-connection-setup", label: "Connecting Jira to Workspace", level: 2 },
     { id: "adf-to-markdown", label: "ADF Document Parser", level: 2 },
-    { id: "kanban-and-sprints", label: "Kanban & Sprints Browsing", level: 2 },
-    { id: "upstream-sync", label: "Requirement Synchronization", level: 2 },
+    { id: "status-transitions", label: "Workflow Transitions", level: 2 },
+    { id: "jira-webhooks", label: "Webhooks & Drift Protection", level: 2 },
   ],
   "user-guides": [
     { id: "managing-workspaces", label: "1. Team Workspaces & Invites", level: 2 },
@@ -118,7 +120,7 @@ export function DocsLayout() {
       />
 
       {/* Main 3-Column Shell */}
-      <div className="flex-1 w-full max-w-7xl mx-auto flex">
+      <div className="flex-1 w-full max-w-[1536px] mx-auto flex px-4 sm:px-6 lg:px-8">
         {/* Left Sidebar */}
         <DocsSidebar
           activeSection={activeSection}
@@ -127,7 +129,7 @@ export function DocsLayout() {
         />
 
         {/* Center Main Content */}
-        <main className="flex-1 min-w-0 px-4 sm:px-8 lg:px-12 py-10">
+        <main className="flex-1 min-w-0 px-6 sm:px-10 lg:px-14 py-10 max-w-5xl">
           {activeSection === "getting-started" && <GettingStartedDoc />}
           {activeSection === "architecture" && <ArchitectureDoc />}
           {activeSection === "core-concepts" && <CoreConceptsDoc />}

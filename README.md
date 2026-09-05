@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/logo.png" alt="TraceIQ Logo" width="128" />
+</p>
+
 # TraceIQ
 
 Autonomous Code Impact Analysis, AST Code Graph Indexing, Jira Bidirectional Sync, and Pull Request Review Intelligence.

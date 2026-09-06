@@ -8,7 +8,7 @@ import { SystemArchitectureVisual } from "../architecture/SystemArchitectureVisu
 
 export function ArchitectureDoc() {
   return (
-    <article className="space-y-12 max-w-5xl text-[15px] leading-relaxed text-[#222222]">
+    <article className="space-y-12 w-full max-w-none text-[15px] leading-relaxed text-[#222222]">
       
       {/* Title & Introduction */}
       <div>
@@ -33,7 +33,7 @@ export function ArchitectureDoc() {
               System Topology &amp; Pipeline Data Flow
             </h2>
             <p className="text-sm text-[#555E6D] mt-1 font-sans">
-              Interactive overview of the 4-tier decoupled pipeline. Toggle flow modes to inspect specific event lifecycles.
+              Production-grade view of the entire request lifecycle — from dashboard ingress to async workers and storage. Fully visible, no scrolling.
             </p>
           </div>
         </div>

@@ -9,6 +9,7 @@ import { DocsTOC, TOCItem } from "./DocsTOC";
 // Content Modules
 import { GettingStartedDoc } from "./content/GettingStartedDoc";
 import { ArchitectureDoc } from "./content/ArchitectureDoc";
+import { WorkingDoc } from "./content/WorkingDoc";
 import { CoreConceptsDoc } from "./content/CoreConceptsDoc";
 import { JiraIntegrationDoc } from "./content/JiraIntegrationDoc";
 import { UserGuidesDoc } from "./content/UserGuidesDoc";
@@ -33,6 +34,15 @@ const TOC_MAP: Record<string, TOCItem[]> = {
     { id: "architecture-diagram", label: "System Topology & Pipeline", level: 2 },
     { id: "four-tier-model", label: "The 4-Tier Model", level: 2 },
     { id: "technology-stack", label: "Technology Stack", level: 2 },
+  ],
+  working: [
+    { id: "working-overview", label: "Overview", level: 2 },
+    { id: "lifecycle-pipeline", label: "Execution Pipeline", level: 2 },
+    { id: "step-1-ingestion", label: "1. Ingestion & Decoupling", level: 2 },
+    { id: "step-2-ast-graph", label: "2. AST Syntax Graphing", level: 2 },
+    { id: "step-3-hybrid-rrf", label: "3. Sub-15ms Hybrid Search", level: 2 },
+    { id: "step-4-blast-radius", label: "4. 2-Hop Blast Radius", level: 2 },
+    { id: "step-5-ai-delivery", label: "5. Autonomous Delivery", level: 2 },
   ],
   "core-concepts": [
     { id: "ast-parsing", label: "1. AST Parsing & Breadcrumbs", level: 2 },
@@ -109,6 +119,7 @@ export function DocsLayout() {
   const currentIndex = ALL_SECTIONS.findIndex((s) => s.id === activeSection);
   const prevSection = currentIndex > 0 ? ALL_SECTIONS[currentIndex - 1] : null;
   const nextSection = currentIndex < ALL_SECTIONS.length - 1 ? ALL_SECTIONS[currentIndex + 1] : null;
+  const isArchitecture = activeSection === "architecture" || activeSection === "working";
 
   return (
     <div className="min-h-screen bg-[#F8F6F2] text-[#111111] flex flex-col selection:bg-accent selection:text-white">
@@ -129,9 +140,16 @@ export function DocsLayout() {
         />
 
         {/* Center Main Content */}
-        <main className="flex-1 min-w-0 px-6 sm:px-10 lg:px-14 py-10 max-w-5xl">
+        <main
+          className={
+            isArchitecture
+              ? "flex-1 min-w-0 px-4 sm:px-6 lg:px-8 xl:px-10 py-8 w-full max-w-none"
+              : "flex-1 min-w-0 px-6 sm:px-10 lg:px-14 py-10 max-w-5xl"
+          }
+        >
           {activeSection === "getting-started" && <GettingStartedDoc />}
           {activeSection === "architecture" && <ArchitectureDoc />}
+          {activeSection === "working" && <WorkingDoc />}
           {activeSection === "core-concepts" && <CoreConceptsDoc />}
           {activeSection === "jira-integration" && <JiraIntegrationDoc />}
           {activeSection === "user-guides" && <UserGuidesDoc />}
@@ -171,8 +189,8 @@ export function DocsLayout() {
           </div>
         </main>
 
-        {/* Right Floating TOC */}
-        <DocsTOC items={TOC_MAP[activeSection] || []} />
+        {/* Right Floating TOC — hidden on architecture to give diagram full width */}
+        {!isArchitecture && <DocsTOC items={TOC_MAP[activeSection] || []} />}
       </div>
 
       {/* Global Search Modal */}

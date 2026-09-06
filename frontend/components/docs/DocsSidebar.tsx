@@ -41,6 +41,12 @@ export const DOCS_NAV_GROUPS: NavGroup[] = [
         label: "System Architecture",
         icon: <Layers className="w-4 h-4" />,
       },
+      {
+        id: "working",
+        label: "How TraceIQ Works",
+        icon: <Workflow className="w-4 h-4" />,
+        badge: "Workflow",
+      },
     ],
   },
   {

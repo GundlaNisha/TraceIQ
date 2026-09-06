@@ -511,18 +511,37 @@ export function usePostJiraComment() {
 
 export function useRotateWebhookSecret() {
   const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (workspaceId?: string | null) => {
-      const url = workspaceId
-        ? `/api/v1/jira/config/webhook-secret?workspace_id=${encodeURIComponent(workspaceId)}`
-        : `/api/v1/jira/config/webhook-secret`;
-      const res = await fetchApi(url, { method: "POST" });
+    mutationFn: async (params?: {
+      workspaceId?: string | null;
+      rotate?: boolean;
+      customSecret?: string | null;
+    } | string | null) => {
+      const workspaceId = typeof params === "string" || params === null ? params : params?.workspaceId;
+      const rotate = typeof params === "object" && params !== null ? params.rotate : true;
+      const customSecret = typeof params === "object" && params !== null ? params.customSecret : undefined;
+
+      const searchParams = new URLSearchParams();
+      if (workspaceId) searchParams.append("workspace_id", workspaceId);
+      if (rotate) searchParams.append("rotate", "true");
+
+      const queryStr = searchParams.toString();
+      const url = `/api/v1/jira/config/webhook-secret${queryStr ? `?${queryStr}` : ""}`;
+      const res = await fetchApi(url, {
+        method: "POST",
+        headers: customSecret ? { "Content-Type": "application/json" } : undefined,
+        body: customSecret ? JSON.stringify({ custom_secret: customSecret, rotate: false }) : undefined,
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to generate webhook secret");
+        throw new Error(err.detail || "Failed to update webhook secret");
       }
       return res.json() as Promise<JiraWebhookSecretResponse>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jira_config"] });
     },
   });
 }

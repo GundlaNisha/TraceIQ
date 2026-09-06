@@ -13,6 +13,7 @@ class JiraConfigBase(BaseModel):
     jira_domain: str = Field(..., description="Jira instance domain, e.g. https://company.atlassian.net")
     jira_email: str = Field(..., description="Jira user email address")
     default_project_key: str | None = Field(None, max_length=64, description="Optional default project key")
+    webhook_secret: str | None = Field(None, description="Optional custom webhook shared secret")
 
 
 class JiraConfigCreate(JiraConfigBase):
@@ -24,6 +25,7 @@ class JiraConfigUpdate(BaseModel):
     jira_email: str | None = None
     jira_api_token: str | None = None
     default_project_key: str | None = None
+    webhook_secret: str | None = None
     is_active: bool | None = None
 
 
@@ -36,6 +38,8 @@ class JiraConfigResponse(BaseModel):
     is_active: bool = True
     is_configured: bool = True
     token_preview: str = Field(..., description="Masked token preview, e.g. ATAT...4x9a")
+    webhook_url: str | None = None
+    webhook_secret: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -249,11 +253,22 @@ class JiraPostCommentResponse(BaseModel):
     message: str
 
 
+class JiraSetWebhookSecretRequest(BaseModel):
+    """Request body for updating or rotating the Jira webhook shared secret."""
+
+    custom_secret: str | None = Field(
+        None, min_length=6, max_length=256, description="Optional custom secret to use instead of generating a new one"
+    )
+    rotate: bool = Field(
+        False, description="Whether to explicitly rotate/regenerate the secret with a new random value"
+    )
+
+
 class JiraWebhookSecretResponse(BaseModel):
     """Webhook secret configuration for the workspace Jira integration."""
 
     webhook_url: str = Field(..., description="Endpoint URL to register in Jira webhook settings")
-    webhook_secret: str = Field(..., description="Shared secret to paste in Jira (shown once)")
+    webhook_secret: str = Field(..., description="Shared secret to paste in Jira")
     message: str = "Copy the secret above and paste it as the 'Secret' in Jira Webhook settings."
 
 

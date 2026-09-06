@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+import secrets as _secrets
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +34,15 @@ from app.modules.requirement.services.req_service import create_requirement
 from app.modules.workspace.models.workspace import WorkspaceMember, WorkspaceRole
 
 logger = logging.getLogger(__name__)
+
+
+def get_request_base_url(request: Request) -> str:
+    """Extract public base URL respecting reverse proxies (Render, Vercel, Cloudflare)."""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    if host:
+        return f"{proto}://{host}".rstrip("/")
+    return str(request.base_url).rstrip("/")
 
 
 def mask_token(token: str) -> str:
@@ -102,6 +112,7 @@ async def get_jira_config_response(
     db: AsyncSession,
     user_id: str,
     workspace_id: uuid.UUID | None = None,
+    base_url: str | None = None,
 ) -> JiraConfigResponse:
     """Get current Jira configuration details without exposing the raw API token."""
     integration = await get_jira_integration(db, user_id, workspace_id)
@@ -115,9 +126,19 @@ async def get_jira_config_response(
             is_active=False,
             is_configured=False,
             token_preview="",
+            webhook_url=None,
+            webhook_secret=None,
             created_at=None,
             updated_at=None,
         )
+
+    # Ensure integration has a stable webhook secret initialized
+    if not integration.webhook_secret:
+        integration.webhook_secret = _secrets.token_urlsafe(32)
+        await db.commit()
+        await db.refresh(integration)
+
+    webhook_url = f"{base_url.rstrip('/')}/api/v1/jira/webhook" if base_url else None
 
     return JiraConfigResponse(
         id=integration.id,
@@ -128,6 +149,8 @@ async def get_jira_config_response(
         is_active=integration.is_active,
         is_configured=True,
         token_preview=mask_token(integration.jira_api_token),
+        webhook_url=webhook_url,
+        webhook_secret=integration.webhook_secret,
         created_at=integration.created_at,
         updated_at=integration.updated_at,
     )
@@ -172,6 +195,8 @@ async def save_jira_config(
     email: str,
     api_token: str,
     default_project_key: str | None = None,
+    webhook_secret: str | None = None,
+    base_url: str | None = None,
 ) -> JiraConfigResponse:
     """Verify credentials and save or update Jira integration."""
     norm_domain = normalize_jira_url(domain)
@@ -188,6 +213,10 @@ async def save_jira_config(
         integration.jira_email = email.strip()
         integration.jira_api_token = api_token.strip()
         integration.default_project_key = default_project_key.strip() if default_project_key else None
+        if webhook_secret and webhook_secret.strip():
+            integration.webhook_secret = webhook_secret.strip()
+        elif not integration.webhook_secret:
+            integration.webhook_secret = _secrets.token_urlsafe(32)
         integration.is_active = True
     else:
         integration = JiraIntegration(
@@ -197,6 +226,7 @@ async def save_jira_config(
             jira_email=email.strip(),
             jira_api_token=api_token.strip(),
             default_project_key=default_project_key.strip() if default_project_key else None,
+            webhook_secret=webhook_secret.strip() if (webhook_secret and webhook_secret.strip()) else _secrets.token_urlsafe(32),
             is_active=True,
         )
         db.add(integration)
@@ -211,7 +241,7 @@ async def save_jira_config(
     await db.commit()
     await db.refresh(integration)
 
-    return await get_jira_config_response(db, user_id, workspace_id)
+    return await get_jira_config_response(db, user_id, workspace_id, base_url=base_url)
 
 
 async def delete_jira_config(
@@ -735,16 +765,19 @@ async def post_jira_comment(
     )
 
 
-async def generate_webhook_secret(
+async def get_or_create_webhook_secret(
     db: AsyncSession,
     user_id: str,
     workspace_id: uuid.UUID | None,
     base_url: str,
+    rotate: bool = False,
+    custom_secret: str | None = None,
 ) -> "JiraWebhookSecretResponse":
-    """Generate (or rotate) the per-integration webhook shared secret.
+    """Get the current webhook shared secret or rotate/set custom secret.
 
-    The secret is stored on the JiraIntegration record and returned ONCE
-    in plain text. Subsequent GET /config calls return a masked version.
+    - If custom_secret is provided: updates the secret to the custom value.
+    - If rotate is True: generates a new random token_urlsafe(32).
+    - Otherwise: preserves and returns the existing webhook secret (or generates one if none exists yet).
     """
     from app.modules.jira.schemas.jira_schemas import JiraWebhookSecretResponse
 
@@ -755,15 +788,30 @@ async def generate_webhook_secret(
             detail="No Jira integration configured. Save your Jira connection first.",
         )
 
-    new_secret = _secrets.token_urlsafe(32)
-    integration.webhook_secret = new_secret
-    await db.commit()
+    if custom_secret and custom_secret.strip():
+        integration.webhook_secret = custom_secret.strip()
+        await db.commit()
+        await db.refresh(integration)
+        message = "Custom webhook secret saved successfully."
+    elif rotate or not integration.webhook_secret:
+        new_secret = _secrets.token_urlsafe(32)
+        integration.webhook_secret = new_secret
+        await db.commit()
+        await db.refresh(integration)
+        message = "Webhook secret regenerated successfully. Please update the Secret in your Jira webhook configuration."
+    else:
+        message = "Active webhook secret retrieved successfully."
 
     webhook_url = f"{base_url.rstrip('/')}/api/v1/jira/webhook"
     return JiraWebhookSecretResponse(
         webhook_url=webhook_url,
-        webhook_secret=new_secret,
+        webhook_secret=integration.webhook_secret or "",
+        message=message,
     )
+
+
+# Backwards compatibility alias
+generate_webhook_secret = get_or_create_webhook_secret
 
 
 async def handle_jira_webhook(

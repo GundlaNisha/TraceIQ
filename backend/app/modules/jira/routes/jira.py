@@ -38,6 +38,7 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraTransitionItem,
     JiraTransitionRequest,
     JiraTransitionResponse,
+    JiraSetWebhookSecretRequest,
     JiraWebhookSecretResponse,
     JiraWebhookTestResponse,
 )
@@ -45,6 +46,8 @@ from app.modules.jira.services.jira_service import (
     batch_import_jira_issues,
     delete_jira_config,
     generate_webhook_secret,
+    get_or_create_webhook_secret,
+    get_request_base_url,
     get_issue_transitions,
     get_jira_config_response,
     get_jira_integration,
@@ -83,7 +86,8 @@ async def get_config(
 ):
     """Retrieve current Jira integration status and configuration (without exposing API token)."""
     target_ws = workspace_id or get_active_workspace_id(request)
-    return await get_jira_config_response(db, current_user.id, target_ws)
+    base_url = get_request_base_url(request)
+    return await get_jira_config_response(db, current_user.id, target_ws, base_url=base_url)
 
 
 @router.post("/config", response_model=JiraConfigResponse)
@@ -96,6 +100,7 @@ async def save_config(
 ):
     """Verify credentials with Jira and save Jira integration configuration."""
     target_ws = workspace_id or get_active_workspace_id(request)
+    base_url = get_request_base_url(request)
     return await save_jira_config(
         db=db,
         user_id=current_user.id,
@@ -104,6 +109,8 @@ async def save_config(
         email=body.jira_email,
         api_token=body.jira_api_token,
         default_project_key=body.default_project_key,
+        webhook_secret=body.webhook_secret,
+        base_url=base_url,
     )
 
 
@@ -420,26 +427,52 @@ async def post_comment_to_jira(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/config/webhook-secret", response_model=JiraWebhookSecretResponse)
-async def rotate_webhook_secret(
+@router.get("/config/webhook-secret", response_model=JiraWebhookSecretResponse)
+async def get_webhook_secret_endpoint(
     request: Request,
     workspace_id: uuid.UUID | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Generate or rotate the Jira webhook shared secret for this workspace.
-
-    The secret is returned ONCE in plain text — copy it into the
-    'Secret' field of your Jira Webhook configuration.
-    The webhook endpoint URL is also included for convenience.
-    """
+    """Retrieve the current active webhook secret and URL without rotating it."""
     target_ws = workspace_id or get_active_workspace_id(request)
-    base_url = str(request.base_url)
-    return await generate_webhook_secret(
+    base_url = get_request_base_url(request)
+    return await get_or_create_webhook_secret(
         db=db,
         user_id=current_user.id,
         workspace_id=target_ws,
         base_url=base_url,
+        rotate=False,
+    )
+
+
+@router.post("/config/webhook-secret", response_model=JiraWebhookSecretResponse)
+async def rotate_or_set_webhook_secret(
+    request: Request,
+    body: JiraSetWebhookSecretRequest | None = None,
+    rotate: bool = Query(False, description="Set to true to rotate secret"),
+    workspace_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get, rotate, or set custom Jira webhook shared secret for this workspace.
+
+    - If body.custom_secret is provided: updates the secret to that value.
+    - If rotate is True or body.rotate is True: regenerates a new random secret.
+    - If neither is provided: returns the existing active secret safely without modifying it.
+    """
+    target_ws = workspace_id or get_active_workspace_id(request)
+    base_url = get_request_base_url(request)
+    should_rotate = rotate or (body.rotate if body else False)
+    custom_sec = body.custom_secret if body else None
+
+    return await get_or_create_webhook_secret(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+        base_url=base_url,
+        rotate=should_rotate,
+        custom_secret=custom_sec,
     )
 
 

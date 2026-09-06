@@ -159,6 +159,8 @@ export interface JiraConfig {
   is_active: boolean;
   is_configured: boolean;
   token_preview: string;
+  webhook_url?: string | null;
+  webhook_secret?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }

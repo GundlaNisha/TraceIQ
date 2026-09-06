@@ -194,3 +194,71 @@ def test_hmac_sha256_signature_computation():
     assert header_val.startswith("sha256=")
     assert hmac.compare_digest(f"sha256={computed}", header_val)
     assert hmac.compare_digest(computed, header_val.removeprefix("sha256="))
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_webhook_secret_preserves_existing():
+    from app.modules.jira.services.jira_service import get_or_create_webhook_secret
+
+    existing_secret = "stable_existing_secret_123"
+    integration = JiraIntegration(
+        user_id="user_test_a",
+        jira_domain="https://testorg.atlassian.net",
+        jira_email="user@test.com",
+        jira_api_token="token",
+        webhook_secret=existing_secret,
+        is_active=True,
+    )
+    mock_db = AsyncMock()
+    with patch("app.modules.jira.services.jira_service.get_jira_integration", new_callable=AsyncMock, return_value=integration):
+        res = await get_or_create_webhook_secret(
+            db=mock_db,
+            user_id="user_test_a",
+            workspace_id=None,
+            base_url="https://traceiq-backend-881o.onrender.com",
+            rotate=False,
+        )
+
+        assert res.webhook_secret == existing_secret
+        assert res.webhook_url == "https://traceiq-backend-881o.onrender.com/api/v1/jira/webhook"
+        # Secret should NOT have changed
+        assert integration.webhook_secret == existing_secret
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_webhook_secret_custom_and_rotate():
+    from app.modules.jira.services.jira_service import get_or_create_webhook_secret
+
+    initial_secret = "initial_secret_111"
+    integration = JiraIntegration(
+        user_id="user_test_a",
+        jira_domain="https://testorg.atlassian.net",
+        jira_email="user@test.com",
+        jira_api_token="token",
+        webhook_secret=initial_secret,
+        is_active=True,
+    )
+    mock_db = AsyncMock()
+    with patch("app.modules.jira.services.jira_service.get_jira_integration", new_callable=AsyncMock, return_value=integration):
+        # 1. Custom secret
+        res_custom = await get_or_create_webhook_secret(
+            db=mock_db,
+            user_id="user_test_a",
+            workspace_id=None,
+            base_url="https://traceiq-backend-881o.onrender.com",
+            custom_secret="my_pasted_jira_secret_999",
+        )
+        assert res_custom.webhook_secret == "my_pasted_jira_secret_999"
+        assert integration.webhook_secret == "my_pasted_jira_secret_999"
+
+        # 2. Rotate secret
+        res_rotated = await get_or_create_webhook_secret(
+            db=mock_db,
+            user_id="user_test_a",
+            workspace_id=None,
+            base_url="https://traceiq-backend-881o.onrender.com",
+            rotate=True,
+        )
+        assert res_rotated.webhook_secret != "my_pasted_jira_secret_999"
+        assert len(res_rotated.webhook_secret) > 20
+

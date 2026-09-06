@@ -36,6 +36,10 @@ import {
   Send,
   Terminal,
   Info,
+  Key,
+  Edit3,
+  AlertTriangle,
+  Check,
 } from "lucide-react";
 
 const schema = z.object({
@@ -71,7 +75,7 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [webhookResult, setWebhookResult] = useState<{ webhook_url: string; webhook_secret: string } | null>(null);
-  const [copiedField, setCopiedField] = useState<"url" | "secret" | null>(null);
+  const [copiedField, setCopiedField] = useState<"url" | "secret" | "curl" | null>(null);
   const [testWebhookResult, setTestWebhookResult] = useState<{
     success: boolean;
     message: string;
@@ -81,6 +85,10 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
   } | null>(null);
   const [testWebhookError, setTestWebhookError] = useState<string | null>(null);
   const [showCurlCommand, setShowCurlCommand] = useState(false);
+  const [curlTarget, setCurlTarget] = useState<"remote" | "local">("remote");
+  const [isEditingSecret, setIsEditingSecret] = useState(false);
+  const [customSecretInput, setCustomSecretInput] = useState("");
+  const [isConfirmingRotate, setIsConfirmingRotate] = useState(false);
 
   const {
     register,
@@ -106,6 +114,12 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
         jira_api_token: "", // Don't expose token in form
         default_project_key: config.default_project_key || "",
       });
+      if (config.webhook_url && config.webhook_secret) {
+        setWebhookResult({
+          webhook_url: config.webhook_url,
+          webhook_secret: config.webhook_secret,
+        });
+      }
     } else {
       reset({
         jira_domain: "",
@@ -113,15 +127,35 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
         jira_api_token: "",
         default_project_key: "",
       });
+      setWebhookResult(null);
     }
     setTestResult(null);
     setSaveError(null);
+    setIsEditingSecret(false);
+    setIsConfirmingRotate(false);
   }, [config, reset, open]);
 
   async function handleTest() {
     setTestResult(null);
     setSaveError(null);
     const values = getValues();
+
+    // If Jira is already configured and user left token blank, test the saved credentials!
+    if (config?.is_configured && !values.jira_api_token) {
+      try {
+        const res = await testConnection({
+          workspace_id: workspaceId,
+        });
+        setTestResult(res);
+      } catch (err: any) {
+        setTestResult({
+          success: false,
+          message: err?.message || "Failed to test saved Jira connection",
+        });
+      }
+      return;
+    }
+
     if (!values.jira_domain || !values.jira_email || !values.jira_api_token) {
       setTestResult({
         success: false,
@@ -142,6 +176,41 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
         success: false,
         message: err?.message || "Failed to connect to Jira instance",
       });
+    }
+  }
+
+  async function handleSaveCustomSecret() {
+    if (!customSecretInput.trim()) return;
+    try {
+      const res = await rotateSecret({
+        workspaceId,
+        customSecret: customSecretInput.trim(),
+        rotate: false,
+      });
+      setWebhookResult({
+        webhook_url: res.webhook_url,
+        webhook_secret: res.webhook_secret,
+      });
+      setIsEditingSecret(false);
+      setCustomSecretInput("");
+    } catch (err: any) {
+      setSaveError(err?.message || "Failed to save custom secret");
+    }
+  }
+
+  async function handleConfirmRotateSecret() {
+    setIsConfirmingRotate(false);
+    try {
+      const res = await rotateSecret({
+        workspaceId,
+        rotate: true,
+      });
+      setWebhookResult({
+        webhook_url: res.webhook_url,
+        webhook_secret: res.webhook_secret,
+      });
+    } catch (err: any) {
+      setSaveError(err?.message || "Failed to generate webhook secret");
     }
   }
 
@@ -387,11 +456,16 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                   </p>
                 </div>
 
-                {webhookResult ? (
+                {webhookResult && (
                   <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4 space-y-3">
-                    <p className="text-xs font-semibold text-violet-800 uppercase tracking-wider">
-                      Copy these into Jira Webhook settings:
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-violet-800 uppercase tracking-wider">
+                        Copy these into Jira Webhook settings:
+                      </p>
+                      <span className="text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-md font-medium border border-violet-200">
+                        Stable Secret Preserved
+                      </span>
+                    </div>
 
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted font-medium">Webhook URL</p>
@@ -419,12 +493,39 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                     </div>
 
                     <div className="space-y-1">
-                      <p className="text-[11px] text-muted font-medium">
-                        Shared Secret{" "}
-                        <span className="text-rose-500 font-bold">(shown once - copy now!)</span>
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-muted font-medium">
+                          Shared Secret{" "}
+                          <span className="text-emerald-700 font-semibold">(Active &amp; Persistent)</span>
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingSecret(!isEditingSecret);
+                              setIsConfirmingRotate(false);
+                              setCustomSecretInput(webhookResult.webhook_secret);
+                            }}
+                            className="text-[11px] text-violet-700 hover:text-violet-900 hover:underline inline-flex items-center gap-1 font-medium"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            {isEditingSecret ? "Cancel Edit" : "Paste Existing Secret"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsConfirmingRotate(!isConfirmingRotate);
+                              setIsEditingSecret(false);
+                            }}
+                            className="text-[11px] text-amber-700 hover:text-amber-900 hover:underline inline-flex items-center gap-1 font-medium"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Rotate
+                          </button>
+                        </div>
+                      </div>
                       <div className="flex gap-2">
-                        <code className="flex-1 text-xs font-mono bg-white border border-rose-200 px-3 py-1.5 rounded-lg text-rose-800 truncate">
+                        <code className="flex-1 text-xs font-mono bg-white border border-violet-200 px-3 py-1.5 rounded-lg text-violet-900 truncate">
                           {webhookResult.webhook_secret}
                         </code>
                         <button
@@ -434,7 +535,7 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                             setCopiedField("secret");
                             setTimeout(() => setCopiedField(null), 2000);
                           }}
-                          className="p-1.5 hover:bg-rose-50 rounded-lg transition-colors text-rose-600"
+                          className="p-1.5 hover:bg-violet-100 rounded-lg transition-colors text-violet-700"
                           title="Copy secret"
                         >
                           {copiedField === "secret" ? (
@@ -446,39 +547,116 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                       </div>
                     </div>
 
+                    {/* Custom / Existing Secret Input Panel */}
+                    {isEditingSecret && (
+                      <div className="rounded-lg border border-violet-300 bg-white p-3 space-y-2.5 shadow-sm">
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <Key className="w-3.5 h-3.5 text-violet-600" />
+                            Use Existing Jira Webhook Secret
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            If you already created webhooks in Jira with a custom or previous secret, paste it here so TraceIQ accepts it without needing to update Jira.
+                          </p>
+                        </div>
+                        <Input
+                          value={customSecretInput}
+                          onChange={(e) => setCustomSecretInput(e.target.value)}
+                          placeholder="Paste your existing Jira secret"
+                          className="text-xs font-mono"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsEditingSecret(false)}
+                            className="text-xs h-7 px-2.5"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={isRotating || !customSecretInput.trim()}
+                            onClick={handleSaveCustomSecret}
+                            className="text-xs h-7 px-3 bg-violet-600 hover:bg-violet-700 text-white"
+                          >
+                            {isRotating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />}
+                            Save Secret
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Safe Rotation Confirmation */}
+                    {isConfirmingRotate && (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50/90 p-3 space-y-2 text-xs text-amber-900">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="font-semibold text-amber-950">Regenerate Webhook Secret?</p>
+                            <p className="text-[11px] text-amber-800 leading-relaxed">
+                              Generating a new secret will immediately invalidate your active secret. Any existing Jira webhooks using the current secret will stop receiving updates until you update the Secret field in Jira.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsConfirmingRotate(false)}
+                            className="text-xs h-7 px-2.5 text-amber-900"
+                          >
+                            Keep Current
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isRotating}
+                            onClick={handleConfirmRotateSecret}
+                            className="text-xs h-7 px-3 border-amber-400 text-amber-950 bg-amber-100 hover:bg-amber-200"
+                          >
+                            {isRotating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                            Yes, Regenerate Secret
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     <p className="text-[11px] text-muted-foreground">
                       In Jira: <strong>Settings &rarr; System &rarr; WebHooks &rarr; Create a WebHook</strong>. Paste URL and secret, and select: <strong>Issue Updated</strong> and <strong>Issue Deleted</strong>.
                     </p>
                   </div>
-                ) : null}
+                )}
 
                 {/* Actions & Verification Toolbar */}
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isRotating}
-                    onClick={async () => {
-                      try {
-                        const res = await rotateSecret(workspaceId);
-                        setWebhookResult({
-                          webhook_url: res.webhook_url,
-                          webhook_secret: res.webhook_secret,
-                        });
-                      } catch (err: any) {
-                        setSaveError(err.message || "Failed to generate webhook secret");
-                      }
-                    }}
-                    className="text-xs gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
-                  >
-                    {isRotating ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    )}
-                    {isRotating ? "Generating..." : webhookResult ? "Regenerate Secret" : "Show / Generate Webhook Secret"}
-                  </Button>
+                  {!webhookResult && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isRotating}
+                      onClick={async () => {
+                        try {
+                          const res = await rotateSecret({ workspaceId, rotate: false });
+                          setWebhookResult({
+                            webhook_url: res.webhook_url,
+                            webhook_secret: res.webhook_secret,
+                          });
+                        } catch (err: any) {
+                          setSaveError(err.message || "Failed to load webhook secret");
+                        }
+                      }}
+                      className="text-xs gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
+                    >
+                      {isRotating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                      Load Webhook Secret
+                    </Button>
+                  )}
 
                   <Button
                     type="button"
@@ -544,24 +722,50 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                 {showCurlCommand && (
                   <div className="rounded-xl bg-slate-900 text-slate-100 p-3.5 text-[11px] font-mono space-y-2">
                     <div className="flex items-center justify-between text-slate-400">
-                      <span>Terminal Test Command</span>
+                      <div className="flex items-center gap-2">
+                        <span>Terminal Test Command</span>
+                        <div className="flex items-center bg-slate-800 rounded p-0.5 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setCurlTarget("remote")}
+                            className={`px-1.5 py-0.5 rounded ${
+                              curlTarget === "remote" ? "bg-violet-600 text-white font-semibold" : "text-slate-400 hover:text-slate-200"
+                            }`}
+                          >
+                            Active URL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCurlTarget("local")}
+                            className={`px-1.5 py-0.5 rounded ${
+                              curlTarget === "local" ? "bg-violet-600 text-white font-semibold" : "text-slate-400 hover:text-slate-200"
+                            }`}
+                          >
+                            Localhost
+                          </button>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
+                          const effectiveUrl =
+                            curlTarget === "local"
+                              ? "http://localhost:8000/api/v1/jira/webhook"
+                              : (webhookResult?.webhook_url || `${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/jira/webhook`);
                           const secretVal = webhookResult?.webhook_secret || "YOUR_SECRET";
-                          const cmd = `curl -X POST "http://localhost:8000/api/v1/jira/webhook?secret=${secretVal}" -H "Content-Type: application/json" -d '{"webhookEvent":"jira:issue_updated","issue":{"key":"SAM1-1","fields":{"status":{"name":"In Progress"}}}}'`;
+                          const cmd = `curl -X POST "${effectiveUrl}?secret=${secretVal}" -H "Content-Type: application/json" -d '{"webhookEvent":"jira:issue_updated","issue":{"key":"SAM1-1","fields":{"status":{"name":"In Progress"}}}}'`;
                           navigator.clipboard.writeText(cmd);
-                          setCopiedField("secret");
+                          setCopiedField("curl");
                           setTimeout(() => setCopiedField(null), 2000);
                         }}
                         className="hover:text-white flex items-center gap-1 text-[10px] text-slate-300"
                       >
                         <Copy className="w-3 h-3" />
-                        {copiedField === "secret" ? "Copied!" : "Copy"}
+                        {copiedField === "curl" ? "Copied!" : "Copy"}
                       </button>
                     </div>
                     <div className="break-all whitespace-pre-wrap text-emerald-400 leading-relaxed bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
-                      curl -X POST &quot;http://localhost:8000/api/v1/jira/webhook?secret={webhookResult?.webhook_secret || "YOUR_SECRET"}&quot; \<br />
+                      curl -X POST &quot;{curlTarget === "local" ? "http://localhost:8000/api/v1/jira/webhook" : (webhookResult?.webhook_url || "/api/v1/jira/webhook")}?secret={webhookResult?.webhook_secret || "YOUR_SECRET"}&quot; \<br />
                       &nbsp;&nbsp;-H &quot;Content-Type: application/json&quot; \<br />
                       &nbsp;&nbsp;-d &apos;&#123;&quot;webhookEvent&quot;:&quot;jira:issue_updated&quot;,&quot;issue&quot;:&#123;&quot;key&quot;:&quot;SAM1-1&quot;,&quot;fields&quot;:&#123;&quot;status&quot;:&#123;&quot;name&quot;:&quot;In Progress&quot;&#125;&#125;&#125;&#125;&apos;
                     </div>

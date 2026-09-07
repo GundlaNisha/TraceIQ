@@ -1,3 +1,4 @@
+import os
 import instructor
 from litellm import acompletion
 from pydantic import BaseModel
@@ -15,15 +16,20 @@ class LiteLLMAdapter(ProviderAdapter):
         self, system_prompt: str, user_prompt: str, response_model: type[BaseModel]
     ) -> BaseModel:
         extra_kwargs: dict = {}
-        api_base = settings.llm_base_url or settings.openai_api_base
-        if settings.openai_api_key:
-            extra_kwargs["api_key"] = settings.openai_api_key
-        if api_base:
-            extra_kwargs["api_base"] = api_base
+        model = settings.llm_model or "gemini/gemini-3.6-flash"
 
-        model = settings.llm_model
-        if api_base and not ("/" in model):
-            model = f"openai/{model}"
+        if model.startswith("gemini/"):
+            gemini_key = settings.gemini_api_key or settings.google_api_key or os.getenv("GEMINI_API_KEY")
+            if gemini_key:
+                extra_kwargs["api_key"] = gemini_key
+        else:
+            api_base = settings.llm_base_url or settings.openai_api_base
+            if settings.openai_api_key:
+                extra_kwargs["api_key"] = settings.openai_api_key
+            if api_base:
+                extra_kwargs["api_base"] = api_base
+            if api_base and not ("/" in model):
+                model = f"openai/{model}"
 
         return await self.client.chat.completions.create(
             model=model,

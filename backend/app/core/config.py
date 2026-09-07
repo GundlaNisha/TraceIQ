@@ -109,3 +109,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+if settings.gemini_api_key and "GEMINI_API_KEY" not in os.environ:
+    os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
+if settings.google_api_key and "GOOGLE_API_KEY" not in os.environ:
+    os.environ["GOOGLE_API_KEY"] = settings.google_api_key

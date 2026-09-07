@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import tarfile
@@ -11,6 +10,7 @@ from sqlalchemy import delete, select, update
 
 from app.core.config import settings
 from app.db.session import get_worker_session
+from app.workers.runner import run_async
 from app.modules.indexing.models.index_models import (
     CodeChunk,
     CodeDependency,
@@ -88,7 +88,7 @@ BULK_BATCH_SIZE = 500
 @shared_task(name="app.workers.repo_index.index_repository")
 def index_repository(repository_id: str, snapshot_id: str):
     """Celery background worker entrypoint"""
-    asyncio.run(_async_index_repository(repository_id, snapshot_id))
+    run_async(_async_index_repository, repository_id, snapshot_id)
 
 
 async def _async_index_repository(repository_id: str, snapshot_id: str):

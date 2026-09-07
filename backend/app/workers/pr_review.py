@@ -20,6 +20,7 @@ from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
 from app.modules.review.models.rev_models import PRFileDiff, PRReview, PRReviewFinding
 from app.workers.celery_app import celery_app
+from app.workers.runner import run_async
 
 logger = get_task_logger(__name__)
 
@@ -455,7 +456,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
 @celery_app.task(name="app.workers.pr_review.process_pr_review")
 def process_pr_review(pr_review_id: str) -> None:
     """Synchronous Celery entry point."""
-    asyncio.run(_process_pr_review(pr_review_id))
+    run_async(_process_pr_review, pr_review_id)
 
 
 # Alias for backwards compatibility

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from sqlalchemy import or_, select
@@ -16,6 +15,7 @@ from app.modules.repository.models.repo import Repository  # noqa: F401
 from app.modules.requirement.models.req import Requirement
 from app.modules.retrieval.services.semantic import hybrid_code_search
 from app.workers.celery_app import celery_app
+from app.workers.runner import run_async
 
 logger = logging.getLogger(__name__)
 
@@ -148,4 +148,4 @@ async def _run_impact_analysis_async(job_id: str):
 
 @celery_app.task
 def run_impact_analysis(job_id: str) -> None:
-    asyncio.run(_run_impact_analysis_async(job_id))
+    run_async(_run_impact_analysis_async, job_id)

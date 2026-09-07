@@ -15,10 +15,12 @@ import app.modules.workspace.models.workspace  # noqa: F401
 from app.core.config import settings
 from app.db.session import engine
 
+is_eager = settings.is_celery_eager
+
 celery_app = Celery(
     "traceiq",
-    broker=settings.redis_url,
-    backend=settings.redis_url,
+    broker=settings.redis_url if not is_eager else "memory://",
+    backend=settings.redis_url if not is_eager else "cache+memory://",
     include=[
         "app.workers.repo_sync",
         "app.workers.repo_index",
@@ -44,11 +46,11 @@ celery_conf = {
     "timezone": "UTC",
     "enable_utc": True,
     # Eager mode: if True, tasks execute in-process; if False, tasks queue to Celery workers via Redis
-    "task_always_eager": settings.is_celery_eager,
+    "task_always_eager": is_eager,
 }
 
 # Automatically configure SSL when connecting to Upstash / Cloud Redis (rediss://)
-if settings.redis_url.startswith("rediss://"):
+if not is_eager and settings.redis_url.startswith("rediss://"):
     import ssl
     celery_conf.update(
         {

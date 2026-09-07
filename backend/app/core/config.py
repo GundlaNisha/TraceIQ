@@ -70,9 +70,11 @@ class Settings(BaseSettings):
     def is_celery_eager(self) -> bool:
         """Determines if Celery executes in eager (in-process) mode or distributed worker queue mode.
 
-        - USE_CELERY=true  -> is_celery_eager=False (Distributed Redis Worker Queue)
-        - USE_CELERY=false -> is_celery_eager=True  (In-process Direct Execution)
+        Only local/development environments can use distributed Celery worker queues;
+        production strictly executes in-process directly.
         """
+        if self.environment == "production":
+            return True
         if self.celery_always_eager is not None:
             return self.celery_always_eager
         return not self.use_celery

@@ -1,4 +1,3 @@
-import asyncio
 import os
 import shutil
 import socket
@@ -19,6 +18,7 @@ from app.modules.repository.models.repo import (
     SyncStatus,
 )
 from app.workers.celery_app import celery_app
+from app.workers.runner import run_async
 
 logger = get_task_logger(__name__)
 
@@ -169,11 +169,14 @@ async def _process_sync(repository_id: str):
                 os.remove(tar_path)
 
 
+async def _safe_process_sync(repository_id: str) -> None:
+    try:
+        await _process_sync(repository_id)
+    except Exception as e:
+        logger.error(f"Sync failed for repo {repository_id}: {type(e).__name__}: {e!s}")
+        await _update_status(repository_id, SyncStatus.failed)
+
+
 @celery_app.task
 def sync_repository(repository_id: str, user_id: str) -> None:
-    try:
-        asyncio.run(_process_sync(repository_id))
-    except Exception as e:
-        # Log without the URL (which may contain an auth token)
-        logger.error(f"Sync failed for repo {repository_id}: {type(e).__name__}: {e!s}")
-        asyncio.run(_update_status(repository_id, SyncStatus.failed))
+    run_async(_safe_process_sync, repository_id)

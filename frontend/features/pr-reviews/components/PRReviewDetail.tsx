@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatTimeAgo } from "@/lib/utils";
 import type { PRReviewFinding } from "@/lib/types/pr-review";
+import { CICorrelationPanel } from "./CICorrelationPanel";
 import { DiffFilesTab } from "./DiffFilesTab";
 
 const STATUS_CONFIG = {
@@ -238,6 +239,9 @@ export function PRReviewDetail({ reviewId }: Props) {
           </div>
         )}
       </div>
+
+      {/* CI x Blast Radius — live Actions status vs predicted impact */}
+      {isCompleted && <CICorrelationPanel reviewId={reviewId} />}
 
       {isActive && (
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-center gap-3">

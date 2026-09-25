@@ -1,5 +1,6 @@
 import { useApiClient } from "@/lib/api/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { CICorrelation } from "@/lib/types/github";
 import type { PRFileDiff, PRReview, PRReviewCreate, PRReviewFinding } from "@/lib/types/pr-review";
 
 export function useCreatePRReview() {
@@ -128,6 +129,27 @@ export function useRerunPRReview() {
       qc.invalidateQueries({ queryKey: ["pr_review_findings", reviewId] });
       qc.invalidateQueries({ queryKey: ["pr_review_diffs", reviewId] });
     },
+  });
+}
+
+export function useCICorrelation(reviewId: string, enabled: boolean = true) {
+  const { fetchApi } = useApiClient();
+
+  return useQuery({
+    queryKey: ["pr_review_ci_correlation", reviewId],
+    queryFn: async () => {
+      const res = await fetchApi(
+        `/api/v1/github/pull-requests/ci-correlation?review_id=${encodeURIComponent(reviewId)}`,
+        {}
+      );
+      if (!res.ok) throw new Error("Failed to fetch CI correlation");
+      return res.json() as Promise<CICorrelation>;
+    },
+    enabled: !!reviewId && enabled,
+    // CI + impact data change slowly; webhook check_run events land
+    // server-side and the next stale refetch picks them up.
+    staleTime: 60000,
+    retry: 1,
   });
 }
 

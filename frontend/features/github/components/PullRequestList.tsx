@@ -26,6 +26,7 @@ import { formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReviewPRModal } from "@/features/pr-reviews/components/ReviewPRModal";
+import { CIBadge } from "./CIBadge";
 import Link from "next/link";
 import type { GitHubPullRequest } from "@/lib/types/github";
 
@@ -514,6 +515,14 @@ export function PullRequestList() {
                         <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-semibold uppercase tracking-wider">
                           Draft
                         </span>
+                      )}
+
+                      {/* Live GitHub Actions status — open PRs only to bound API fan-out */}
+                      {pr.state === "open" && (
+                        <CIBadge
+                          repositoryId={pr.repository_id}
+                          prNumber={pr.number}
+                        />
                       )}
 
                       {matchingReview && (

@@ -22,6 +22,7 @@ import {
   Building2,
 } from "lucide-react";
 import { RepoSettingsModal } from "./RepoSettingsModal";
+import { RepoActionsPanel } from "@/features/github/components/RepoActionsPanel";
 import { useWorkspaceSummary } from "@/features/workspace/api/queries";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -269,6 +270,11 @@ export function RepositoryList() {
           </tbody>
         </table>
       </div>
+
+      {/* CI health for the selected repo — click any row to switch */}
+      {activeRepositoryId && (
+        <RepoActionsPanel repositoryId={activeRepositoryId} />
+      )}
 
       <RepoSettingsModal
         repo={selectedRepoForSettings}

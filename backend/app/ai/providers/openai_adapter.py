@@ -16,7 +16,7 @@ class LiteLLMAdapter(ProviderAdapter):
         self, system_prompt: str, user_prompt: str, response_model: type[BaseModel]
     ) -> BaseModel:
         extra_kwargs: dict = {}
-        model = settings.llm_model or "gemini/gemini-3.6-flash"
+        model = settings.llm_model or "gemini/gemini-3.5-flash-lite"
 
         if model.startswith("gemini/"):
             gemini_key = settings.gemini_api_key or settings.google_api_key or os.getenv("GEMINI_API_KEY")

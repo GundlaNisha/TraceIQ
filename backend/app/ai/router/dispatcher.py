@@ -31,9 +31,10 @@ async def dispatch_pr_review(
     pr_diff: str,
     requirement_text: str = "",
     analysis_context: str = "",
+    ci_context: str = "",
 ) -> PRReviewOutput:
     system = pr_review_prompts.PR_REVIEW_SYSTEM
     user = pr_review_prompts.build_pr_review_prompt(
-        pr_title, pr_diff, requirement_text, analysis_context
+        pr_title, pr_diff, requirement_text, analysis_context, ci_context
     )
     return cast(PRReviewOutput, await _adapter.complete(system, user, PRReviewOutput))

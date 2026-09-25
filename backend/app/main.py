@@ -12,6 +12,7 @@ from app.modules.auth.routes.auth import router as auth_router
 from app.modules.auth.routes.webhook import router as webhook_router
 from app.modules.dashboard.routes.dashboard import router as dashboard_router
 from app.modules.github.routes.callback import router as github_callback_router
+from app.modules.github.routes.checks import router as github_checks_router
 from app.modules.github.routes.prs import router as github_prs_router
 from app.modules.github.routes.webhook import router as github_webhook_router
 from app.modules.health.routes.health import router as health_router
@@ -73,6 +74,7 @@ app.include_router(dashboard_router)
 app.include_router(github_callback_router)
 app.include_router(github_webhook_router)
 app.include_router(github_prs_router)
+app.include_router(github_checks_router)
 app.include_router(workspace_router)
 app.include_router(jira_router)
 

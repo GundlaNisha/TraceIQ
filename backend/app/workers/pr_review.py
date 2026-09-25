@@ -15,6 +15,7 @@ from app.modules.github.services.auth import (
     get_installation_id_for_repo,
     get_installation_token,
 )
+from app.modules.github.services.checks import build_ci_context, fetch_pr_checks
 from app.modules.impact.models.impact import AnalysisJob, ImpactResult
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
@@ -289,6 +290,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
             # 6. Fetch linked requirement text and impact analysis (if any)
             req_text = ""
             analysis_context = ""
+            impacted_paths: list[dict] = []
 
             if requirement_id:
                 req_result = await session.execute(
@@ -312,6 +314,11 @@ async def _process_pr_review(pr_review_id: str) -> None:
                     impact_rec = impact_result_db.scalar_one_or_none()
                     if impact_rec and impact_rec.impacted_files:
                         files_data = impact_rec.impacted_files.get("files", [])
+                        impacted_paths = [
+                            {"file_path": f.get("file_path", "")}
+                            for f in files_data
+                            if f.get("file_path")
+                        ]
                         if files_data:
                             file_lines = []
                             for f in files_data:
@@ -322,6 +329,17 @@ async def _process_pr_review(pr_review_id: str) -> None:
                                 "Impacted files predicted by prior analysis:\n"
                                 + "\n".join(file_lines)
                             )
+
+            # 6b. Fetch live CI status so the review reads failing checks.
+            # Never raises (service degrades to "unknown"); never blocks review.
+            ci_context = ""
+            try:
+                ci_summary = await fetch_pr_checks(
+                    repo_full_name, pr_number, token
+                )
+                ci_context = build_ci_context(ci_summary, impacted_paths)
+            except Exception as exc:
+                logger.warning(f"CI context fetch skipped (non-fatal): {exc!s}")
 
             # 7. High-Performance Multi-File Chunking & Parallel AI Review
             file_patches = _parse_diff_into_file_patches(pr_diff)
@@ -347,6 +365,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
                         combined_patch_diff,
                         req_text,
                         analysis_context,
+                        ci_context,
                     )
 
                 tasks = [
@@ -373,7 +392,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
                     pr_diff = pr_diff[:120_000] + "\n\n[... diff truncated ...]"
 
                 ai_result = await dispatch_pr_review(
-                    pr_title, pr_diff, req_text, analysis_context
+                    pr_title, pr_diff, req_text, analysis_context, ci_context
                 )
                 all_findings = ai_result.findings
                 final_summary = ai_result.summary

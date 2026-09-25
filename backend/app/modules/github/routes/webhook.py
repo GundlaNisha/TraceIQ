@@ -50,6 +50,22 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     event = request.headers.get("X-GitHub-Event", "")
     payload = await request.json()
 
+    # CI live-update events: acknowledge so GitHub keeps delivering.
+    # The frontend polls GET /pull-requests/checks (30s stale) for fresh state.
+    if event in ("check_run", "check_suite", "workflow_run"):
+        action = payload.get("action", "")
+        repo_name = (payload.get("repository") or {}).get("full_name", "?")
+        conclusion = (
+            (payload.get("check_run") or {}).get("conclusion")
+            or (payload.get("check_suite") or {}).get("conclusion")
+            or (payload.get("workflow_run") or {}).get("conclusion")
+            or "in_progress"
+        )
+        logger.info(
+            f"CI event {event}/{action} for {repo_name}: conclusion={conclusion}"
+        )
+        return {"status": "ok", "ci_conclusion": conclusion}
+
     if event == "pull_request":
         action = payload.get("action")
         # Process 'opened' or 'synchronize' (new commits pushed to PR)

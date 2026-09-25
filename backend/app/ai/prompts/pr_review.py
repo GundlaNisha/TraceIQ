@@ -13,6 +13,7 @@ def build_pr_review_prompt(
     pr_diff: str,
     requirement_text: str = "",
     analysis_context: str = "",
+    ci_context: str = "",
 ) -> str:
     sections = []
     if requirement_text.strip():
@@ -21,6 +22,8 @@ def build_pr_review_prompt(
         sections.append(
             f"""<impact_analysis_context>\n{analysis_context}\n</impact_analysis_context>"""
         )
+    if ci_context.strip():
+        sections.append(f"""<ci_status>\n{ci_context}\n</ci_status>""")
 
     if sections:
         req_section = (
@@ -29,7 +32,8 @@ def build_pr_review_prompt(
 Review the diff carefully against BOTH the requirement specification and the expected impact analysis:
 - Verify if the PR completely and correctly implements the requirement.
 - Cross-check against the expected impacted files, symbols, and tests from the impact analysis: flag if any critical files/symbols were neglected or if expected test cases are missing.
-- Clearly explain any deviations or unfulfilled criteria in the `requirement_gap` field of each finding."""
+- Clearly explain any deviations or unfulfilled criteria in the `requirement_gap` field of each finding.
+- If a <ci_status> block is present and CI is failing: do NOT present the PR as safe to merge. Reference the failing checks in the summary, and raise severity for findings in files touched by failing checks that overlap the predicted blast radius."""
         )
     else:
         req_section = """No specific requirement or impact analysis was provided. Focus on code quality, bugs, security vulnerabilities, and logic flaws."""

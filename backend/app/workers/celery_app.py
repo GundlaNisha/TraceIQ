@@ -12,6 +12,7 @@ import app.modules.repository.models.repo
 import app.modules.requirement.models.req
 import app.modules.review.models.rev_models  # noqa: F401
 import app.modules.workspace.models.workspace  # noqa: F401
+import app.modules.agent.models.agent_models  # noqa: F401
 from app.core.config import settings
 from app.db.session import engine
 

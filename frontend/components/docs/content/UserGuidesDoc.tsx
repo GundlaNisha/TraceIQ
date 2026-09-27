@@ -3,7 +3,7 @@
 import React from "react";
 import { DocsCodeBlock } from "../DocsCodeBlock";
 import { DocsCallout } from "../DocsCallout";
-import { Users, FolderGit2, FileText, Zap, GitPullRequest, ShieldCheck } from "lucide-react";
+import { Users, FolderGit2, FileText, Zap, GitPullRequest, ShieldCheck, Activity } from "lucide-react";
 
 export function UserGuidesDoc() {
   return (
@@ -101,6 +101,29 @@ export function UserGuidesDoc() {
         <p>
           Navigate to <strong>Traceability</strong> to view repository compliance scores. Each requirement displays its linked blast radius prediction, the associated GitHub PRs, and verification status.
         </p>
+      </section>
+
+      {/* Guide 6: GitHub Actions & CI Correlation */}
+      <section className="space-y-4 pt-4">
+        <h2 id="monitoring-ci-actions" className="text-xl sm:text-2xl font-serif font-bold text-[#111111] flex items-center gap-2">
+          <Activity className="w-5 h-5 text-accent" />
+          <span>6. Monitoring GitHub Actions CI &amp; Blast-Radius Correlation</span>
+        </h2>
+        <p>
+          TraceIQ provides unified visibility into GitHub CI checks, correlating build failures against predicted blast radius and tracking pipeline reliability:
+        </p>
+        <ol className="list-decimal pl-5 space-y-1.5 text-xs text-[#111111]">
+          <li>Navigate to <strong>Pull Requests</strong> or <strong>PR Reviews</strong> to see live <strong>CI Badges</strong> (e.g. <code>CI passing (4/4)</code> or <code>CI failing (1 failed)</code>).</li>
+          <li>Hover or click any CI badge to inspect the popover detailing every individual check run, duration, and direct links to GitHub Actions logs.</li>
+          <li>Open any PR Review Detail page to inspect the <strong>CI Correlation Panel</strong>:
+            <ul className="list-disc pl-4 mt-1 space-y-0.5">
+              <li><strong>Clean:</strong> All checks passing. Safe to proceed with verification.</li>
+              <li><strong>In Scope:</strong> A failing test directly overlaps files in the 2-hop blast radius, indicating a regression introduced by this PR.</li>
+              <li><strong>Unrelated:</strong> A test failure exists outside the blast radius, isolating pipeline noise from developer changes.</li>
+            </ul>
+          </li>
+          <li>In <strong>Repositories</strong> &rarr; select a repository &rarr; click the <strong>Actions</strong> tab to inspect overall workflow success rates, Mean Time to Resolution (MTTR), active streaks, and flaky test detection.</li>
+        </ol>
       </section>
 
     </article>

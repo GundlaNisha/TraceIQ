@@ -76,6 +76,20 @@ const SEARCH_INDEX: SearchDocResult[] = [
     keywords: ["traceability", "matrix", "compliance", "health", "audit", "soc2", "iso"],
   },
   {
+    sectionId: "core-concepts",
+    category: "Core Concepts",
+    title: "Live GitHub CI Checks & Correlation Engine",
+    snippet: "Correlate failing GitHub CI check runs against predicted 2-hop blast radius with clean, in_scope, and unrelated verdicts.",
+    keywords: ["ci", "checks", "correlation", "in scope", "clean", "unrelated", "status badge", "github actions"],
+  },
+  {
+    sectionId: "core-concepts",
+    category: "Core Concepts",
+    title: "GitHub Actions Health & Reliability Analytics",
+    snippet: "Repository-wide Actions dashboard tracking workflow success rate, MTTR (Mean Time to Resolution), and flaky workflow detection.",
+    keywords: ["actions", "mttr", "flaky", "reliability", "streaks", "workflow", "health"],
+  },
+  {
     sectionId: "jira-integration",
     category: "Integrations",
     title: "Atlassian Jira REST API & Kanban Sync",

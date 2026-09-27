@@ -129,6 +129,48 @@ export function ApiReferenceDoc() {
     },
     {
       method: "GET",
+      path: "/api/v1/github/pull-requests/checks",
+      desc: "Fetch normalized live CI check runs (passing/failing/pending) for a PR head SHA.",
+      auth: true,
+    },
+    {
+      method: "GET",
+      path: "/api/v1/github/pull-requests/ci-correlation",
+      desc: "Correlate failing CI checks with predicted blast radius files (clean/in_scope/unrelated).",
+      auth: true,
+    },
+    {
+      method: "GET",
+      path: "/api/v1/github/pull-requests/actions",
+      desc: "Get repository-wide GitHub Actions run history, MTTR, streaks, and flaky workflow stats.",
+      auth: true,
+    },
+    {
+      method: "POST",
+      path: "/api/v1/jira/webhook/test-ping",
+      desc: "Simulate inbound webhook ping and test HMAC-SHA256 signature verification.",
+      auth: true,
+    },
+    {
+      method: "GET",
+      path: "/api/v1/jira/transitions",
+      desc: "Fetch valid next workflow transitions for a Jira ticket.",
+      auth: true,
+    },
+    {
+      method: "POST",
+      path: "/api/v1/jira/transition",
+      desc: "Execute Jira issue workflow status transition with optional audit comment.",
+      auth: true,
+    },
+    {
+      method: "POST",
+      path: "/api/v1/jira/comment",
+      desc: "Convert Markdown to Atlassian Document Format (ADF) and post comment to Jira.",
+      auth: true,
+    },
+    {
+      method: "GET",
       path: "/api/v1/traceability",
       desc: "Fetch continuous traceability matrix and compliance health score.",
       auth: true,
@@ -235,6 +277,14 @@ Content-Type: application/json`}
         <h4 className="font-serif font-bold text-sm text-[#111111] mt-4">2. Analyze Blast Radius for Requirement</h4>
         <DocsCodeBlock
           code={`curl -X POST "http://localhost:8000/api/v1/requirements/req_84/analyze" \\
+  -H "Authorization: Bearer $CLERK_TOKEN" \\
+  -H "X-Workspace-Id: $WORKSPACE_ID"`}
+          language="bash"
+        />
+
+        <h4 className="font-serif font-bold text-sm text-[#111111] mt-4">3. Correlate CI Checks with Blast Radius</h4>
+        <DocsCodeBlock
+          code={`curl -X GET "http://localhost:8000/api/v1/github/pull-requests/ci-correlation?review_id=rev_771" \\
   -H "Authorization: Bearer $CLERK_TOKEN" \\
   -H "X-Workspace-Id: $WORKSPACE_ID"`}
           language="bash"

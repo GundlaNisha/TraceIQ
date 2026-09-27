@@ -49,7 +49,9 @@ const TOC_MAP: Record<string, TOCItem[]> = {
     { id: "hybrid-rrf-search", label: "2. Sub-15ms Hybrid Search (RRF)", level: 2 },
     { id: "blast-radius-analysis", label: "3. 2-Hop Blast Radius Engine", level: 2 },
     { id: "automated-pr-reviews", label: "4. Automated PR Review Engine", level: 2 },
-    { id: "workspaces-and-rbac", label: "5. Multi-Tenant RBAC Matrix", level: 2 },
+    { id: "ci-correlation-engine", label: "5. Live CI & Correlation", level: 2 },
+    { id: "actions-health-analytics", label: "6. Actions Health & MTTR", level: 2 },
+    { id: "workspaces-and-rbac", label: "7. Multi-Tenant RBAC Matrix", level: 2 },
   ],
   "jira-integration": [
     { id: "jira-integration-guide", label: "Overview", level: 2 },
@@ -65,6 +67,7 @@ const TOC_MAP: Record<string, TOCItem[]> = {
     { id: "requirements-and-analysis", label: "3. Requirements & Blast Radius", level: 2 },
     { id: "pull-request-reviews", label: "4. Reviewing Pull Requests", level: 2 },
     { id: "traceability-matrix", label: "5. Compliance & Audit Matrix", level: 2 },
+    { id: "monitoring-ci-actions", label: "6. Monitoring CI & Actions", level: 2 },
   ],
   "project-structure": [
     { id: "repository-tree", label: "Repository Directory Tree", level: 2 },

@@ -25,16 +25,20 @@ export function PRDraftCard({ prDraft }: PRDraftCardProps) {
   };
 
   return (
-    <div className="my-4 rounded-xl border border-emerald-500/30 bg-slate-900/80 p-5 backdrop-blur-md shadow-lg shadow-emerald-500/5">
+    <div className="my-4 rounded-2xl border border-border/80 bg-white p-5 shadow-xs">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-400">
+      <div className="flex items-center justify-between border-b border-border/60 pb-3.5">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-emerald-50 p-2 text-emerald-700 border border-emerald-200">
             <GitPullRequest className="h-4 w-4" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-slate-100">Draft Pull Request Description</h4>
-            <p className="text-xs text-slate-400">Linked to requirement {prDraft.linked_requirement || "N/A"}</p>
+            <h4 className="text-sm font-bold font-serif text-foreground tracking-tight">
+              Draft Pull Request Description
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Linked to requirement {prDraft.linked_requirement || "N/A"}
+            </p>
           </div>
         </div>
 
@@ -42,7 +46,7 @@ export function PRDraftCard({ prDraft }: PRDraftCardProps) {
           <button
             type="button"
             onClick={() => setIsEditing(!isEditing)}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-slate-700 transition"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border/80 bg-white px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-slate-50 transition shadow-2xs"
           >
             {isEditing ? (
               <>
@@ -58,7 +62,7 @@ export function PRDraftCard({ prDraft }: PRDraftCardProps) {
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 transition shadow-sm"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-accent/90 transition shadow-xs"
           >
             {copied ? (
               <>
@@ -74,22 +78,24 @@ export function PRDraftCard({ prDraft }: PRDraftCardProps) {
       </div>
 
       {/* PR Title Display */}
-      <div className="mt-3.5 rounded-lg border border-slate-800 bg-slate-950/60 px-3.5 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Suggested PR Title</span>
-        <p className="font-mono text-xs font-medium text-emerald-400 mt-0.5">{prDraft.title}</p>
+      <div className="mt-3.5 rounded-xl border border-border/60 bg-[#FAF8F5]/80 px-3.5 py-2.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Suggested PR Title
+        </span>
+        <p className="font-mono text-xs font-medium text-emerald-700 mt-0.5">{prDraft.title}</p>
       </div>
 
       {/* PR Body Content */}
-      <div className="mt-3.5 rounded-lg border border-slate-800 bg-slate-950/80 p-4">
+      <div className="mt-3.5 rounded-xl border border-border/60 bg-[#FAF8F5]/50 p-4">
         {isEditing ? (
           <textarea
             value={editedMarkdown}
             onChange={(e) => setEditedMarkdown(e.target.value)}
-            className="w-full min-h-[300px] font-mono text-xs text-slate-200 bg-transparent focus:outline-none resize-y"
+            className="w-full min-h-[300px] font-mono text-xs text-foreground bg-white border border-border rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent resize-y"
             rows={14}
           />
         ) : (
-          <div className="prose prose-invert prose-xs max-w-none text-slate-300 leading-relaxed space-y-2">
+          <div className="prose prose-slate prose-xs max-w-none text-foreground leading-relaxed space-y-2 prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-[#1B2A4A] prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
             <ReactMarkdown>{editedMarkdown}</ReactMarkdown>
           </div>
         )}

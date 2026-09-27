@@ -10,6 +10,8 @@ import {
   Bot,
   PanelRightClose,
   PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   FolderGit2,
   Layers,
   ArrowRight,
@@ -47,6 +49,7 @@ export default function AgentPage() {
   const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
   const [inputContent, setInputContent] = useState("");
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
+  const [isSessionSidebarOpen, setIsSessionSidebarOpen] = useState(true);
 
   // Queries
   const { data: repositories = [] } = useRepositories({ workspaceId: activeWorkspaceId });
@@ -171,89 +174,114 @@ export default function AgentPage() {
   const activeRepo = repositories.find((r: any) => r.id === activeRepositoryId);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-slate-950 text-slate-100">
-      {/* 1. Left Sidebar: Sessions List */}
-      <div className="flex w-64 md:w-72 flex-col border-r border-slate-800 bg-slate-900/60 backdrop-blur-md">
-        {/* Header with New Session button */}
-        <div className="border-b border-slate-800 p-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-sky-500/10 p-1.5 text-sky-400">
-              <Bot className="h-4 w-4" />
+    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background text-foreground">
+      {/* 1. Left Sidebar: Sessions List (Collapsible for maximum spaciousness) */}
+      {isSessionSidebarOpen && (
+        <aside className="flex w-64 md:w-72 flex-col border-r border-border/50 bg-slate-50/60 backdrop-blur-md shrink-0 transition-all duration-300">
+          {/* Header with New Session button & Collapse toggle */}
+          <div className="border-b border-border/50 p-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="rounded-xl bg-accent/10 p-1.5 text-accent">
+                <Bot className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-bold font-serif uppercase tracking-wider text-foreground">
+                Agent Chats
+              </span>
             </div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-              Agent Chats
-            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleCreateSession}
+                disabled={createSessionMutation.isPending || !activeWorkspaceId}
+                className="inline-flex items-center gap-1 rounded-xl bg-accent px-2.5 py-1 text-xs font-semibold text-white hover:bg-accent/90 transition shadow-2xs disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>New</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSessionSidebarOpen(false)}
+                className="p-1 text-muted-foreground hover:text-foreground hover:bg-black/[0.04] rounded-lg transition"
+                title="Collapse Session List"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCreateSession}
-            disabled={createSessionMutation.isPending || !activeWorkspaceId}
-            className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 transition shadow-sm disabled:opacity-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>New</span>
-          </button>
-        </div>
-
-        {/* Sessions Scroll List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {isLoadingSessions ? (
-            <div className="flex items-center justify-center p-8 text-xs text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading sessions...
-            </div>
-          ) : sessions.length === 0 ? (
-            <div className="p-6 text-center text-xs text-slate-500">
-              No sessions yet. Click <strong>New</strong> above to start!
-            </div>
-          ) : (
-            sessions.map((sess) => {
-              const isSelected = sess.id === selectedSessionId;
-              return (
-                <div
-                  key={sess.id}
-                  onClick={() => setSelectedSessionId(sess.id)}
-                  className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-xs transition cursor-pointer ${
-                    isSelected
-                      ? "bg-sky-500/15 text-white font-medium border border-sky-500/30"
-                      : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "text-sky-400" : "text-slate-500"}`} />
-                    <span className="truncate">{sess.title}</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => handleDeleteSession(sess.id, e)}
-                    className="opacity-0 group-hover:opacity-100 rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-rose-400 transition"
+          {/* Sessions Scroll List */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {isLoadingSessions ? (
+              <div className="flex items-center justify-center p-8 text-xs text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin mr-2 text-accent" /> Loading sessions...
+              </div>
+            ) : sessions.length === 0 ? (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                No sessions yet. Click <strong>New</strong> above to start!
+              </div>
+            ) : (
+              sessions.map((sess) => {
+                const isSelected = sess.id === selectedSessionId;
+                return (
+                  <div
+                    key={sess.id}
+                    onClick={() => setSelectedSessionId(sess.id)}
+                    className={`group relative flex items-center justify-between rounded-xl px-3 py-2.5 text-xs transition cursor-pointer ${
+                      isSelected
+                        ? "bg-white text-accent font-semibold border border-border/70 shadow-xs"
+                        : "text-muted-foreground hover:bg-black/[0.03] hover:text-foreground border border-transparent"
+                    }`}
                   >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "text-accent" : "text-muted-foreground"}`} />
+                      <span className="truncate">{sess.title}</span>
+                    </div>
 
-        {/* HITL Safety Badge */}
-        <div className="border-t border-slate-800 p-3 bg-slate-950/40 text-[11px] text-slate-400 flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-          <span>Human-in-the-Loop protection active.</span>
-        </div>
-      </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteSession(sess.id, e)}
+                      className="opacity-0 group-hover:opacity-100 rounded p-1 text-muted-foreground hover:bg-slate-100 hover:text-rose-600 transition"
+                      title="Delete Session"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* HITL Safety Badge */}
+          <div className="border-t border-border/50 p-3 bg-white/40 text-[11px] text-muted-foreground flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>Human-in-the-Loop protection active.</span>
+          </div>
+        </aside>
+      )}
 
       {/* 2. Main Center Workstation */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top Control Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/40 px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-white/70 backdrop-blur-md px-5 py-3">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-slate-200 truncate max-w-xs md:max-w-md">
+            {!isSessionSidebarOpen && (
+              <button
+                type="button"
+                onClick={() => setIsSessionSidebarOpen(true)}
+                className="p-1.5 text-muted-foreground hover:text-accent hover:bg-black/[0.04] rounded-lg transition border border-border/60 bg-white shadow-2xs mr-1"
+                title="Open Session List"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            )}
+
+            <h2 className="text-sm font-bold font-serif text-foreground truncate max-w-xs md:max-w-md tracking-tight">
               {sessionDetail?.session.title || "AI Code Impact & Review Assistant"}
             </h2>
             {sessionDetail?.session.current_phase && (
-              <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-[10px] font-mono uppercase text-sky-400 border border-slate-700">
+              <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-mono uppercase text-accent border border-accent/20 font-semibold">
                 {sessionDetail.session.current_phase}
               </span>
             )}
@@ -261,16 +289,16 @@ export default function AgentPage() {
 
           <div className="flex items-center gap-2.5">
             {/* Repository Selector */}
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-xs text-slate-300">
-              <FolderGit2 className="h-3.5 w-3.5 text-sky-400" />
+            <div className="flex items-center gap-1.5 rounded-xl border border-border/70 bg-white px-2.5 py-1 text-xs text-foreground shadow-2xs">
+              <FolderGit2 className="h-3.5 w-3.5 text-accent" />
               <select
                 value={activeRepositoryId || ""}
                 onChange={(e) => setActiveRepositoryId(e.target.value || null)}
-                className="bg-transparent text-slate-200 focus:outline-none cursor-pointer"
+                className="bg-transparent text-foreground focus:outline-none cursor-pointer font-medium"
               >
-                <option value="" className="bg-slate-900">Select Repository...</option>
+                <option value="">Select Repository...</option>
                 {repositories.map((repo: any) => (
-                  <option key={repo.id} value={repo.id} className="bg-slate-900">
+                  <option key={repo.id} value={repo.id}>
                     {repo.name}
                   </option>
                 ))}
@@ -278,16 +306,16 @@ export default function AgentPage() {
             </div>
 
             {/* Requirement Selector */}
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-xs text-slate-300">
-              <Layers className="h-3.5 w-3.5 text-indigo-400" />
+            <div className="flex items-center gap-1.5 rounded-xl border border-border/70 bg-white px-2.5 py-1 text-xs text-foreground shadow-2xs">
+              <Layers className="h-3.5 w-3.5 text-purple-600" />
               <select
                 value={selectedReqId || ""}
                 onChange={(e) => setSelectedReqId(e.target.value || null)}
-                className="bg-transparent text-slate-200 focus:outline-none cursor-pointer max-w-[150px] truncate"
+                className="bg-transparent text-foreground focus:outline-none cursor-pointer max-w-[150px] truncate font-medium"
               >
-                <option value="" className="bg-slate-900">Link Story/BRD...</option>
+                <option value="">Link Story/BRD...</option>
                 {requirements.map((req: any) => (
-                  <option key={req.id} value={req.id} className="bg-slate-900">
+                  <option key={req.id} value={req.id}>
                     {req.jira_key ? `[${req.jira_key}] ` : ""}{req.title}
                   </option>
                 ))}
@@ -298,7 +326,7 @@ export default function AgentPage() {
             <button
               type="button"
               onClick={() => setIsInspectorOpen(!isInspectorOpen)}
-              className="rounded-lg border border-slate-800 bg-slate-900/80 p-1.5 text-slate-400 hover:text-white transition"
+              className="rounded-xl border border-border/70 bg-white p-1.5 text-muted-foreground hover:text-accent shadow-2xs transition"
               title="Toggle Context & Artifact Inspector"
             >
               {isInspectorOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
@@ -319,14 +347,14 @@ export default function AgentPage() {
         />
 
         {/* Quick Action Suggestion Chips */}
-        <div className="border-t border-slate-800/80 bg-slate-950/80 px-4 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <div className="border-t border-border/50 bg-[#FAF8F5]/60 px-4 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
           {QUICK_ACTIONS.map((action, i) => (
             <button
               key={i}
               type="button"
               onClick={() => handleSendMessage(action.prompt)}
               disabled={sendMessageMutation.isPending || isStreaming}
-              className="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 hover:border-sky-500/40 hover:bg-slate-800 transition disabled:opacity-50"
+              className="shrink-0 rounded-full border border-border/80 bg-white px-3 py-1.5 text-xs font-medium text-foreground hover:border-accent hover:text-accent hover:bg-white shadow-2xs transition disabled:opacity-50"
             >
               {action.label}
             </button>
@@ -334,13 +362,13 @@ export default function AgentPage() {
         </div>
 
         {/* Input Bar */}
-        <div className="border-t border-slate-800 bg-slate-900/90 p-4 backdrop-blur-md">
+        <div className="border-t border-border/50 bg-white/90 p-4 backdrop-blur-md">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSendMessage();
             }}
-            className="flex items-center gap-3 rounded-xl border border-slate-700/80 bg-slate-950 px-4 py-2.5 shadow-inner focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500 transition"
+            className="flex items-center gap-3 rounded-2xl border border-border/80 bg-[#FAF8F5]/80 px-4 py-2.5 shadow-inner focus-within:border-accent focus-within:bg-white focus-within:ring-2 focus-within:ring-accent/10 transition"
           >
             <textarea
               value={inputContent}
@@ -354,13 +382,13 @@ export default function AgentPage() {
               placeholder="Ask the AI agent... (e.g. 'Where should I start for requirement PROJ-102?')"
               rows={1}
               disabled={sendMessageMutation.isPending || isStreaming}
-              className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none resize-none"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-none"
             />
 
             <button
               type="submit"
               disabled={!inputContent.trim() || sendMessageMutation.isPending || isStreaming}
-              className="rounded-lg bg-sky-500 p-2 text-white hover:bg-sky-400 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-sky-500/20"
+              className="rounded-xl bg-accent p-2 text-white hover:bg-accent/90 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
             >
               {sendMessageMutation.isPending || isStreaming ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

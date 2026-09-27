@@ -50,7 +50,7 @@ export function AgentContextInspector({
       <button
         type="button"
         onClick={onToggle}
-        className="fixed right-0 top-1/2 -translate-y-1/2 rounded-l-xl border border-r-0 border-slate-800 bg-slate-900/90 p-2.5 text-slate-400 shadow-xl backdrop-blur-md hover:text-white transition z-20"
+        className="fixed right-0 top-1/2 -translate-y-1/2 rounded-l-xl border border-r-0 border-border/80 bg-white/95 p-2.5 text-muted-foreground shadow-lg backdrop-blur-md hover:text-accent transition z-20"
         title="Open Context & Artifact Inspector"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -59,30 +59,30 @@ export function AgentContextInspector({
   }
 
   return (
-    <div className="flex h-full w-80 md:w-96 flex-col border-l border-slate-800 bg-slate-950/95 backdrop-blur-xl">
+    <div className="flex h-full w-80 md:w-96 flex-col border-l border-border/60 bg-white/95 backdrop-blur-xl shadow-xs">
       {/* Inspector Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3.5">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3.5">
+        <h3 className="text-xs font-bold font-serif uppercase tracking-wider text-foreground">
           Context & Artifact Inspector
         </h3>
         <button
           type="button"
           onClick={onToggle}
-          className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+          className="rounded-lg p-1 text-muted-foreground hover:bg-slate-100 hover:text-foreground transition"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 bg-slate-900/50">
+      <div className="flex border-b border-border/60 bg-[#FAF8F5]/80">
         <button
           type="button"
           onClick={() => setActiveTab("requirement")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition border-b-2 ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition border-b-2 ${
             activeTab === "requirement"
-              ? "border-sky-500 text-sky-400 bg-sky-500/5"
-              : "border-transparent text-slate-400 hover:text-slate-200"
+              ? "border-accent text-accent bg-white"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <Layers className="h-3.5 w-3.5" />
@@ -92,10 +92,10 @@ export function AgentContextInspector({
         <button
           type="button"
           onClick={() => setActiveTab("code")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition border-b-2 ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition border-b-2 ${
             activeTab === "code"
-              ? "border-sky-500 text-sky-400 bg-sky-500/5"
-              : "border-transparent text-slate-400 hover:text-slate-200"
+              ? "border-accent text-accent bg-white"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <FileCode2 className="h-3.5 w-3.5" />
@@ -105,10 +105,10 @@ export function AgentContextInspector({
         <button
           type="button"
           onClick={() => setActiveTab("impact")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition border-b-2 ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition border-b-2 ${
             activeTab === "impact"
-              ? "border-sky-500 text-sky-400 bg-sky-500/5"
-              : "border-transparent text-slate-400 hover:text-slate-200"
+              ? "border-accent text-accent bg-white"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <Activity className="h-3.5 w-3.5" />
@@ -118,10 +118,10 @@ export function AgentContextInspector({
         <button
           type="button"
           onClick={() => setActiveTab("pr_draft")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition border-b-2 ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition border-b-2 ${
             activeTab === "pr_draft"
-              ? "border-sky-500 text-sky-400 bg-sky-500/5"
-              : "border-transparent text-slate-400 hover:text-slate-200"
+              ? "border-accent text-accent bg-white"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <GitPullRequest className="h-3.5 w-3.5" />
@@ -134,14 +134,14 @@ export function AgentContextInspector({
         {/* Tab 1: Requirement Context */}
         {activeTab === "requirement" && (
           <div className="space-y-3.5 text-xs">
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <div className="rounded-xl border border-border/60 bg-[#FAF8F5]/80 p-3.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 Active Requirement
               </span>
-              <p className="font-semibold text-slate-200 mt-1">
+              <p className="font-serif font-bold text-foreground mt-1">
                 {sessionDetail?.session.requirement_id ? `ID: ${sessionDetail.session.requirement_id}` : "No specific requirement linked"}
               </p>
-              <p className="text-slate-400 mt-2 leading-relaxed">
+              <p className="text-muted-foreground mt-2 leading-relaxed">
                 Requirements provide grounding for automated AST symbol exploration and PR linkage.
               </p>
             </div>
@@ -151,27 +151,27 @@ export function AgentContextInspector({
         {/* Tab 2: Code Explorer */}
         {activeTab === "code" && (
           <div className="space-y-3 text-xs">
-            <div className="flex items-center justify-between text-slate-400">
+            <div className="flex items-center justify-between text-muted-foreground font-medium">
               <span>Suggested Files ({startingPoints.length})</span>
             </div>
 
             {startingPoints.length === 0 ? (
-              <p className="text-slate-500 italic">No starting points recorded yet.</p>
+              <p className="text-muted-foreground italic">No starting points recorded yet.</p>
             ) : (
               <div className="space-y-2">
                 {startingPoints.map((item: any, idx: number) => (
                   <div
                     key={idx}
-                    className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 space-y-1.5"
+                    className="rounded-xl border border-border/60 bg-[#FAF8F5]/80 p-3 space-y-1.5"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-slate-200 truncate">{item.file_path}</span>
-                      <span className="text-[10px] text-sky-400">{Math.round(item.confidence * 100)}%</span>
+                      <span className="font-mono text-foreground font-medium truncate">{item.file_path}</span>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-semibold border border-emerald-200">{Math.round(item.confidence * 100)}%</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
+                    <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
                       <span>Symbol:</span>
-                      <code className="text-sky-300 font-mono">{item.symbol_name}</code>
-                      <span className="text-slate-500">(L{item.line_start}–{item.line_end})</span>
+                      <code className="text-accent font-mono font-semibold">{item.symbol_name}</code>
+                      <span className="text-muted-foreground">(L{item.line_start}–{item.line_end})</span>
                     </div>
                   </div>
                 ))}
@@ -184,27 +184,27 @@ export function AgentContextInspector({
         {activeTab === "impact" && (
           <div className="space-y-3 text-xs">
             {!impactSummary ? (
-              <p className="text-slate-500 italic">Blast radius calculation not run yet.</p>
+              <p className="text-muted-foreground italic">Blast radius calculation not run yet.</p>
             ) : (
               <div className="space-y-3">
-                <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3.5">
+                <div className="rounded-xl border border-border/60 bg-[#FAF8F5]/80 p-3.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Risk Assessment</span>
-                    <span className="rounded bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-400">
+                    <span className="text-muted-foreground font-medium">Risk Assessment</span>
+                    <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
                       {impactSummary.risk_level || "Medium"}
                     </span>
                   </div>
-                  <p className="mt-2 text-slate-300">
+                  <p className="mt-2 text-foreground">
                     {impactSummary.impacted_files_count || 0} potentially impacted files detected across downstream AST dependencies.
                   </p>
                 </div>
 
                 {impactSummary.downstream_routes && impactSummary.downstream_routes.length > 0 && (
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                    <span className="text-[10px] uppercase font-semibold text-slate-500">Affected Routes</span>
+                  <div className="rounded-xl border border-border/60 bg-[#FAF8F5]/50 p-3">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Affected Routes</span>
                     <div className="mt-1.5 space-y-1">
                       {impactSummary.downstream_routes.map((route: string, i: number) => (
-                        <div key={i} className="font-mono text-[11px] text-slate-300 bg-slate-950/60 px-2 py-1 rounded">
+                        <div key={i} className="font-mono text-[11px] text-foreground bg-white px-2 py-1 rounded border border-border/60">
                           {route}
                         </div>
                       ))}
@@ -220,22 +220,22 @@ export function AgentContextInspector({
         {activeTab === "pr_draft" && (
           <div className="space-y-3 text-xs">
             {!prDraft ? (
-              <p className="text-slate-500 italic">No PR description draft generated yet.</p>
+              <p className="text-muted-foreground italic">No PR description draft generated yet.</p>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-300">PR Markdown Draft</span>
+                  <span className="font-serif font-bold text-foreground">PR Markdown Draft</span>
                   <button
                     type="button"
                     onClick={() => handleCopyMarkdown(prDraft.raw_markdown)}
-                    className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:bg-slate-700"
+                    className="inline-flex items-center gap-1 rounded-xl bg-accent px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-accent/90"
                   >
-                    {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                    {copied ? <Check className="h-3 w-3 text-emerald-300" /> : <Copy className="h-3 w-3" />}
                     <span>{copied ? "Copied" : "Copy"}</span>
                   </button>
                 </div>
 
-                <div className="rounded-lg border border-slate-800 bg-slate-900/80 p-3 text-slate-300 prose prose-invert prose-xs max-w-none">
+                <div className="rounded-xl border border-border/60 bg-[#FAF8F5]/50 p-3.5 text-foreground prose prose-slate prose-xs max-w-none prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-accent prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
                   <ReactMarkdown>{prDraft.raw_markdown}</ReactMarkdown>
                 </div>
               </div>

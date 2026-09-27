@@ -94,19 +94,19 @@ export function AgentChatThread({
           >
             {/* Agent Avatar */}
             {!isUser && (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20">
-                <Sparkles className="h-4 w-4" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent text-white shadow-xs border border-accent/20">
+                <Sparkles className="h-4 w-4 text-emerald-300" />
               </div>
             )}
 
             {/* Bubble */}
             <div
-              className={`max-w-[85%] rounded-2xl p-4.5 text-sm transition shadow-sm ${
+              className={`max-w-[85%] rounded-2xl p-4.5 text-sm transition shadow-xs ${
                 isUser
-                  ? "bg-sky-600 text-white rounded-tr-sm shadow-sky-600/10"
+                  ? "bg-accent text-white rounded-tr-sm shadow-accent/10"
                   : msg.message_type === "error"
-                  ? "bg-rose-950/40 border border-rose-800 text-rose-200 rounded-tl-sm"
-                  : "bg-slate-900/90 border border-slate-800 text-slate-200 rounded-tl-sm backdrop-blur-md"
+                  ? "bg-rose-50 border border-rose-200 text-rose-800 rounded-tl-sm"
+                  : "bg-white border border-border/80 text-foreground rounded-tl-sm shadow-xs"
               }`}
             >
               {/* Agent role / reasoning pill */}
@@ -115,9 +115,9 @@ export function AgentChatThread({
                   <button
                     type="button"
                     onClick={() => toggleReasoning(msg.id)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-800/60 px-2.5 py-0.5 text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-[#FAF8F5] px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-slate-100 transition"
                   >
-                    <Cpu className="h-3 w-3 text-sky-400" />
+                    <Cpu className="h-3 w-3 text-accent" />
                     <span>Agent: {msg.agent_role}</span>
                     {reasoningOpen ? (
                       <ChevronDown className="h-3 w-3" />
@@ -127,8 +127,8 @@ export function AgentChatThread({
                   </button>
 
                   {reasoningOpen && (
-                    <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/80 p-2.5 font-mono text-[11px] text-slate-400">
-                      <div className="flex items-center gap-1 text-slate-500 mb-1">
+                    <div className="mt-2 rounded-xl border border-border/60 bg-[#FAF8F5] p-2.5 font-mono text-[11px] text-muted-foreground">
+                      <div className="flex items-center gap-1 text-accent font-semibold mb-1">
                         <Terminal className="h-3 w-3" />
                         <span>Tool Invocation Log</span>
                       </div>
@@ -139,7 +139,13 @@ export function AgentChatThread({
               )}
 
               {/* Message Content */}
-              <div className="prose prose-invert prose-xs max-w-none break-words leading-relaxed">
+              <div
+                className={`prose prose-xs max-w-none break-words leading-relaxed ${
+                  isUser
+                    ? "prose-invert text-white"
+                    : "prose-slate text-foreground prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-accent prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
+                }`}
+              >
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
 
@@ -149,7 +155,7 @@ export function AgentChatThread({
 
             {/* User Avatar */}
             {isUser && (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-800 text-slate-300 border border-slate-700 shadow-sm">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-foreground border border-border/60 shadow-xs">
                 <User className="h-4 w-4" />
               </div>
             )}
@@ -160,27 +166,27 @@ export function AgentChatThread({
       {/* Live Streaming State Bubble */}
       {isStreaming && (
         <div className="flex gap-3.5 justify-start">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20 animate-pulse">
-            <Sparkles className="h-4 w-4" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent text-white shadow-xs border border-accent/20 animate-pulse">
+            <Sparkles className="h-4 w-4 text-emerald-300" />
           </div>
 
-          <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-slate-800 bg-slate-900/90 p-4 text-sm text-slate-200 backdrop-blur-md">
+          <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-border/80 bg-white p-4 text-sm text-foreground shadow-xs">
             {statusMessage && (
-              <div className="flex items-center gap-2 text-xs text-sky-400 font-medium mb-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <div className="flex items-center gap-2 text-xs text-accent font-semibold mb-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
                 <span>{statusMessage}</span>
               </div>
             )}
 
             {streamingContent ? (
-              <div className="prose prose-invert prose-xs max-w-none break-words leading-relaxed">
+              <div className="prose prose-slate prose-xs max-w-none break-words leading-relaxed text-foreground prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-accent prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
                 <ReactMarkdown>{streamingContent}</ReactMarkdown>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 py-1 text-slate-500 text-xs">
-                <div className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-bounce" />
-                <div className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-bounce [animation-delay:0.2s]" />
-                <div className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-bounce [animation-delay:0.4s]" />
+              <div className="flex items-center gap-1.5 py-1 text-muted-foreground text-xs">
+                <div className="h-1.5 w-1.5 rounded-full bg-accent animate-bounce" />
+                <div className="h-1.5 w-1.5 rounded-full bg-accent animate-bounce [animation-delay:0.2s]" />
+                <div className="h-1.5 w-1.5 rounded-full bg-accent animate-bounce [animation-delay:0.4s]" />
               </div>
             )}
           </div>

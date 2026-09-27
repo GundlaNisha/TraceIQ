@@ -15,8 +15,9 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
 
     lines = diff_text.splitlines()
     for idx, line in enumerate(lines, 1):
+        clean_line = line.lstrip("+-").strip()
         # 1. Hardcoded API keys / Secrets
-        if re.search(r"(?:api_key|secret|password|token)\s*=\s*['\"][A-Za-z0-9_\-]{8,}['\"]", line, re.IGNORECASE):
+        if re.search(r"(?:api_key|secret|password|token)\s*=\s*['\"][A-Za-z0-9_\-]{8,}['\"]", clean_line, re.IGNORECASE):
             findings.append({
                 "severity": "high",
                 "category": "security",
@@ -27,7 +28,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
             })
 
         # 2. Raw SQL string concatenation (SQL injection risk)
-        if re.search(r"(?:SELECT|INSERT|UPDATE|DELETE).*\+.*(?:['\"])", line, re.IGNORECASE) or re.search(r"execute\s*\(\s*f['\"].*\{.*\}", line):
+        if re.search(r"(?:SELECT|INSERT|UPDATE|DELETE).*\+", clean_line, re.IGNORECASE) or re.search(r"execute\s*\(\s*f['\"].*\{.*\}", clean_line):
             findings.append({
                 "severity": "high",
                 "category": "security",
@@ -38,7 +39,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
             })
 
         # 3. Bare except clauses
-        if re.search(r"^\s*except\s*:\s*$", line):
+        if re.search(r"^except\s*:\s*$", clean_line):
             findings.append({
                 "severity": "medium",
                 "category": "error-handling",
@@ -49,7 +50,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
             })
 
         # 4. Print / console.log debugging left in code
-        if re.search(r"^\s*(?:print\(|console\.log\()", line):
+        if re.search(r"^(?:print\(|console\.log\()", clean_line):
             findings.append({
                 "severity": "low",
                 "category": "code-style",
@@ -60,7 +61,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
             })
 
         # 5. TODO / FIXME markers
-        if re.search(r"\b(?:TODO|FIXME|HACK)\b", line):
+        if re.search(r"\b(?:TODO|FIXME|HACK)\b", clean_line):
             findings.append({
                 "severity": "low",
                 "category": "code-quality",

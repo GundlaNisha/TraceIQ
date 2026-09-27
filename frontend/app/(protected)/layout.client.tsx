@@ -7,6 +7,7 @@ import { GlobalSearchBar } from "@/features/search/components/GlobalSearchBar";
 import { useEnsureBackendUser } from "@/features/auth/api/queries";
 import { UserButton, useUser } from "@clerk/nextjs";
 import { WorkspaceSwitcher } from "@/features/workspace/components/WorkspaceSwitcher";
+import { NotificationsMenu } from "@/features/notifications/components/NotificationsMenu";
 import { useState } from "react";
 import { EditProfileModal } from "@/features/auth/components/EditProfileModal";
 import {
@@ -52,6 +53,50 @@ export default function ProtectedLayoutClient({
 
   const displayName = user?.username || backendUser?.name || user?.firstName || "User";
   const displayEmail = user?.emailAddresses[0]?.emailAddress || backendUser?.email || "";
+
+  const isJoinFlow = pathname?.startsWith("/join");
+
+  if (isJoinFlow) {
+    return (
+      <div className="min-h-screen bg-slate-50/60 flex flex-col text-foreground antialiased selection:bg-accent/20 selection:text-accent">
+        {/* Minimal Invitation Header */}
+        <header className="bg-white/80 backdrop-blur-xl border-b border-border/50 shrink-0 z-20 px-6 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+          <div className="max-w-5xl mx-auto flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2.5 group transition-opacity hover:opacity-90">
+              <Image
+                src="/logo.png"
+                alt="TraceIQ"
+                width={28}
+                height={28}
+                className="w-7 h-7 object-contain drop-shadow-xs transition-transform group-hover:scale-105"
+                priority
+              />
+              <span className="text-lg font-bold font-serif text-foreground tracking-tight">
+                TraceIQ
+              </span>
+            </Link>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Signed in as <strong className="text-foreground">{displayEmail || displayName}</strong>
+              </span>
+              <UserButton
+                userProfileMode="modal"
+                appearance={{
+                  elements: {
+                    userButtonAvatarBox: "w-7 h-7 rounded-xl ring-2 ring-border/50",
+                  },
+                }}
+              />
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground antialiased selection:bg-accent/20 selection:text-accent">
@@ -158,7 +203,10 @@ export default function ProtectedLayoutClient({
             </div>
 
             {/* Right-Hand Profile & System Status */}
-            <div className="flex items-center gap-3.5 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
+              {/* Notifications Menu */}
+              <NotificationsMenu />
+
               {/* Sync Status Badge */}
               <BackendSyncPill
                 loading={backendUserLoading}

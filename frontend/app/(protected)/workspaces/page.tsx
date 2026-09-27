@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useWorkspaces, useCreateWorkspace } from "@/features/workspace/api/queries";
+import { useRouter } from "next/navigation";
+import {
+  useWorkspaces,
+  useCreateWorkspace,
+  useMyWorkspaceInvitations,
+  useAcceptInvite,
+  useDeclineInvite,
+} from "@/features/workspace/api/queries";
 import { useWorkspaceStore } from "@/stores/workspace";
 import {
   Users,
@@ -17,6 +24,9 @@ import {
   FolderGit2,
   Check,
   CheckCircle2,
+  Mail,
+  ExternalLink,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -134,9 +144,14 @@ function CreateWorkspaceModal({
 }
 
 export default function WorkspacesPage() {
+  const router = useRouter();
   const { data: workspaces, isLoading } = useWorkspaces();
+  const { data: myInvitations } = useMyWorkspaceInvitations();
+  const { mutate: acceptInvite } = useAcceptInvite();
+  const { mutate: declineInvite } = useDeclineInvite();
   const { activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore();
   const [showCreate, setShowCreate] = useState(false);
+  const [actingToken, setActingToken] = useState<string | null>(null);
 
   const isPersonalActive = !activeWorkspaceId;
 
@@ -160,6 +175,130 @@ export default function WorkspacesPage() {
           New Workspace
         </Button>
       </div>
+
+      {/* Pending Workspace Invitations for You */}
+      {myInvitations && myInvitations.length > 0 && (
+        <div className="bg-gradient-to-r from-accent/10 via-purple-500/10 to-indigo-500/10 border border-accent/30 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-accent text-white flex items-center justify-center shadow-xs">
+                <Mail className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                  Invitations for You ({myInvitations.length})
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  You have been invited to collaborate in these workspaces. Accept to gain access.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {myInvitations.map((inv) => {
+              const isActing = actingToken === inv.token;
+              return (
+                <div
+                  key={inv.id}
+                  className="bg-white rounded-xl border border-border/60 p-4 shadow-2xs flex flex-col justify-between gap-3 hover:border-accent/40 transition-colors"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent font-bold text-sm shrink-0">
+                          {inv.workspace_name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-foreground truncate">
+                            {inv.workspace_name}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {inv.invited_by_name || inv.invited_by_email ? (
+                              <>
+                                Invited by <strong>{inv.invited_by_name || inv.invited_by_email}</strong>
+                              </>
+                            ) : (
+                              "Team invitation"
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span className="text-[10px] font-semibold capitalize bg-accent/10 text-accent px-2 py-0.5 rounded-full border border-accent/20 shrink-0">
+                        {inv.role}
+                      </span>
+                    </div>
+
+                    {inv.workspace_description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                        {inv.workspace_description}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground pt-0.5">
+                      <Clock className="w-3 h-3 text-muted-foreground/70" />
+                      <span>Expires {new Date(inv.expires_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-border/40 gap-2">
+                    <Link
+                      href={`/join/${inv.token}`}
+                      className="text-xs text-accent hover:underline font-medium inline-flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Preview
+                    </Link>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isActing}
+                        onClick={() => {
+                          if (confirm(`Decline invitation to join ${inv.workspace_name}?`)) {
+                            setActingToken(inv.token);
+                            declineInvite(inv.token, {
+                              onSettled: () => setActingToken(null),
+                            });
+                          }
+                        }}
+                        className="text-xs h-8 hover:text-rose-600 hover:bg-rose-50 border-border/60"
+                      >
+                        Decline
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={isActing}
+                        onClick={() => {
+                          setActingToken(inv.token);
+                          acceptInvite(inv.token, {
+                            onSuccess: (ws) => {
+                              setActiveWorkspace(ws.id, ws.name);
+                              setActingToken(null);
+                              router.push("/dashboard");
+                            },
+                            onError: () => setActingToken(null),
+                          });
+                        }}
+                        className="text-xs h-8 gap-1.5 shadow-2xs"
+                      >
+                        {isActing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        Accept
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Personal Workspace Hero Card */}
       <div

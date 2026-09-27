@@ -1,0 +1,214 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "TraceIQ Low-Level Code Intelligence Pipeline",
+    "quality_profile": "showcase",
+    "output": "docs/architecture/traceiq-pipeline-workflow.html",
+    "views": [
+      {
+        "id": "full-pipeline",
+        "label": "1. End-to-End Pipeline",
+        "focus": ["git_diff", "treesitter", "chunker", "rrf_search", "blast_radius", "ci_checks", "ci_correlate", "llm_review", "github_delivery"],
+        "note": "Follow the complete execution from git diff ingestion to multi-channel review delivery."
+      },
+      {
+        "id": "ast-and-graph",
+        "label": "2. AST Graph & Blast Radius",
+        "focus": ["git_diff", "treesitter", "chunker", "rrf_search", "blast_radius"],
+        "note": "Isolate multi-language CST parsing, breadcrumb chunking, and 2-hop graph traversal."
+      },
+      {
+        "id": "ci-and-review",
+        "label": "3. CI Correlation & AI Delivery",
+        "focus": ["ci_checks", "ci_correlate", "llm_review", "github_delivery"],
+        "note": "Examine live check-run ingestion, root-cause token isolation, and automated PR commenting."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "ingest", "label": "1. Repository Parsing & AST Extraction" },
+    { "id": "graph", "label": "2. Hybrid Search & Blast Radius" },
+    { "id": "ci", "label": "3. GitHub CI & Reliability Telemetry" },
+    { "id": "delivery", "label": "4. AI Review & Multi-Channel Delivery" }
+  ],
+  "phases": [
+    { "id": "phase_ingest", "label": "AST Ingestion", "fromCol": 0, "toCol": 2 },
+    { "id": "phase_graph", "label": "Impact Traversal", "fromCol": 3, "toCol": 4, "variant": "emphasis" },
+    { "id": "phase_deliver", "label": "Review Delivery", "fromCol": 5, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["git_diff", "treesitter", "chunker", "rrf_search", "blast_radius", "llm_review"],
+  "nodes": [
+    {
+      "id": "git_diff",
+      "lane": "ingest",
+      "col": 0,
+      "type": "frontend",
+      "label": "Git Patch & Diff",
+      "sublabel": "extract unidiff hunks",
+      "tag": "GitPython / HTTPX",
+      "width": 136
+    },
+    {
+      "id": "treesitter",
+      "lane": "ingest",
+      "col": 1,
+      "type": "backend",
+      "label": "Tree-sitter Parser",
+      "sublabel": "CST node visitor",
+      "tag": "Py / TS / Go / Rust",
+      "width": 136
+    },
+    {
+      "id": "chunker",
+      "lane": "ingest",
+      "col": 2,
+      "type": "database",
+      "label": "Semantic Chunker",
+      "sublabel": "breadcrumb injection",
+      "tag": "pgvector HNSW 384d",
+      "width": 136
+    },
+    {
+      "id": "rrf_search",
+      "lane": "graph",
+      "col": 3,
+      "type": "database",
+      "label": "Tri-Signal RRF",
+      "sublabel": "vectors + tsvector + AST",
+      "tag": "Sub-15ms SQL (k=60)",
+      "width": 136
+    },
+    {
+      "id": "blast_radius",
+      "lane": "graph",
+      "col": 4,
+      "type": "backend",
+      "label": "2-Hop Blast Radius",
+      "sublabel": "recursive CTE walk",
+      "tag": "Fan-out Risk Score",
+      "width": 136
+    },
+    {
+      "id": "ci_checks",
+      "lane": "ci",
+      "col": 2,
+      "type": "external",
+      "label": "GitHub Checks API",
+      "sublabel": "fetch live check runs",
+      "tag": "Octokit REST v3",
+      "width": 136
+    },
+    {
+      "id": "ci_correlate",
+      "lane": "ci",
+      "col": 3,
+      "type": "backend",
+      "label": "CI Correlation",
+      "sublabel": "token overlap isolation",
+      "tag": "Clean / In-Scope",
+      "width": 136
+    },
+    {
+      "id": "llm_review",
+      "lane": "delivery",
+      "col": 5,
+      "type": "backend",
+      "label": "LiteLLM Orchestrator",
+      "sublabel": "Gemini 3.5 Flash Lite",
+      "tag": "Instructor Pydantic",
+      "width": 136
+    },
+    {
+      "id": "github_delivery",
+      "lane": "ci",
+      "col": 5,
+      "type": "external",
+      "label": "PR & Jira Delivery",
+      "sublabel": "inline comments & ADF",
+      "tag": "Check-run Status",
+      "width": 136
+    }
+  ],
+  "edges": [
+    {
+      "id": "diff-to-parser",
+      "from": "git_diff",
+      "to": "treesitter",
+      "label": "parse AST",
+      "variant": "emphasis"
+    },
+    {
+      "id": "parser-to-chunker",
+      "from": "treesitter",
+      "to": "chunker",
+      "label": "spans & symbols",
+      "variant": "default"
+    },
+    {
+      "id": "chunker-to-rrf",
+      "from": "chunker",
+      "to": "rrf_search",
+      "label": "seed match",
+      "variant": "emphasis"
+    },
+    {
+      "id": "rrf-to-blast",
+      "from": "rrf_search",
+      "to": "blast_radius",
+      "label": "hop 1 direct",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ci-to-correlate",
+      "from": "ci_checks",
+      "to": "ci_correlate",
+      "label": "raw runs",
+      "variant": "default"
+    },
+    {
+      "id": "blast-to-correlate",
+      "from": "blast_radius",
+      "to": "ci_correlate",
+      "label": "impact set",
+      "variant": "default"
+    },
+    {
+      "id": "blast-to-llm",
+      "from": "blast_radius",
+      "to": "llm_review",
+      "label": "impact context",
+      "variant": "emphasis"
+    },
+    {
+      "id": "correlate-to-llm",
+      "from": "ci_correlate",
+      "to": "llm_review",
+      "label": "CI verdict",
+      "variant": "default"
+    },
+    {
+      "id": "llm-to-delivery",
+      "from": "llm_review",
+      "to": "github_delivery",
+      "label": "findings",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "AST Extraction & Graph Traversal",
+      "items": [
+        "Tree-sitter CST visitor extracts symbols and 2-hop recursive CTE walks caller call sites."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "CI Correlation & AI Delivery",
+      "items": [
+        "Deterministic token overlap isolates regressions; LiteLLM posts structured PR comments."
+      ]
+    }
+  ]
+}

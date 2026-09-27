@@ -99,6 +99,20 @@ $$RRF(d) = \sum_{m \in M} \frac{1}{k + r_m(d)} \quad (k = 60)$$
 - **Zero-Hover Action Toolbar**: Instant access to **Analyze Blast Radius**, **Sync Jira**, **Transition Status**, **Post Comment**, and **Edit**.
 - **Slide-in Inspector Drawer**: Side drawer featuring clean document reading, 1-click Markdown copying, and an interactive **Version History Timeline**.
 
+### 8. Live GitHub CI Checks & Blast-Radius Correlation Engine (Commit `07666b3`)
+- **Live Status Badges (`GET /api/v1/github/pull-requests/checks`)**: Real-time CI check runs tracking directly in pull request lists and detail views with passing/failing/pending status pills, check durations, and deep links to GitHub Actions logs.
+- **Automated Failure Correlation (`GET /api/v1/github/pull-requests/ci-correlation`)**: Cross-references failing CI checks with the files flagged in the PR review's 2-hop blast-radius impact analysis. Returns deterministic verdicts:
+  - `clean`: All CI checks passing (green).
+  - `in_scope`: One or more failing checks directly overlap files or modules flagged in TraceIQ's predicted blast radius (`in_blast_radius`).
+  - `unrelated`: CI failures are outside the predicted impact radius (e.g. global lint error, flaky infra, unrelated test).
+- **CI-Aware AI Code Reviews**: The automated PR review engine ingests `<ci_status>` in real time. When CI is failing, TraceIQ automatically refuses to present the PR as safe to merge and elevates severity for findings in files touched by failing checks that overlap the blast radius.
+
+### 9. Repository Actions Health & CI Reliability Analytics (Commit `98bed56`)
+- **Interactive Actions Dashboard (`GET /api/v1/github/pull-requests/actions`)**: Dedicated Actions tab in repository details tracking workflow runs, overall success rate, and average run durations.
+- **Flaky Workflow Detection**: Identifies "recovery episodes" (a failed run followed by a successful run of the same workflow) to isolate and rank flaky workflows.
+- **Mean Time to Resolution (MTTR)**: Measures average duration from initial failure to recovery across closed episodes.
+- **Consecutive Streak Tracking**: Computes passing and failing run streaks per workflow with trailing 10-run success rates.
+
 ---
 
 ## 🏛️ System Architecture
@@ -180,7 +194,7 @@ graph TD
 
 ### 2. High-Performance Multi-Model AI Routing (Commit `5c4f6eb`)
 * **Problem**: Fluctuating API rate limits, vendor lock-in, and payload serialization discrepancies between OpenAI, Anthropic, and Google Gemini schemas.
-* **Solution**: Unified all AI operations behind `LiteLLMAdapter` with `instructor` structured outputs. The engine dynamically sets `gemini/gemini-3.6-flash` as the high-speed default with 0 MB server RAM overhead, while providing automatic fallback to custom base URLs or OpenAI endpoints (`OPENAI_API_BASE`).
+* **Solution**: Unified all AI operations behind `LiteLLMAdapter` with `instructor` structured outputs. The engine dynamically sets Google Gemini as the high-speed default with 0 MB server RAM overhead, while providing automatic fallback to custom base URLs or OpenAI endpoints (`OPENAI_API_BASE`).
 
 ### 3. Robust Jira Integration with HMAC Verification & Isolated Sessions (Commit `675ae37` & `38c100e`)
 * **Problem**: Jira Cloud webhooks operate over public networks without standard session cookies and transmit complex nested JSON trees (ADF) rather than standard Markdown. Long-running webhook processing frequently collided with request database sessions, producing SQLAlchemy detached instance errors.
@@ -188,6 +202,18 @@ graph TD
   - Implemented `verify_jira_webhook_signature` supporting native Atlassian HMAC-SHA256 headers (`X-Hub-Signature`), authorization tokens, and query secrets.
   - Built isolated database sessions (`AsyncSessionLocal`) inside webhook worker handlers to prevent connection pool starvation.
   - Created a recursive ADF parser handling headings, code blocks, lists, panels, and tables with full Markdown conversion.
+
+### 4. Live GitHub CI Synchronization & Blast-Radius Correlation Engine (Commits `07666b3` & `98bed56`)
+* **Problem**: CI failures often produce noisy test suites where engineers cannot easily tell whether a broken test is directly caused by their PR's code modifications or by an unrelated flaky infrastructure failure. Furthermore, standard AI code reviews lacked visibility into live CI results, risking approving pull requests that broke existing builds.
+* **Solution**:
+  - Implemented parallel GitHub Check-Run and Check-Suite fetching (`fetch_pr_checks`) via async HTTP client with head SHA resolution and graceful degradation (never blocks review on GitHub API hiccups).
+  - Built `correlate_ci_with_blast_radius` which mathematically intersects failing check names with predicted 2-hop impacted file paths, assigning deterministic verdicts (`clean`, `in_scope`, `unrelated`).
+  - Injected dynamic `<ci_status>` into PR review system prompts: when failing checks are in-scope, the AI automatically escalates finding severities and refuses to emit a passing verdict.
+  - Developed `analyze_reliability` for repository Actions health: detects "recovery episodes" to flag flaky workflows, tracks MTTR, and computes consecutive passing/failing run streaks.
+
+### 5. High-Efficiency LLM Defaulting to Google Gemini 3.5 Flash Lite (Commit `964bddf`)
+* **Problem**: Large diffs across multi-file pull requests require substantial token context and fast evaluation to maintain developer flow without incurring high latency or API costs.
+* **Solution**: Shifted the primary default LLM to Google Gemini `gemini-3.5-flash-lite` with LiteLLM adapter. This delivers sub-second structured schema responses via `instructor` validation with high reasoning fidelity for multi-file AST diff chunk evaluations, while supporting `gemini-3.6-flash` and OpenAI-compatible providers on demand.
 
 ---
 
@@ -207,8 +233,9 @@ graph TD
 | **ORM & Migrations** | **SQLAlchemy + Alembic** | `2.0+` | Async engine, connection pooling, schema migrations |
 | **Code Parsing** | **Tree-sitter** | `0.23+` | Multi-language AST parsing and symbol extraction |
 | **Embeddings** | **Google Gemini Embedding 2** | `384d` | Fast semantic vector embeddings with zero RAM overhead |
-| **LLM Orchestration** | **LiteLLM + Instructor** | `1.50+` | Structured schema validation and model dispatching |
-| **Task Queue** | **Celery + Redis** | `5.4+` | Distributed worker execution for repo indexing and PR reviews |
+| **LLM Orchestration** | **LiteLLM + Instructor** | `1.50+` | Gemini 3.5 Flash Lite default, structured Pydantic dispatching |
+| **CI & Webhooks** | **GitHub Checks & Actions API** | `REST v3` | Live CI check runs, Actions health dashboard, blast-radius correlation |
+| **Task Queue** | **Celery + Redis / In-Process** | `5.4+` | Event-loop safe background worker execution and caching |
 | **Authentication** | **Clerk** | `v7.7` | Multi-tenant auth, user profile sync, and JWT verification |
 
 ---
@@ -233,6 +260,7 @@ TraceIQ/
 │   │   │   ├── audit/               # Audit log models and drift tracking
 │   │   │   ├── auth/                # Clerk JWT verification and user sync
 │   │   │   ├── dashboard/           # Aggregated workspace summary metrics
+│   │   │   ├── github/              # GitHub live CI checks, correlation, Actions health, webhooks
 │   │   │   ├── impact/              # Blast radius jobs, results, and schemas
 │   │   │   ├── indexing/            # Tree-sitter parsers, chunkers, and embedders
 │   │   │   ├── jira/                # Jira sync, transitions, comments, webhooks
@@ -266,8 +294,10 @@ TraceIQ/
 │   │   └── docs/                    # Interactive documentation components & visuals
 │   ├── features/                    # Domain-driven frontend feature modules
 │   │   ├── analysis/                # Blast radius UI and polling hooks
+│   │   ├── github/                  # Live CI badges, check popovers, and Repo Actions dashboard
 │   │   ├── jira/                    # Jira configuration, transition, and comment modals
 │   │   ├── pr-drafts/               # PR draft list and live editor
+│   │   ├── pr-reviews/              # Review detail, diff viewer, and CI correlation panel
 │   │   ├── requirements/            # Requirement table and Inspector drawer
 │   │   └── search/                  # Global search bar and RRF results
 │   ├── lib/                         # API client wrapper, types, and utilities

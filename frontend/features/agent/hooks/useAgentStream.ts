@@ -49,10 +49,29 @@ export function useAgentStream({
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/v1/agent/sessions/${sessionId}/stream`, {
-        headers,
-        signal: controller.signal,
-      });
+      const streamUrl = `${API_BASE_URL}/api/v1/agent/sessions/${sessionId}/stream`;
+      let res: Response;
+      try {
+        res = await fetch(streamUrl, {
+          headers,
+          signal: controller.signal,
+        });
+      } catch (streamFetchErr: any) {
+        if (streamFetchErr.name === "AbortError") throw streamFetchErr;
+        if (streamUrl.includes("localhost:8000")) {
+          res = await fetch(streamUrl.replace("localhost:8000", "127.0.0.1:8000"), {
+            headers,
+            signal: controller.signal,
+          });
+        } else if (streamUrl.includes("127.0.0.1:8000")) {
+          res = await fetch(streamUrl.replace("127.0.0.1:8000", "localhost:8000"), {
+            headers,
+            signal: controller.signal,
+          });
+        } else {
+          throw streamFetchErr;
+        }
+      }
 
       if (!res.ok) {
         throw new Error(`Stream connection failed: HTTP ${res.status}`);

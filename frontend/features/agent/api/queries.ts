@@ -45,11 +45,21 @@ export function useCreateAgentSession() {
     { workspace_id: string; repository_id?: string | null; requirement_id?: string | null; title?: string }
   >({
     mutationFn: async (payload) => {
+      const cleanPayload: Record<string, any> = {
+        workspace_id: payload.workspace_id,
+        title: payload.title || "New Agent Session",
+      };
+      if (payload.repository_id) cleanPayload.repository_id = payload.repository_id;
+      if (payload.requirement_id) cleanPayload.requirement_id = payload.requirement_id;
+
       const res = await fetchApi(`/api/v1/agent/sessions`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(cleanPayload),
       });
-      if (!res.ok) throw new Error("Failed to create agent session");
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        throw new Error(`Failed to create agent session (${res.status}): ${errorText}`);
+      }
       return res.json();
     },
     onSuccess: (_, variables) => {

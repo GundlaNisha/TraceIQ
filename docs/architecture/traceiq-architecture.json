@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "TraceIQ System Architecture & Runtime Flows",
+    "quality_profile": "showcase",
+    "output": "docs/architecture/traceiq-architecture.html",
+    "repository": {
+      "url": "https://github.com/GundlaNisha/TraceIQ",
+      "provider": "github",
+      "revision": "5d100c0c8f586eed9abf59a19907f13fd4cea1f0"
+    },
+    "views": [
+      {
+        "id": "system-architecture",
+        "label": "1. System Architecture",
+        "focus": ["client", "api_gateway", "domain_services", "postgres_db", "redis_queue", "celery_workers", "clerk_auth", "github_platform", "jira_cloud", "gemini_llm"],
+        "note": "Complete runtime topology showing web UI, API gateway, core services, persistence, workers, and external SaaS platforms."
+      },
+      {
+        "id": "runtime-request-flow",
+        "label": "2. Runtime Request Path",
+        "focus": ["client", "api_gateway", "domain_services", "postgres_db"],
+        "note": "Primary synchronous path: authenticated REST request with Clerk JWT & Workspace RBAC, RRF hybrid retrieval, and database transaction."
+      },
+      {
+        "id": "backend-implementation",
+        "label": "3. Backend Layers & Workers",
+        "focus": ["api_gateway", "domain_services", "redis_queue", "celery_workers", "postgres_db", "gemini_llm"],
+        "note": "Layered backend: FastAPI routing, dependency injection, async domain services, Celery workers, and AI orchestrator."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "clerk_auth",
+      "type": "security",
+      "label": "Clerk IAM",
+      "sublabel": "OAuth & JWKS Provider",
+      "pos": [40, 100],
+      "size": [140, 56],
+      "tag": "RS256 JWT",
+      "sources": [
+        { "path": "backend/app/core/deps.py", "line": 16, "label": "JWKS Token Verifier" }
+      ]
+    },
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "Next.js 16 Web UI",
+      "sublabel": "React 19 / Turbopack",
+      "brand": "next-js",
+      "pos": [40, 230],
+      "size": [140, 56],
+      "tag": "Port :3000",
+      "sources": [
+        { "path": "frontend/app/layout.tsx", "line": 1, "label": "App Layout & ClerkProvider" },
+        { "path": "frontend/lib/api/client.ts", "line": 1, "label": "Authenticated API Client" }
+      ]
+    },
+    {
+      "id": "api_gateway",
+      "type": "backend",
+      "label": "FastAPI Gateway",
+      "sublabel": "ASGI Server & Routers",
+      "brand": "fastapi",
+      "pos": [280, 230],
+      "size": [140, 56],
+      "tag": "Port :8000",
+      "sources": [
+        { "path": "backend/app/main.py", "line": 47, "label": "FastAPI App & Lifespan" },
+        { "path": "backend/app/core/deps.py", "line": 24, "label": "Auth & RBAC Dependencies" }
+      ]
+    },
+    {
+      "id": "redis_queue",
+      "type": "messagebus",
+      "label": "Redis Broker",
+      "sublabel": "Celery Message Queue",
+      "brand": "redis",
+      "pos": [280, 360],
+      "size": [140, 56],
+      "tag": "Port :6379",
+      "sources": [
+        { "path": "backend/app/workers/celery_app.py", "line": 20, "label": "Celery Broker Init" }
+      ]
+    },
+    {
+      "id": "gemini_llm",
+      "type": "external",
+      "label": "Google Gemini",
+      "sublabel": "gemini-3.5-flash-lite",
+      "brand": "google-gemini",
+      "pos": [540, 100],
+      "size": [160, 56],
+      "tag": "LiteLLM Adapter",
+      "sources": [
+        { "path": "backend/app/ai/providers/openai_adapter.py", "line": 1, "label": "LiteLLM Gemini Adapter" }
+      ]
+    },
+    {
+      "id": "domain_services",
+      "type": "backend",
+      "label": "Domain Services",
+      "sublabel": "Blast Radius & RRF Search",
+      "pos": [540, 230],
+      "size": [160, 56],
+      "tag": "AST & RAG",
+      "sources": [
+        { "path": "backend/app/modules/retrieval/services/semantic.py", "line": 16, "label": "Tri-Signal Hybrid Search (RRF)" },
+        { "path": "backend/app/modules/github/services/checks.py", "line": 153, "label": "CI Failure Correlation Engine" },
+        { "path": "backend/app/ai/router/dispatcher.py", "line": 15, "label": "AI Review Dispatcher" }
+      ]
+    },
+    {
+      "id": "celery_workers",
+      "type": "backend",
+      "label": "Celery Workers",
+      "sublabel": "Async Indexing & Reviews",
+      "pos": [540, 360],
+      "size": [160, 56],
+      "tag": "Background Jobs",
+      "sources": [
+        { "path": "backend/app/workers/repo_index.py", "line": 90, "label": "AST Repository Indexer" },
+        { "path": "backend/app/workers/pr_review.py", "line": 475, "label": "PR Review Worker" }
+      ]
+    },
+    {
+      "id": "github_platform",
+      "type": "external",
+      "label": "GitHub Platform",
+      "sublabel": "Checks API & Webhooks",
+      "brand": "github",
+      "pos": [800, 100],
+      "size": [150, 56],
+      "tag": "VCS & CI",
+      "sources": [
+        { "path": "backend/app/modules/github/services/checks.py", "line": 434, "label": "PR Checks Ingestion" }
+      ]
+    },
+    {
+      "id": "postgres_db",
+      "type": "database",
+      "label": "PostgreSQL 16",
+      "sublabel": "pgvector + HNSW Indexes",
+      "brand": "postgresql",
+      "pos": [800, 230],
+      "size": [160, 56],
+      "tag": "Port :5432",
+      "sources": [
+        { "path": "backend/app/db/session.py", "line": 13, "label": "Async Engine & Session Pool" },
+        { "path": "backend/app/modules/indexing/models/index_models.py", "line": 8, "label": "Code Chunk & AST Models" }
+      ]
+    },
+    {
+      "id": "jira_cloud",
+      "type": "external",
+      "label": "Jira Cloud",
+      "sublabel": "REST API v3 & ADF",
+      "brand": "jira",
+      "pos": [800, 360],
+      "size": [150, 56],
+      "tag": "Issue Tracker",
+      "sources": [
+        { "path": "backend/app/integrations/jira/client.py", "line": 41, "label": "Async Jira REST Client" },
+        { "path": "backend/app/integrations/jira/adf_converter.py", "line": 14, "label": "ADF Markdown Parser" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "TraceIQ Application Core (Private Runtime)",
+      "wraps": ["api_gateway", "domain_services", "redis_queue", "celery_workers", "postgres_db"],
+      "pad": 14
+    },
+    {
+      "kind": "security-group",
+      "label": "Ingress Security Group (:8000)",
+      "wraps": ["api_gateway"],
+      "pad": 10
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-to-auth",
+      "from": "client",
+      "to": "clerk_auth",
+      "label": "Sign-in",
+      "variant": "security"
+    },
+    {
+      "id": "auth-to-gateway",
+      "from": "clerk_auth",
+      "to": "api_gateway",
+      "label": "JWKS keys",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "client-to-gateway",
+      "from": "client",
+      "to": "api_gateway",
+      "label": "REST + JWT",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-to-services",
+      "from": "api_gateway",
+      "to": "domain_services",
+      "label": "Controller call",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-to-redis",
+      "from": "api_gateway",
+      "to": "redis_queue",
+      "label": "Enqueue job",
+      "variant": "dashed",
+      "labelDy": 20
+    },
+    {
+      "id": "redis-to-workers",
+      "from": "redis_queue",
+      "to": "celery_workers",
+      "label": "Task dispatch",
+      "variant": "dashed"
+    },
+    {
+      "id": "services-to-ai",
+      "from": "domain_services",
+      "to": "gemini_llm",
+      "label": "Prompts & schemas"
+    },
+    {
+      "id": "services-to-db",
+      "from": "domain_services",
+      "to": "postgres_db",
+      "label": "SQL & RRF search",
+      "variant": "emphasis",
+      "labelDy": 14
+    },
+    {
+      "id": "services-to-github",
+      "from": "domain_services",
+      "to": "github_platform",
+      "label": "Checks API"
+    },
+    {
+      "id": "celery-to-db",
+      "from": "celery_workers",
+      "to": "postgres_db",
+      "label": "Persist chunks",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "celery-to-jira",
+      "from": "celery_workers",
+      "to": "jira_cloud",
+      "label": "ADF sync"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Client & Ingress Plane",
+      "items": [
+        "Next.js 16 Web UI with Clerk auth SDK and authenticated FastAPI ASGI gateway with PyJWT RS256 token verification."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Domain Intelligence & Workers",
+      "items": [
+        "Sub-15ms Tri-Signal Hybrid Search (RRF k=60), 2-hop blast radius graph traversal, and Celery background workers backed by Redis."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Persistence & External Integrations",
+      "items": [
+        "PostgreSQL 16 with pgvector HNSW indexing, Google Gemini 3.5 Flash Lite LLM orchestrator, GitHub Checks API, and Jira Cloud REST."
+      ]
+    }
+  ]
+}

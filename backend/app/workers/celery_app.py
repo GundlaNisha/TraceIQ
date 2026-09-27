@@ -27,6 +27,7 @@ celery_app = Celery(
         "app.workers.repo_index",
         "app.workers.impact_analysis",
         "app.workers.pr_review",
+        "app.workers.agent_tasks",
     ],
 )
 

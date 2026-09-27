@@ -4,12 +4,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import AsyncSessionLocal
 from app.modules.requirement.models.req import Requirement
 
 
 async def fetch_requirement_details_fn(
-    db: AsyncSession,
     requirement_id: str,
+    db: AsyncSession | None = None,
 ) -> dict[str, Any] | None:
     """Fetch full requirement specifications, Jira key, and version information."""
     try:
@@ -17,9 +18,15 @@ async def fetch_requirement_details_fn(
     except ValueError:
         return None
 
-    stmt = select(Requirement).where(Requirement.id == req_uuid)
-    result = await db.execute(stmt)
-    req = result.scalar_one_or_none()
+    if db is None:
+        async with AsyncSessionLocal() as session:
+            stmt = select(Requirement).where(Requirement.id == req_uuid)
+            result = await session.execute(stmt)
+            req = result.scalar_one_or_none()
+    else:
+        stmt = select(Requirement).where(Requirement.id == req_uuid)
+        result = await db.execute(stmt)
+        req = result.scalar_one_or_none()
 
     if not req:
         return None
@@ -36,8 +43,8 @@ async def fetch_requirement_details_fn(
 
 
 async def list_workspace_requirements_fn(
-    db: AsyncSession,
     workspace_id: str,
+    db: AsyncSession | None = None,
     limit: int = 15,
 ) -> list[dict[str, Any]]:
     """List available requirements in the workspace for requirement selection and linking."""
@@ -52,9 +59,16 @@ async def list_workspace_requirements_fn(
         .order_by(Requirement.created_at.desc())
         .limit(limit)
     )
-    result = await db.execute(stmt)
+    if db is None:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(stmt)
+            reqs = result.scalars().all()
+    else:
+        result = await db.execute(stmt)
+        reqs = result.scalars().all()
+
     requirements = []
-    for req in result.scalars().all():
+    for req in reqs:
         requirements.append({
             "id": str(req.id),
             "title": req.title,

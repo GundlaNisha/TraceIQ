@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import AsyncSessionLocal
 from app.modules.indexing.models.index_models import RepositoryFile
 
 
@@ -85,12 +86,15 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
 
 
 async def audit_missing_tests_fn(
-    db: AsyncSession,
-    repository_id: str,
+    repository_id: str | None,
     modified_files: list[str],
     modified_symbols: list[str] | None = None,
+    db: AsyncSession | None = None,
 ) -> dict[str, Any]:
     """Scan existing repository test files to identify missing unit test coverage for changed code."""
+    if not repository_id:
+        return {"total_modified_files": len(modified_files), "test_files_detected_in_repo": 0, "missing_coverage_count": 0, "missing_coverage": [], "test_gap_detected": False}
+
     try:
         repo_uuid = uuid.UUID(repository_id)
     except ValueError:
@@ -107,8 +111,14 @@ async def audit_missing_tests_fn(
             )
         )
     )
-    result = await db.execute(stmt)
-    test_files = [r[0] for r in result.all()]
+
+    if db is None:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(stmt)
+            test_files = [r[0] for r in result.all()]
+    else:
+        result = await db.execute(stmt)
+        test_files = [r[0] for r in result.all()]
 
     missing_coverage: list[dict[str, Any]] = []
 

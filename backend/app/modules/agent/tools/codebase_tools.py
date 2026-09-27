@@ -4,17 +4,20 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import AsyncSessionLocal
 from app.modules.indexing.models.index_models import CodeChunk, CodeSymbol, RepositoryFile
 from app.modules.retrieval.services.semantic import hybrid_code_search
 
 
 async def search_code_symbols_fn(
-    db: AsyncSession,
-    repository_id: str,
+    repository_id: str | None,
     query: str,
     limit: int = 15,
+    db: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
     """Search AST symbols (classes, functions, methods) by name in the indexed codebase."""
+    if not repository_id:
+        return []
     try:
         repo_uuid = uuid.UUID(repository_id)
     except ValueError:
@@ -27,9 +30,17 @@ async def search_code_symbols_fn(
         .where(CodeSymbol.symbol_name.ilike(f"%{query}%"))
         .limit(limit)
     )
-    result = await db.execute(stmt)
+
+    if db is None:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(stmt)
+            rows = result.all()
+    else:
+        result = await db.execute(stmt)
+        rows = result.all()
+
     symbols = []
-    for sym, file in result.all():
+    for sym, file in rows:
         symbols.append({
             "symbol_name": sym.symbol_name,
             "symbol_type": sym.symbol_type,
@@ -41,27 +52,33 @@ async def search_code_symbols_fn(
 
 
 async def semantic_code_search_fn(
-    db: AsyncSession,
-    repository_id: str,
+    repository_id: str | None,
     query: str,
     top_k: int = 8,
+    db: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
     """Perform hybrid vector + keyword semantic search across indexed code chunks."""
+    if not repository_id:
+        return []
     try:
         repo_uuid = uuid.UUID(repository_id)
     except ValueError:
         return []
 
-    results = await hybrid_code_search(db, query, repo_uuid, top_k=top_k)
+    if db is None:
+        async with AsyncSessionLocal() as session:
+            results = await hybrid_code_search(session, query, repo_uuid, top_k=top_k)
+    else:
+        results = await hybrid_code_search(db, query, repo_uuid, top_k=top_k)
     return results
 
 
 async def read_source_file_snippet_fn(
-    db: AsyncSession,
     repository_id: str,
     file_path: str,
     start_line: int | None = None,
     end_line: int | None = None,
+    db: AsyncSession | None = None,
 ) -> dict[str, Any]:
     """Retrieve code content for a specific file and optional line range from indexed chunks."""
     try:
@@ -78,8 +95,14 @@ async def read_source_file_snippet_fn(
         )
         .order_by(CodeChunk.start_line.asc())
     )
-    result = await db.execute(stmt)
-    chunks = result.scalars().all()
+
+    if db is None:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(stmt)
+            chunks = result.scalars().all()
+    else:
+        result = await db.execute(stmt)
+        chunks = result.scalars().all()
 
     if not chunks:
         return {

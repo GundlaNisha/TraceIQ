@@ -55,7 +55,7 @@ async def create_agent_session(
         title=payload.title,
         status="active",
         current_phase="idle",
-        context_data={},
+        context_metadata={},
     )
     db.add(session)
     await db.flush()
@@ -215,7 +215,7 @@ async def post_agent_message(
     config = {"configurable": {"thread_id": str(session.id)}}
 
     # Initial graph state
-    current_context = session.context_data or {}
+    current_context = session.context_metadata or {}
     graph_input = {
         "messages": langchain_messages,
         "session_id": str(session.id),
@@ -280,7 +280,7 @@ async def post_agent_message(
                     for k in ("starting_points", "impact_summary", "review_findings", "test_gaps", "pr_draft"):
                         if k in node_output:
                             current_context[k] = node_output[k]
-                    session.context_data = current_context
+                    session.context_metadata = current_context
 
                     # Extract new AIMessages
                     node_msgs = node_output.get("messages", [])
@@ -386,7 +386,7 @@ async def submit_agent_approval(
             data={"message": f"Processing approval decision ({decision.action})...", "phase": "resuming"},
         )
 
-        current_context = session.context_data or {}
+        current_context = session.context_metadata or {}
         async for event in agent_graph.astream(Command(resume=resume_payload), config):
             for node_name, node_output in event.items():
                 if node_name == "__interrupt__":
@@ -420,7 +420,7 @@ async def submit_agent_approval(
                     for k in ("starting_points", "impact_summary", "review_findings", "test_gaps", "pr_draft"):
                         if k in node_output:
                             current_context[k] = node_output[k]
-                    session.context_data = current_context
+                    session.context_metadata = current_context
 
                     node_msgs = node_output.get("messages", [])
                     for msg in node_msgs:

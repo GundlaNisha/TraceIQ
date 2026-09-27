@@ -47,9 +47,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="TraceIQ API", version="1.0.0", lifespan=lifespan)
 
+raw_allowed = (
+    settings.allowed_origins
+    if isinstance(settings.allowed_origins, list)
+    else [s.strip() for s in settings.allowed_origins.split(",") if s.strip()]
+    if settings.allowed_origins
+    else []
+)
 cors_origins = list(dict.fromkeys(
-    ([settings.frontend_url] if settings.frontend_url else [])
-    + (settings.allowed_origins if isinstance(settings.allowed_origins, list) else [settings.allowed_origins] if settings.allowed_origins else [])
+    ["http://localhost:3000", "http://127.0.0.1:3000"]
+    + ([settings.frontend_url] if settings.frontend_url else [])
+    + raw_allowed
 ))
 
 app.add_middleware(

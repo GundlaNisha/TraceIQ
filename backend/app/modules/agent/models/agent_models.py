@@ -38,6 +38,14 @@ class AgentSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )  # exploring | starting_point_confirmed | reviewing | drafting | completed
     context_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
+    @property
+    def context_data(self) -> dict:
+        return self.context_metadata
+
+    @context_data.setter
+    def context_data(self, val: dict) -> None:
+        self.context_metadata = val
+
 
 class AgentMessage(UUIDPrimaryKeyMixin, Base):
     """An individual message or tool turn within an agent session."""

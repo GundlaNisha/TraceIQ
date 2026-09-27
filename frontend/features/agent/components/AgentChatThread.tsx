@@ -26,6 +26,7 @@ interface AgentChatThreadProps {
   isStreaming?: boolean;
   statusMessage?: string | null;
   streamingContent?: string;
+  optimisticUserMessage?: string | null;
 }
 
 export function AgentChatThread({
@@ -37,6 +38,7 @@ export function AgentChatThread({
   isStreaming,
   statusMessage,
   streamingContent,
+  optimisticUserMessage,
 }: AgentChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [openReasoningMap, setOpenReasoningMap] = useState<Record<string, boolean>>({});
@@ -47,7 +49,7 @@ export function AgentChatThread({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent, statusMessage]);
+  }, [messages, streamingContent, statusMessage, optimisticUserMessage]);
 
   const renderApprovalCard = (approval: AgentApproval) => {
     if (approval.action_type === "confirm_starting_point") {
@@ -80,8 +82,14 @@ export function AgentChatThread({
     return null;
   };
 
+  const showOptimisticMessage =
+    optimisticUserMessage &&
+    (!messages.length ||
+      messages[messages.length - 1].sender !== "user" ||
+      messages[messages.length - 1].content !== optimisticUserMessage);
+
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+    <div className="flex-1 min-h-0 overflow-y-auto px-4 py-6 space-y-6">
       {messages.map((msg, index) => {
         const isUser = msg.sender === "user";
         const isLastMessage = index === messages.length - 1;
@@ -162,6 +170,20 @@ export function AgentChatThread({
           </div>
         );
       })}
+
+      {/* Optimistic User Message Bubble */}
+      {showOptimisticMessage && (
+        <div className="flex gap-3.5 justify-end">
+          <div className="max-w-[85%] rounded-2xl rounded-tr-sm p-4.5 text-sm bg-accent text-white shadow-accent/10 shadow-xs">
+            <div className="prose prose-invert prose-xs max-w-none break-words leading-relaxed text-white">
+              <p>{optimisticUserMessage}</p>
+            </div>
+          </div>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-foreground border border-border/60 shadow-xs">
+            <User className="h-4 w-4" />
+          </div>
+        </div>
+      )}
 
       {/* Live Streaming State Bubble */}
       {isStreaming && (

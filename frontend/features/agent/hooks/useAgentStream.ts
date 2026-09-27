@@ -64,7 +64,8 @@ export function useAgentStream({
       const decoder = new TextDecoder();
       let buffer = "";
 
-      while (true) {
+      let shouldBreak = false;
+      while (!shouldBreak) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -101,9 +102,13 @@ export function useAgentStream({
                 setStatusMessage(null);
                 setIsStreaming(false);
                 onDone?.();
+                shouldBreak = true;
+                break;
               } else if (parsed.type === "error") {
                 setError(parsed.data?.error || "An error occurred");
                 setIsStreaming(false);
+                shouldBreak = true;
+                break;
               }
             } catch {
               // Ignore non-json chunks

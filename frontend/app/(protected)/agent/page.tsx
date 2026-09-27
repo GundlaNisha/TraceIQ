@@ -50,6 +50,7 @@ export default function AgentPage() {
   const [inputContent, setInputContent] = useState("");
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isSessionSidebarOpen, setIsSessionSidebarOpen] = useState(true);
+  const [optimisticUserMessage, setOptimisticUserMessage] = useState<string | null>(null);
 
   // Queries
   const { data: repositories = [] } = useRepositories({ workspaceId: activeWorkspaceId });
@@ -117,23 +118,53 @@ export default function AgentPage() {
   };
 
   const handleSendMessage = async (textToSend?: string) => {
-    const text = textToSend || inputContent;
-    if (!text.trim() || !selectedSessionId || sendMessageMutation.isPending || isStreaming) return;
+    const text = (textToSend !== undefined ? textToSend : inputContent).trim();
+    if (!text || sendMessageMutation.isPending) return;
+
+    let currentSessionId = selectedSessionId;
+    if (!currentSessionId) {
+      const wsId = activeWorkspaceId || useWorkspaceStore.getState().activeWorkspaceId;
+      if (wsId) {
+        try {
+          const newSession = await createSessionMutation.mutateAsync({
+            workspace_id: wsId,
+            repository_id: activeRepositoryId,
+            requirement_id: selectedReqId,
+            title: text.slice(0, 35) || "New Codebase Assistant Chat",
+          });
+          currentSessionId = newSession.id;
+          setSelectedSessionId(newSession.id);
+        } catch (err) {
+          console.error("Failed to auto-create session:", err);
+          return;
+        }
+      } else {
+        console.error("No active workspace to create session");
+        return;
+      }
+    }
 
     setInputContent("");
+    setOptimisticUserMessage(text);
+
     try {
-      // Trigger background stream listener
-      startStream();
+      try {
+        startStream();
+      } catch (streamErr) {
+        console.warn("Stream start error:", streamErr);
+      }
 
       await sendMessageMutation.mutateAsync({
-        sessionId: selectedSessionId,
-        content: text.trim(),
+        sessionId: currentSessionId,
+        content: text,
       });
 
-      refetchSessionDetail();
+      await refetchSessionDetail();
     } catch (err) {
       console.error("Failed to send message:", err);
       stopStream();
+    } finally {
+      setOptimisticUserMessage(null);
     }
   };
 
@@ -174,10 +205,10 @@ export default function AgentPage() {
   const activeRepo = repositories.find((r: any) => r.id === activeRepositoryId);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background text-foreground">
+    <div className="flex flex-1 h-full w-full min-h-0 min-w-0 overflow-hidden bg-background text-foreground">
       {/* 1. Left Sidebar: Sessions List (Collapsible for maximum spaciousness) */}
       {isSessionSidebarOpen && (
-        <aside className="flex w-64 md:w-72 flex-col border-r border-border/50 bg-slate-50/60 backdrop-blur-md shrink-0 transition-all duration-300">
+        <aside className="flex w-64 md:w-72 flex-col h-full min-h-0 border-r border-border/50 bg-slate-50/60 backdrop-blur-md shrink-0 transition-all duration-300 overflow-hidden">
           {/* Header with New Session button & Collapse toggle */}
           <div className="border-b border-border/50 p-3.5 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -212,7 +243,7 @@ export default function AgentPage() {
           </div>
 
           {/* Sessions Scroll List */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
             {isLoadingSessions ? (
               <div className="flex items-center justify-center p-8 text-xs text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin mr-2 text-accent" /> Loading sessions...
@@ -254,7 +285,7 @@ export default function AgentPage() {
           </div>
 
           {/* HITL Safety Badge */}
-          <div className="border-t border-border/50 p-3 bg-white/40 text-[11px] text-muted-foreground flex items-center gap-2">
+          <div className="border-t border-border/50 p-3 bg-white/40 text-[11px] text-muted-foreground flex items-center gap-2 shrink-0">
             <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
             <span>Human-in-the-Loop protection active.</span>
           </div>
@@ -262,9 +293,9 @@ export default function AgentPage() {
       )}
 
       {/* 2. Main Center Workstation */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 h-full min-h-0 min-w-0 flex-col overflow-hidden">
         {/* Top Control Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-white/70 backdrop-blur-md px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-white/70 backdrop-blur-md px-5 py-3 shrink-0">
           <div className="flex items-center gap-3">
             {!isSessionSidebarOpen && (
               <button
@@ -344,16 +375,17 @@ export default function AgentPage() {
           isStreaming={isStreaming}
           statusMessage={statusMessage}
           streamingContent={streamingContent}
+          optimisticUserMessage={optimisticUserMessage}
         />
 
         {/* Quick Action Suggestion Chips */}
-        <div className="border-t border-border/50 bg-[#FAF8F5]/60 px-4 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <div className="border-t border-border/50 bg-[#FAF8F5]/60 px-4 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
           {QUICK_ACTIONS.map((action, i) => (
             <button
               key={i}
               type="button"
               onClick={() => handleSendMessage(action.prompt)}
-              disabled={sendMessageMutation.isPending || isStreaming}
+              disabled={sendMessageMutation.isPending}
               className="shrink-0 rounded-full border border-border/80 bg-white px-3 py-1.5 text-xs font-medium text-foreground hover:border-accent hover:text-accent hover:bg-white shadow-2xs transition disabled:opacity-50"
             >
               {action.label}
@@ -362,11 +394,13 @@ export default function AgentPage() {
         </div>
 
         {/* Input Bar */}
-        <div className="border-t border-border/50 bg-white/90 p-4 backdrop-blur-md">
+        <div className="border-t border-border/50 bg-white/90 p-4 backdrop-blur-md shrink-0">
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleSendMessage();
+              if (inputContent.trim()) {
+                handleSendMessage(inputContent);
+              }
             }}
             className="flex items-center gap-3 rounded-2xl border border-border/80 bg-[#FAF8F5]/80 px-4 py-2.5 shadow-inner focus-within:border-accent focus-within:bg-white focus-within:ring-2 focus-within:ring-accent/10 transition"
           >
@@ -376,21 +410,23 @@ export default function AgentPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  handleSendMessage();
+                  if (inputContent.trim()) {
+                    handleSendMessage(inputContent);
+                  }
                 }
               }}
               placeholder="Ask the AI agent... (e.g. 'Where should I start for requirement PROJ-102?')"
               rows={1}
-              disabled={sendMessageMutation.isPending || isStreaming}
+              disabled={sendMessageMutation.isPending}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-none"
             />
 
             <button
               type="submit"
-              disabled={!inputContent.trim() || sendMessageMutation.isPending || isStreaming}
+              disabled={!inputContent.trim() || sendMessageMutation.isPending}
               className="rounded-xl bg-accent p-2 text-white hover:bg-accent/90 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
             >
-              {sendMessageMutation.isPending || isStreaming ? (
+              {sendMessageMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />

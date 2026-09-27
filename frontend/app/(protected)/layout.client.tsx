@@ -310,12 +310,18 @@ export default function ProtectedLayoutClient({
           backendUser={backendUser}
         />
 
-        {/* Scrollable Page Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="w-full max-w-[1400px] mx-auto px-6 md:px-10 py-8 md:py-10">
+        {/* Page Content: full viewport fit with no outer scrollbar for AI Agent, scrollable container for other pages */}
+        {pathname?.startsWith("/agent") ? (
+          <main className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col bg-background">
             {children}
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="flex-1 overflow-y-auto min-h-0">
+            <div className="w-full max-w-[1400px] mx-auto px-6 md:px-10 py-8 md:py-10">
+              {children}
+            </div>
+          </main>
+        )}
       </div>
     </div>
   );

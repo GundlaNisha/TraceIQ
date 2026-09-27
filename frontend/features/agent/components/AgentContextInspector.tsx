@@ -59,9 +59,9 @@ export function AgentContextInspector({
   }
 
   return (
-    <div className="flex h-full w-80 md:w-96 flex-col border-l border-border/60 bg-white/95 backdrop-blur-xl shadow-xs">
+    <div className="flex h-full min-h-0 w-80 md:w-96 flex-col border-l border-border/60 bg-white/95 backdrop-blur-xl shadow-xs overflow-hidden">
       {/* Inspector Header */}
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3.5">
+      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3.5 shrink-0">
         <h3 className="text-xs font-bold font-serif uppercase tracking-wider text-foreground">
           Context & Artifact Inspector
         </h3>
@@ -75,7 +75,7 @@ export function AgentContextInspector({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border/60 bg-[#FAF8F5]/80">
+      <div className="flex border-b border-border/60 bg-[#FAF8F5]/80 shrink-0">
         <button
           type="button"
           onClick={() => setActiveTab("requirement")}
@@ -130,7 +130,7 @@ export function AgentContextInspector({
       </div>
 
       {/* Tab Panels */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {/* Tab 1: Requirement Context */}
         {activeTab === "requirement" && (
           <div className="space-y-3.5 text-xs">

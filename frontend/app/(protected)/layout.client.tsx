@@ -30,6 +30,7 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Repositories", href: "/repositories", icon: FolderGit2 },
   { label: "Requirements", href: "/requirements", icon: Layers },
+  { label: "AI Agent", href: "/agent", icon: Sparkles },
   { label: "Impact Analysis", href: "/analysis", icon: Activity },
   { label: "Pull Requests", href: "/pull-requests", icon: GitPullRequest },
   { label: "PR Reviews", href: "/pr-reviews", icon: CheckSquare },

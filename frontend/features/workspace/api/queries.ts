@@ -41,6 +41,38 @@ export interface WorkspaceInvite {
   created_at: string;
 }
 
+export interface WorkspaceInvitePreview {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  workspace_description: string | null;
+  email: string;
+  role: "owner" | "admin" | "member" | "viewer" | string;
+  invited_by_name: string | null;
+  invited_by_email: string | null;
+  created_at: string;
+  expires_at: string;
+  is_expired: boolean;
+  already_accepted: boolean;
+  is_current_user_member: boolean;
+  current_user_role: string | null;
+}
+
+export interface UserInvitation {
+  id: string;
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  workspace_description: string | null;
+  email: string;
+  role: string;
+  token: string;
+  invited_by_name: string | null;
+  invited_by_email: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
 export interface WorkspaceSummary {
   workspace: Workspace;
   member_count: number;
@@ -364,5 +396,110 @@ export function useRemoveMember() {
       qc.invalidateQueries({ queryKey: ["workspace_members", vars.workspaceId] });
       qc.invalidateQueries({ queryKey: ["workspace_summary", vars.workspaceId] });
     },
+  });
+}
+
+export function useWorkspaceInvitePreview(token: string) {
+  const { fetchApi } = useApiClient();
+  return useQuery({
+    queryKey: ["workspace_invite_preview", token],
+    queryFn: async () => {
+      const res = await fetchApi(`/api/v1/workspaces/join/${token}`, {});
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to load invitation preview");
+      }
+      return res.json() as Promise<WorkspaceInvitePreview>;
+    },
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+export function useAcceptInvite() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const res = await fetchApi(`/api/v1/workspaces/join/${token}/accept`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to accept invitation");
+      }
+      return res.json() as Promise<Workspace>;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["workspaces"] });
+      qc.invalidateQueries({ queryKey: ["workspace", data.id] });
+      qc.invalidateQueries({ queryKey: ["workspace_summary", data.id] });
+      qc.invalidateQueries({ queryKey: ["workspace_members", data.id] });
+      qc.invalidateQueries({ queryKey: ["my_workspace_invitations"] });
+    },
+  });
+}
+
+export function useDeclineInvite() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const res = await fetchApi(`/api/v1/workspaces/join/${token}/decline`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to decline invitation");
+      }
+      return res.json() as Promise<{ status: string; message: string }>;
+    },
+    onSuccess: (_data, token) => {
+      qc.invalidateQueries({ queryKey: ["workspace_invite_preview", token] });
+      qc.invalidateQueries({ queryKey: ["my_workspace_invitations"] });
+    },
+  });
+}
+
+export function useRevokeInvite() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      inviteId,
+    }: {
+      workspaceId: string;
+      inviteId: string;
+    }) => {
+      const res = await fetchApi(
+        `/api/v1/workspaces/${workspaceId}/invites/${inviteId}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to revoke invitation");
+      }
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["workspace_invites", vars.workspaceId] });
+      qc.invalidateQueries({ queryKey: ["workspace_summary", vars.workspaceId] });
+      qc.invalidateQueries({ queryKey: ["my_workspace_invitations"] });
+    },
+  });
+}
+
+export function useMyWorkspaceInvitations() {
+  const { fetchApi } = useApiClient();
+  return useQuery({
+    queryKey: ["my_workspace_invitations"],
+    queryFn: async () => {
+      const res = await fetchApi("/api/v1/workspaces/invites/me", {});
+      if (!res.ok) {
+        return [] as UserInvitation[];
+      }
+      return res.json() as Promise<UserInvitation[]>;
+    },
+    refetchInterval: 30000,
   });
 }

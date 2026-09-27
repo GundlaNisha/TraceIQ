@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useInviteMember } from "@/features/workspace/api/queries";
-import { Users, Copy, Check, Loader2, Mail } from "lucide-react";
+import { Users, Copy, Check, Loader2, Mail, ExternalLink } from "lucide-react";
 
 interface InviteTeamModalProps {
   workspaceId: string;
@@ -22,6 +22,8 @@ export function InviteTeamModal({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [lastInvitedEmail, setLastInvitedEmail] = useState<string>("");
+  const [lastInvitedRole, setLastInvitedRole] = useState<string>("member");
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,12 +32,16 @@ export function InviteTeamModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const targetEmail = email.trim();
+    const targetRole = role;
     invite(
-      { workspaceId, email, role },
+      { workspaceId, email: targetEmail, role: targetRole },
       {
         onSuccess: (data) => {
           const link = `${window.location.origin}/join/${data.token}`;
           setInviteLink(link);
+          setLastInvitedEmail(targetEmail);
+          setLastInvitedRole(targetRole);
           setEmail("");
         },
         onError: (err: any) => {
@@ -56,6 +62,7 @@ export function InviteTeamModal({
     setEmail("");
     setRole("member");
     setInviteLink(null);
+    setLastInvitedEmail("");
     setError(null);
     setCopied(false);
     onClose();
@@ -137,10 +144,18 @@ export function InviteTeamModal({
         ) : (
           /* Invite link ready */
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
-              <p className="text-xs font-semibold text-emerald-700 mb-1">Invite link ready</p>
-              <p className="text-xs text-emerald-600">
-                Share this link with <strong>{email || "your teammate"}</strong>. It expires in 7 days.
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  Invite link ready
+                </p>
+                <span className="text-[10px] font-semibold uppercase tracking-wider bg-emerald-200/60 text-emerald-800 px-2 py-0.5 rounded-full">
+                  {lastInvitedRole}
+                </span>
+              </div>
+              <p className="text-xs text-emerald-700">
+                Share this link with <strong>{lastInvitedEmail || "your teammate"}</strong>. It expires in 7 days.
               </p>
             </div>
 
@@ -163,16 +178,28 @@ export function InviteTeamModal({
               </button>
             </div>
 
+            <div className="flex items-center justify-between pt-1">
+              <a
+                href={inviteLink || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline font-medium"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Test / Open Invitation Link
+              </a>
+            </div>
+
             <div className="flex justify-end gap-3 pt-2 border-t border-border/40">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setInviteLink(null)}
-                className="border-border/60"
+                className="border-border/60 text-xs"
               >
                 Invite Another
               </Button>
-              <Button type="button" onClick={handleClose}>
+              <Button type="button" onClick={handleClose} className="text-xs">
                 Done
               </Button>
             </div>

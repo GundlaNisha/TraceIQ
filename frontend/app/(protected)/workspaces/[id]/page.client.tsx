@@ -7,6 +7,7 @@ import {
   useWorkspaceRequirements,
   useWorkspaceInvites,
   useUnlinkRepository,
+  useRevokeInvite,
   type WorkspaceMember,
 } from "@/features/workspace/api/queries";
 import { useUser } from "@clerk/nextjs";
@@ -65,12 +66,14 @@ export default function WorkspaceDetailClient({
 
   const { activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore();
   const { mutate: unlinkRepo, isPending: isUnlinking } = useUnlinkRepository();
+  const { mutate: revokeInvite, isPending: isRevoking } = useRevokeInvite();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("repositories");
   const [showInvite, setShowInvite] = useState(false);
   const [showAssignRepo, setShowAssignRepo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const currentMember = members?.find((m) => m.user_id === user?.id);
   const currentRole = (currentMember?.role as WorkspaceMember["role"]) || null;
@@ -488,6 +491,17 @@ export default function WorkspaceDetailClient({
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <a
+                        href={`/join/${inv.token}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline font-medium px-2 py-1 rounded-md hover:bg-accent/5"
+                        title="Open invitation preview in new tab"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Preview
+                      </a>
+
                       <Button
                         size="sm"
                         variant="outline"
@@ -506,6 +520,32 @@ export default function WorkspaceDetailClient({
                           </>
                         )}
                       </Button>
+
+                      {canAdmin && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={isRevoking && revokingId === inv.id}
+                          onClick={() => {
+                            if (confirm(`Revoke invitation for ${inv.email}?`)) {
+                              setRevokingId(inv.id);
+                              revokeInvite(
+                                { workspaceId: workspace.id, inviteId: inv.id },
+                                { onSettled: () => setRevokingId(null) }
+                              );
+                            }
+                          }}
+                          className="text-xs h-7 text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
+                          title="Revoke invitation"
+                        >
+                          {isRevoking && revokingId === inv.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-rose-500" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
+                          )}
+                          <span className="hidden sm:inline">Revoke</span>
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

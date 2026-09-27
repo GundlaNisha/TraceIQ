@@ -42,7 +42,7 @@ export function ProjectStructureDoc() {
 │   │   │   ├── audit/               # AuditLog ORM models and activity tracking
 │   │   │   ├── auth/                # Clerk JWT auth & user synchronization
 │   │   │   ├── dashboard/           # Summary KPI metrics and activity streams
-│   │   │   ├── github/              # GitHub App installation, webhooks, and commit status
+│   │   │   ├── github/              # GitHub App webhooks, live CI checks, correlation, & Actions health
 │   │   │   ├── impact/              # Blast radius jobs, graph traversal, and risk scoring
 │   │   │   ├── indexing/            # Tree-sitter AST parsers, semantic chunkers, and embedders
 │   │   │   ├── jira/                # Jira integration CRUD, Kanban board & issue search routes
@@ -74,7 +74,7 @@ export function ProjectStructureDoc() {
 │   │   ├── page.tsx                 # Public landing page
 │   │   └── layout.tsx               # Root HTML layout with ClerkProvider
 │   ├── components/                  # Reusable UI components (landing, docs, ui)
-│   ├── features/                    # Domain-driven features (analysis, jira, requirements...)
+│   ├── features/                    # Domain-driven features (analysis, github, jira, pr-reviews, requirements)
 │   ├── lib/                         # API client, TypeScript types, and utilities
 │   ├── stores/                      # Zustand state stores (workspace selection)
 │   └── package.json                 # Frontend dependencies & scripts`}

@@ -21,7 +21,8 @@ import {
   Cpu,
   Clock,
   Radio,
-  FileCheck
+  FileCheck,
+  Activity
 } from "lucide-react";
 
 export function WorkingDoc() {
@@ -285,34 +286,44 @@ LIMIT 10;`}
         </div>
 
         <p>
-          Armed with the PR diff, the linked Jira requirement acceptance criteria, and the 2-hop blast radius impact list, the <strong>LiteLLM Review Orchestrator</strong> generates a deterministic, structured review.
+          Armed with the PR diff, the linked Jira requirement acceptance criteria, the 2-hop blast radius impact list, and live GitHub CI check-run statuses, the <strong>LiteLLM Review Orchestrator (powered by Google Gemini 3.5 Flash Lite)</strong> generates a deterministic, structured review.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2">
             <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-900 uppercase">
               <GitPullRequest className="w-4 h-4 text-emerald-600" />
-              <span>Automated GitHub PR Comment</span>
+              <span>Automated PR Comment</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed font-sans">
-              Posts formatted inline diff comments pinpointing the exact line where a breaking change or requirement drift occurs. Updates the GitHub Check-Run status (Pass / Fail) automatically.
+              Posts formatted inline diff comments pinpointing the exact lines where breaking changes or requirement drift occur. Updates GitHub Check-Run status (Pass / Fail) automatically.
             </p>
           </div>
 
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+          <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2">
             <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-900 uppercase">
-              <Kanban className="w-4 h-4 text-sky-600" />
-              <span>Bidirectional Jira Synchronization</span>
+              <Activity className="w-4 h-4 text-rose-600" />
+              <span>CI Failure Correlation</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed font-sans">
-              Converts complex Atlassian Document Format (ADF) trees, auto-posts impact summaries to the Jira ticket, and executes 1-click status transitions (e.g. <code className="font-mono bg-slate-100 px-1">In Review</code> &rarr; <code className="font-mono bg-slate-100 px-1">Done</code>).
+              Fetches live GitHub Actions check-runs and matches failed step error logs against the 2-hop blast radius to assign <code className="font-mono bg-slate-100 px-1">clean</code>, <code className="font-mono bg-slate-100 px-1">in_scope</code>, or <code className="font-mono bg-slate-100 px-1">unrelated</code> verdicts.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2">
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-900 uppercase">
+              <Kanban className="w-4 h-4 text-sky-600" />
+              <span>Bidirectional Jira Sync</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed font-sans">
+              Converts complex Atlassian Document Format (ADF) trees, auto-posts impact summaries to Jira tickets, and executes 1-click status transitions (e.g. <code className="font-mono bg-slate-100 px-1">In Review</code> &rarr; <code className="font-mono bg-slate-100 px-1">Done</code>).
             </p>
           </div>
         </div>
 
         <DocsCodeBlock
           language="json"
-          filename="Deterministic Pydantic JSON Review Schema"
+          filename="Deterministic Pydantic JSON Review Schema with CI Correlation"
           code={`{
   "summary": "PR #42 modifies billing calculation parameters, introducing potential type mismatches.",
   "risk_score": 85,
@@ -325,6 +336,17 @@ LIMIT 10;`}
   "blast_radius": {
     "direct_callers": ["api/v1/checkout.py:process_payment"],
     "transitive_callers": ["workers/cron.py:reconcile_daily_charges"]
+  },
+  "ci_correlation": {
+    "overall_verdict": "in_scope",
+    "failed_checks": [
+      {
+        "name": "Integration Tests / test_checkout_flow",
+        "verdict": "in_scope",
+        "matched_files": ["api/v1/checkout.py"],
+        "reason": "Test failed with TypeError in calculate_billing signature matching blast-radius caller"
+      }
+    ]
   },
   "actionable_recommendation": "Add default parameter fallback in calculate_billing to preserve backwards compatibility."
 }`}

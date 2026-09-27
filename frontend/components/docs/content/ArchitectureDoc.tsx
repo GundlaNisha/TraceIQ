@@ -170,13 +170,23 @@ export function ArchitectureDoc() {
               </tr>
               <tr className="hover:bg-slate-50/70 transition-colors">
                 <td className="px-5 py-3.5 font-bold text-[#111111]">Embeddings Model</td>
-                <td className="px-5 py-3.5 text-accent font-bold">Google Gemini 2.0 (384d)</td>
+                <td className="px-5 py-3.5 text-accent font-bold">Google Gemini Embedding 2 (384d)</td>
                 <td className="px-5 py-3.5 font-sans text-[#555E6D]">Dense vector embeddings with 0 MB server RAM overhead and local fallback</td>
               </tr>
               <tr className="hover:bg-slate-50/70 transition-colors">
-                <td className="px-5 py-3.5 font-bold text-[#111111]">Task Queuing &amp; Cache</td>
-                <td className="px-5 py-3.5 text-accent font-bold">Celery &amp; Redis</td>
-                <td className="px-5 py-3.5 font-sans text-[#555E6D]">Distributed background workers, async repo cloning/indexing, in-memory cache</td>
+                <td className="px-5 py-3.5 font-bold text-[#111111]">LLM Engine &amp; Review</td>
+                <td className="px-5 py-3.5 text-accent font-bold">Google Gemini 3.5 Flash Lite</td>
+                <td className="px-5 py-3.5 font-sans text-[#555E6D]">High-speed structured Pydantic review dispatching via LiteLLM &amp; Instructor</td>
+              </tr>
+              <tr className="hover:bg-slate-50/70 transition-colors">
+                <td className="px-5 py-3.5 font-bold text-[#111111]">CI Checks &amp; Actions API</td>
+                <td className="px-5 py-3.5 text-accent font-bold">GitHub Checks &amp; Actions v3</td>
+                <td className="px-5 py-3.5 font-sans text-[#555E6D]">Live CI check runs, CI-blast-radius correlation engine, MTTR &amp; flaky workflow metrics</td>
+              </tr>
+              <tr className="hover:bg-slate-50/70 transition-colors">
+                <td className="px-5 py-3.5 font-bold text-[#111111]">Task Queuing &amp; Execution</td>
+                <td className="px-5 py-3.5 text-accent font-bold">Celery + Redis / In-Process</td>
+                <td className="px-5 py-3.5 font-sans text-[#555E6D]">Distributed background workers with event-loop safe in-process fallback runner</td>
               </tr>
               <tr className="hover:bg-slate-50/70 transition-colors">
                 <td className="px-5 py-3.5 font-bold text-[#111111]">Jira Integration</td>

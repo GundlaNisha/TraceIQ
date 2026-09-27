@@ -81,6 +81,19 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail=f"Malformed token: {e!s}")
 
 
+async def get_current_user_optional(
+    request: Request, db: AsyncSession = Depends(get_db)
+) -> User | None:
+    """Return the authenticated user if a valid bearer token is present, else None."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    try:
+        return await get_current_user(request, db)
+    except HTTPException:
+        return None
+
+
 import uuid
 
 

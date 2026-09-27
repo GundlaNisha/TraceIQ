@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_optional
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.db.session import get_db
 from app.modules.auth.models.user import User
@@ -24,7 +24,9 @@ from app.modules.workspace.models.workspace import (
 from app.modules.workspace.schemas.workspace import (
     InviteCreate,
     MemberRoleUpdate,
+    UserInvitationResponse,
     WorkspaceCreate,
+    WorkspaceInvitePreview,
     WorkspaceInviteResponse,
     WorkspaceMemberResponse,
     WorkspaceRepoAssign,
@@ -471,20 +473,119 @@ async def invite_member(
     return invitation
 
 
-@router.get("/join/{token}", response_model=WorkspaceResponse)
+@router.get("/invites/me", response_model=list[UserInvitationResponse])
+async def list_my_invitations(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List pending workspace invitations sent to the authenticated user's email."""
+    if not current_user.email:
+        return []
+
+    now = datetime.now(UTC)
+    result = await db.execute(
+        select(WorkspaceInvitation, Workspace, User)
+        .join(Workspace, WorkspaceInvitation.workspace_id == Workspace.id)
+        .outerjoin(User, WorkspaceInvitation.invited_by == User.id)
+        .where(
+            func.lower(WorkspaceInvitation.email) == current_user.email.lower(),
+            WorkspaceInvitation.accepted_at.is_(None),
+            WorkspaceInvitation.expires_at > now,
+        )
+        .order_by(WorkspaceInvitation.created_at.desc())
+    )
+
+    invitations_list: list[UserInvitationResponse] = []
+    for inv, ws, inviter in result.all():
+        invitations_list.append(
+            UserInvitationResponse(
+                id=inv.id,
+                workspace_id=ws.id,
+                workspace_name=ws.name,
+                workspace_slug=ws.slug,
+                workspace_description=ws.description,
+                email=inv.email,
+                role=inv.role.value if hasattr(inv.role, "value") else str(inv.role),
+                token=inv.token,
+                invited_by_name=inviter.name if inviter else None,
+                invited_by_email=inviter.email if inviter else None,
+                created_at=inv.created_at,
+                expires_at=inv.expires_at,
+            )
+        )
+    return invitations_list
+
+
+@router.get("/join/{token}", response_model=WorkspaceInvitePreview)
+@router.get("/invites/{token}/preview", response_model=WorkspaceInvitePreview)
+async def preview_invite(
+    token: str,
+    current_user: User | None = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    """Preview a workspace invitation without modifying state.
+    Safe, idempotent, and accessible both before and after user authentication.
+    """
+    result = await db.execute(
+        select(WorkspaceInvitation).where(WorkspaceInvitation.token == token)
+    )
+    invitation = result.scalar_one_or_none()
+    if not invitation:
+        raise NotFoundError("Invitation not found or invalid token")
+
+    workspace = await db.get(Workspace, invitation.workspace_id)
+    if not workspace:
+        raise NotFoundError("Workspace not found")
+
+    inviter = await db.get(User, invitation.invited_by)
+    now = datetime.now(UTC)
+    is_expired = invitation.expires_at.replace(tzinfo=UTC) < now
+    already_accepted = invitation.accepted_at is not None
+
+    is_current_user_member = False
+    current_user_role = None
+
+    if current_user:
+        member = await _get_member(invitation.workspace_id, current_user.id, db)
+        if member:
+            is_current_user_member = True
+            current_user_role = (
+                member.role.value if hasattr(member.role, "value") else str(member.role)
+            )
+
+    return WorkspaceInvitePreview(
+        workspace_id=workspace.id,
+        workspace_name=workspace.name,
+        workspace_slug=workspace.slug,
+        workspace_description=workspace.description,
+        email=invitation.email,
+        role=invitation.role.value if hasattr(invitation.role, "value") else str(invitation.role),
+        invited_by_name=inviter.name if inviter else None,
+        invited_by_email=inviter.email if inviter else None,
+        created_at=invitation.created_at,
+        expires_at=invitation.expires_at,
+        is_expired=is_expired,
+        already_accepted=already_accepted,
+        is_current_user_member=is_current_user_member,
+        current_user_role=current_user_role,
+    )
+
+
+@router.post("/join/{token}", response_model=WorkspaceResponse)
+@router.post("/join/{token}/accept", response_model=WorkspaceResponse)
 async def accept_invite(
     token: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Accept a workspace invitation via token. Adds the current user as a member."""
+    """Explicitly accept a workspace invitation via token. Adds the current user as a member."""
     result = await db.execute(
         select(WorkspaceInvitation).where(WorkspaceInvitation.token == token)
     )
     invitation = result.scalar_one_or_none()
 
     if not invitation:
-        raise NotFoundError("Invitation not found or already used")
+        raise NotFoundError("Invitation not found or invalid token")
     if invitation.accepted_at is not None:
         raise HTTPException(status_code=410, detail="Invitation has already been accepted")
     if invitation.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
@@ -510,6 +611,31 @@ async def accept_invite(
     return workspace
 
 
+@router.post("/join/{token}/decline")
+async def decline_invite(
+    token: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Explicitly decline a workspace invitation. Invalidates the token."""
+    result = await db.execute(
+        select(WorkspaceInvitation).where(WorkspaceInvitation.token == token)
+    )
+    invitation = result.scalar_one_or_none()
+
+    if not invitation:
+        raise NotFoundError("Invitation not found or invalid token")
+    if invitation.accepted_at is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot decline an invitation that has already been accepted",
+        )
+
+    await db.delete(invitation)
+    await db.commit()
+    return {"status": "success", "message": "Invitation declined successfully"}
+
+
 @router.get("/{workspace_id}/invites", response_model=list[WorkspaceInviteResponse])
 async def list_invites(
     workspace_id: uuid.UUID,
@@ -529,3 +655,22 @@ async def list_invites(
         .order_by(WorkspaceInvitation.created_at.desc())
     )
     return result.scalars().all()
+
+
+@router.delete("/{workspace_id}/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_invite(
+    workspace_id: uuid.UUID,
+    invite_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke/cancel a pending invitation. Requires workspace admin+."""
+    actor = await _get_member(workspace_id, current_user.id, db)
+    _require_role(actor, WorkspaceRole.admin)
+
+    inv = await db.get(WorkspaceInvitation, invite_id)
+    if not inv or inv.workspace_id != workspace_id:
+        raise NotFoundError("Invitation not found")
+
+    await db.delete(inv)
+    await db.commit()

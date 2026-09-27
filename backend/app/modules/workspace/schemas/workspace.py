@@ -115,6 +115,55 @@ class WorkspaceInviteResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class WorkspaceInvitePreview(BaseModel):
+    workspace_id: uuid.UUID
+    workspace_name: str
+    workspace_slug: str
+    workspace_description: str | None = None
+    email: str
+    role: str
+    invited_by_name: str | None = None
+    invited_by_email: str | None = None
+    created_at: datetime
+    expires_at: datetime
+    is_expired: bool = False
+    already_accepted: bool = False
+    is_current_user_member: bool = False
+    current_user_role: str | None = None
+
+    @field_serializer("created_at", "expires_at")
+    def serialize_dt(self, dt: datetime, _info) -> str:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserInvitationResponse(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    workspace_name: str
+    workspace_slug: str
+    workspace_description: str | None = None
+    email: str
+    role: str
+    token: str
+    invited_by_name: str | None = None
+    invited_by_email: str | None = None
+    created_at: datetime
+    expires_at: datetime
+
+    @field_serializer("created_at", "expires_at")
+    def serialize_dt(self, dt: datetime, _info) -> str:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
 class WorkspaceSummaryResponse(BaseModel):
     workspace: WorkspaceResponse
     member_count: int

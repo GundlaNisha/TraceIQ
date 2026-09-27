@@ -51,17 +51,58 @@ Create a new collaborative Team Workspace.
 * **Body:** `{ "name": "Payment Platform" }`
 * **Response:** Created workspace object with `role: "Owner"`.
 
-### `POST /api/v1/workspaces/{id}/invites`
-Generates a secure, expiring tokenized invite URL for team member onboarding (`/join/[token]`).
-* **Body:** `{ "role": "Member", "expires_in_hours": 168 }`
+### `POST /api/v1/workspaces/{id}/invite`
+Generates a secure, expiring tokenized invite URL for team member onboarding (`/join/[token]`). Requires admin+.
+* **Body:** `{ "email": "teammate@company.com", "role": "member" }`
 * **Response:**
 ```json
 {
-  "token": "inv_7c8d9e0f",
-  "invite_url": "https://traceiqoffi.vercel.app/join/inv_7c8d9e0f",
-  "expires_at": "2026-08-08T12:00:00Z"
+  "id": "c1f7b0f6-9f8d-4e92-9c12-3456789abcde",
+  "workspace_id": "8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d",
+  "email": "teammate@company.com",
+  "role": "member",
+  "token": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+  "invited_by": "user_2k123456",
+  "accepted_at": null,
+  "expires_at": "2026-10-04T12:00:00Z",
+  "created_at": "2026-09-27T12:00:00Z"
 }
 ```
+
+### `GET /api/v1/workspaces/join/{token}` (or `/invites/{token}/preview`)
+Idempotent preview of an invitation before accepting or declining. Works with or without authentication.
+* **Response:**
+```json
+{
+  "workspace_id": "8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d",
+  "workspace_name": "Payment Platform",
+  "workspace_slug": "payment-platform",
+  "workspace_description": "Core payments and ledger",
+  "email": "teammate@company.com",
+  "role": "member",
+  "invited_by_name": "Sarah Connor",
+  "invited_by_email": "sarah@company.com",
+  "created_at": "2026-09-27T12:00:00Z",
+  "expires_at": "2026-10-04T12:00:00Z",
+  "is_expired": false,
+  "already_accepted": false,
+  "is_current_user_member": false,
+  "current_user_role": null
+}
+```
+
+### `POST /api/v1/workspaces/join/{token}/accept` (or `POST /join/{token}`)
+Explicitly accepts the invitation. Requires authenticated user. Adds user to workspace members.
+* **Response:** `WorkspaceResponse`
+
+### `POST /api/v1/workspaces/join/{token}/decline`
+Explicitly declines and invalidates the invitation token.
+* **Response:** `{ "status": "success", "message": "Invitation declined successfully" }`
+
+### `DELETE /api/v1/workspaces/{workspace_id}/invites/{invite_id}`
+Admin/Owner revokes a pending invitation.
+* **Response:** `204 No Content`
+
 
 ---
 

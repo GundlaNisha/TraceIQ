@@ -17,6 +17,7 @@ from app.modules.github.routes.prs import router as github_prs_router
 from app.modules.github.routes.webhook import router as github_webhook_router
 from app.modules.health.routes.health import router as health_router
 from app.modules.impact.routes.analysis import router as analysis_router
+from app.modules.agent.routes.agent_router import router as agent_router
 from app.modules.jira.routes.jira import router as jira_router
 from app.modules.repository.routes.repo import router as repo_router
 from app.modules.requirement.routes.req import router as req_router
@@ -77,6 +78,7 @@ app.include_router(github_prs_router)
 app.include_router(github_checks_router)
 app.include_router(workspace_router)
 app.include_router(jira_router)
+app.include_router(agent_router)
 
 
 @app.get("/health")

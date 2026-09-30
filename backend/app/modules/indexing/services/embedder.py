@@ -178,8 +178,18 @@ async def async_embed_chunks_batched(
         or os.getenv("GEMINI_API_KEY")
         or os.getenv("GOOGLE_API_KEY")
     )
-    openai_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
-    api_base = settings.llm_base_url or settings.openai_api_base or os.getenv("LLM_BASE_URL")
+    openai_key = (
+        settings.openai_api_key
+        or settings.opencode_api_key
+        or os.getenv("OPENCODE_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+    )
+    api_base = (
+        settings.llm_base_url
+        or (settings.opencode_base_url if settings.opencode_api_key else None)
+        or settings.openai_api_base
+        or os.getenv("LLM_BASE_URL")
+    )
     model = settings.embedding_model or "gemini/gemini-embedding-2"
     dimensions = settings.embedding_dimensions or 384
 

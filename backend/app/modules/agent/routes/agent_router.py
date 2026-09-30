@@ -192,13 +192,108 @@ async def post_agent_message(
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent session not found")
 
+    # Resolve tagged entities and extract inline mentions
+    import re
+
+    raw_entities = [e.model_dump() for e in payload.tagged_entities] if payload.tagged_entities else []
+    inline_mentions = re.findall(r"@(?P<type>repo|req|pr):\[(?P<id>[^\]]+)\]", payload.content)
+    for m_type, m_id in inline_mentions:
+        if not any(e.get("id") == m_id for e in raw_entities):
+            raw_entities.append({"type": m_type, "id": m_id, "label": m_id})
+
+    entity_context_parts: list[str] = []
+    effective_repo_id = session.repository_id
+    effective_req_id = session.requirement_id
+
+    for ent in raw_entities:
+        e_type = ent.get("type", "")
+        e_id = str(ent.get("id", ""))
+        if not e_id:
+            continue
+
+        try:
+            if e_type in ("req", "requirement"):
+                from app.modules.requirement.models.req import Requirement
+
+                is_valid_uuid = False
+                try:
+                    req_uuid = uuid.UUID(e_id)
+                    is_valid_uuid = True
+                except ValueError:
+                    req_uuid = None
+
+                req_query = select(Requirement).where(
+                    Requirement.id == req_uuid if is_valid_uuid else Requirement.jira_issue_key == e_id
+                )
+                r_res = await db.execute(req_query)
+                req_row = r_res.scalar_one_or_none()
+                if req_row:
+                    effective_req_id = req_row.id
+                    if req_row.repository_id and not effective_repo_id:
+                        effective_repo_id = req_row.repository_id
+                    entity_context_parts.append(
+                        f"📌 [Tagged Requirement: {req_row.title}]\n"
+                        f"ID: {req_row.id} | Jira Key: {req_row.jira_issue_key or 'N/A'}\n"
+                        f"Specification:\n{req_row.text[:1200]}"
+                    )
+            elif e_type in ("repo", "repository"):
+                from app.modules.repository.models.repo import Repository
+
+                is_valid_uuid = False
+                try:
+                    repo_uuid = uuid.UUID(e_id)
+                    is_valid_uuid = True
+                except ValueError:
+                    repo_uuid = None
+
+                repo_query = select(Repository).where(
+                    Repository.id == repo_uuid if is_valid_uuid else Repository.name == e_id
+                )
+                repo_res = await db.execute(repo_query)
+                repo_row = repo_res.scalar_one_or_none()
+                if repo_row:
+                    effective_repo_id = repo_row.id
+                    entity_context_parts.append(
+                        f"📁 [Tagged Repository: {repo_row.name}]\n"
+                        f"ID: {repo_row.id} | URL: {repo_row.repo_url} | Branch: {repo_row.default_branch}"
+                    )
+            elif e_type in ("pr", "pr_review"):
+                from app.modules.pr_review.models.review import PRReview
+
+                is_valid_uuid = False
+                try:
+                    pr_uuid = uuid.UUID(e_id)
+                    is_valid_uuid = True
+                except ValueError:
+                    pr_uuid = None
+
+                pr_query = select(PRReview).where(
+                    PRReview.id == pr_uuid if is_valid_uuid else (PRReview.pr_number == int(e_id) if e_id.isdigit() else False)
+                )
+                pr_res = await db.execute(pr_query)
+                pr_row = pr_res.scalar_one_or_none()
+                if pr_row:
+                    entity_context_parts.append(
+                        f"🔀 [Tagged Pull Request #{pr_row.pr_number}: {pr_row.pr_title}]\n"
+                        f"Status: {pr_row.status} | Risk Score: {pr_row.risk_score}\n"
+                        f"Summary: {pr_row.summary or 'N/A'}"
+                    )
+        except Exception as err:
+            logger.warning(f"Error resolving tagged entity {ent}: {err}")
+
+    # Synchronize session state with discovered tags if not already bound
+    if effective_repo_id and session.repository_id != effective_repo_id:
+        session.repository_id = effective_repo_id
+    if effective_req_id and session.requirement_id != effective_req_id:
+        session.requirement_id = effective_req_id
+
     # 1. Save user message in DB
     user_msg = AgentMessage(
         session_id=session.id,
         sender="user",
         content=payload.content,
         message_type="text",
-        artifacts={},
+        artifacts={"tagged_entities": raw_entities} if raw_entities else {},
     )
     db.add(user_msg)
     await db.flush()
@@ -223,10 +318,12 @@ async def post_agent_message(
 
     # Initial graph state
     current_context = session.context_metadata or {}
+    entity_context_str = "\n\n".join(entity_context_parts) if entity_context_parts else None
+
     graph_input = {
         "messages": langchain_messages,
         "session_id": str(session.id),
-        "workspace_id": str(session.workspace_id),
+        "workspace_id": str(session.workspace_id) if session.workspace_id else "",
         "repository_id": str(session.repository_id) if session.repository_id else None,
         "requirement_id": str(session.requirement_id) if session.requirement_id else None,
         "current_phase": session.current_phase or "idle",
@@ -239,6 +336,8 @@ async def post_agent_message(
         "approval_status": None,
         "user_feedback": None,
         "next_step": None,
+        "tagged_entities": raw_entities,
+        "entity_context": entity_context_str,
     }
 
     # 3. Stream LangGraph execution

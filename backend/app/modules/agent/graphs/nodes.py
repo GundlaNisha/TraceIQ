@@ -21,6 +21,8 @@ from app.modules.agent.tools.review_tools import (
     audit_missing_tests_fn,
 )
 
+from app.ai.providers.multi_provider import ai_router
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +36,51 @@ def _extract_intent_from_text(text: str) -> str:
     if any(k in lower for k in ["draft pr", "pr draft", "pull request", "generate pr", "pr description"]):
         return "draft_pr"
     return "chat"
+
+
+async def _determine_user_intent(last_human_text: str, current_phase: str) -> str:
+    """Classifies user intent using MultiProviderRouter with fast fallback heuristics."""
+    if not last_human_text or not last_human_text.strip():
+        return "chat"
+
+    lower = last_human_text.lower().strip()
+    # Direct high-confidence phrase matches
+    if any(k in lower for k in ["draft pr", "pr draft", "generate pr", "pr description"]):
+        return "draft_pr"
+    if any(k in lower for k in ["pre-review", "prereview", "audit standards", "test gap", "audit diff"]):
+        return "review"
+    if any(k in lower for k in ["where to start", "find starting point", "starting point"]):
+        return "explore"
+
+    # MultiProviderRouter LLM Classification for diverse or conversational phrasings
+    try:
+        classification_prompt = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a routing intent classifier for TraceIQ AI Coding Agent.\n"
+                    "Classify the user message into one of four actions:\n"
+                    "- explore: User specifically asks where to start implementing code, finding entrypoints, or locating files for a task/requirement.\n"
+                    "- review: User asks to audit code against coding standards or check missing test coverage.\n"
+                    "- draft_pr: User asks to draft a pull request description.\n"
+                    "- chat: User is asking follow-up questions, asking for code explanations ('why?', 'explain line X'), discussing architecture, asking general programming questions, or conversing.\n\n"
+                    "Reply ONLY with the exact word: explore, review, draft_pr, or chat."
+                ),
+            },
+            {"role": "user", "content": last_human_text},
+        ]
+        decision = await ai_router.chat_complete(classification_prompt, temperature=0.0, max_tokens=15)
+        decision_clean = decision.strip().lower()
+        if "explore" in decision_clean:
+            return "explore"
+        if "review" in decision_clean:
+            return "review"
+        if "draft" in decision_clean or "pr" in decision_clean:
+            return "draft_pr"
+        return "chat"
+    except Exception as e:
+        logger.warning(f"AI intent classification error, using fallback heuristics: {e}")
+        return _extract_intent_from_text(last_human_text)
 
 
 async def supervisor_node(state: AgentState) -> dict[str, Any]:
@@ -90,7 +137,7 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
             last_human_text = str(msg.content)
             break
 
-    intent = _extract_intent_from_text(last_human_text)
+    intent = await _determine_user_intent(last_human_text, current_phase)
 
     if intent == "explore":
         return {
@@ -108,21 +155,10 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
             "next_step": "pr_drafter",
         }
     else:
-        # Conversational guidance response
-        guidance = (
-            "Hello! I am your **TraceIQ AI Code Impact & Review Assistant**.\n\n"
-            "I operate with strict **Human-in-the-Loop Governance** — I will analyze and suggest starting points and audits, but I never modify code or proceed without your confirmation.\n\n"
-            "Here is what I can do for you:\n"
-            "1. 📍 **Suggested Starting Points**: Mention a requirement, feature, or Jira story (e.g. `Where should I start for webhook retry logic?`).\n"
-            "2. 💥 **Blast Radius & Impact**: Identify downstream callers, callee chains, and dependent API endpoints.\n"
-            "3. 🛡️ **Standards & Test Gap Pre-Review**: Audit diffs against organizational guidelines and locate missing unit test cases.\n"
-            "4. 📝 **PR Description Drafter**: Generate a production-ready, requirement-linked pull request description.\n\n"
-            "What would you like to explore?"
-        )
+        # Route to conversational chat agent node
         return {
-            "current_phase": "idle",
-            "next_step": "completed",
-            "messages": [AIMessage(content=guidance)],
+            "current_phase": "chatting",
+            "next_step": "conversational_chat",
         }
 
 
@@ -497,4 +533,108 @@ This pull request introduces changes addressing requirement **{requirement_id}**
         "current_phase": "pr_drafted",
         "next_step": "completed",
         "messages": [AIMessage(content=message_text)],
+    }
+
+
+async def conversational_chat_node(state: AgentState) -> dict[str, Any]:
+    """
+    Conversational Chat Agent Node:
+    Empowered by MultiProviderRouter (Gemini, OpenCode Zen, Groq).
+    Provides deep, contextual, and multi-turn technical discussion,
+    answering follow-up questions, clarifying architecture, explaining code,
+    and acknowledging tagged @entities (Repositories, Requirements, PRs).
+    """
+    messages = state.get("messages", [])
+    repository_id = state.get("repository_id")
+    requirement_id = state.get("requirement_id")
+    entity_context = state.get("entity_context")
+
+    # 1. Extract latest user query
+    last_human_text = ""
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage) or getattr(msg, "type", "") == "human":
+            last_human_text = str(msg.content)
+            break
+
+    if not last_human_text:
+        last_human_text = "Hello! What can you do?"
+
+    # 2. Gather relevant code snippets & symbols if repository is bound
+    code_context_parts = []
+    if repository_id:
+        try:
+            symbols = await search_code_symbols_fn(repository_id, last_human_text, limit=4)
+            if symbols:
+                sym_texts = [
+                    f"- `{s['file_path']}`: {s['symbol_type']} **{s['symbol_name']}** (L{s['start_line']}-{s['end_line']})"
+                    for s in symbols
+                ]
+                code_context_parts.append("### Code AST Symbols:\n" + "\n".join(sym_texts))
+
+            chunks = await semantic_code_search_fn(repository_id, last_human_text, top_k=3)
+            if chunks:
+                chunk_texts = [
+                    f"```\n# File: {c.get('file_path')}\n{c.get('content', '')[:400]}\n```"
+                    for c in chunks
+                ]
+                code_context_parts.append("### Relevant Code Chunks:\n" + "\n".join(chunk_texts))
+        except Exception as e:
+            logger.warning(f"Error gathering codebase context for chat node: {e}")
+
+    # 3. Retrieve linked requirement details if available
+    req_context_str = ""
+    if requirement_id:
+        try:
+            req_info = await fetch_requirement_details_fn(requirement_id)
+            if req_info:
+                req_context_str = (
+                    f"Linked Requirement: {req_info.get('title')} ({req_info.get('jira_key') or 'Custom'})\n"
+                    f"Specification: {req_info.get('description', '')[:600]}"
+                )
+        except Exception as e:
+            logger.warning(f"Error fetching requirement details for chat node: {e}")
+
+    # 4. Construct high-fidelity system prompt
+    system_prompt = (
+        "You are TraceIQ Senior AI Architect, an expert coding assistant with deep codebase context.\n"
+        "You are assisting a software engineer in an interactive, multi-turn conversation.\n"
+        "Guidelines:\n"
+        "1. Provide clear, accurate, and deeply insightful technical responses formatted in GitHub Markdown.\n"
+        "2. When explaining code, architecture, or design patterns, reference the provided code symbols and files.\n"
+        "3. If the engineer is asking follow-up questions ('why?', 'explain line X', 'how does error handling work?'), maintain conversational continuity and reason step-by-step.\n"
+        "4. If Human-in-the-Loop actions (such as starting point confirmation, standards audits, or drafting PRs) are relevant to the user's intent, guide them on how to trigger or approve them.\n"
+        "5. Be concise, direct, and avoid robotic boilerplate."
+    )
+
+    context_blocks = []
+    if req_context_str:
+        context_blocks.append(f"=== LINKED REQUIREMENT ===\n{req_context_str}")
+    if entity_context:
+        context_blocks.append(f"=== TAGGED CONTEXT (@mentions) ===\n{entity_context}")
+    if code_context_parts:
+        context_blocks.append("=== CODEBASE CONTEXT ===\n" + "\n\n".join(code_context_parts))
+
+    if context_blocks:
+        system_prompt += "\n\n" + "\n\n".join(context_blocks)
+
+    # 5. Format conversation turns for MultiProviderRouter
+    llm_messages = [{"role": "system", "content": system_prompt}]
+    for m in messages[-10:]:
+        role = "user" if (isinstance(m, HumanMessage) or getattr(m, "type", "") == "human") else "assistant"
+        llm_messages.append({"role": role, "content": str(m.content)})
+
+    # 6. Dispatch through MultiProviderRouter (with Gemini, OpenCode Zen, and Groq failover!)
+    try:
+        response_text = await ai_router.chat_complete(llm_messages, temperature=0.3, max_tokens=2048)
+    except Exception as e:
+        logger.error(f"MultiProviderRouter failed in conversational_chat_node: {e}")
+        response_text = (
+            f"I encountered a temporary issue contacting the AI models: {e!s}.\n\n"
+            "Please verify your API keys or check `/api/v1/health/ai`."
+        )
+
+    return {
+        "current_phase": "chatting",
+        "next_step": "completed",
+        "messages": [AIMessage(content=response_text)],
     }

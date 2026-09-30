@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.modules.agent.graphs.nodes import (
     code_explorer_node,
+    conversational_chat_node,
     hitl_pre_review_node,
     hitl_starting_point_node,
     pre_review_node,
@@ -25,7 +26,7 @@ _default_checkpointer: BaseCheckpointSaver = MemorySaver()
 def _route_supervisor(state: AgentState) -> str:
     """Routes execution from supervisor to appropriate domain agent node or terminates."""
     next_step = state.get("next_step")
-    if next_step in ("code_explorer", "pre_review", "pr_drafter"):
+    if next_step in ("code_explorer", "pre_review", "pr_drafter", "conversational_chat"):
         return next_step
     return "end"
 
@@ -53,6 +54,7 @@ def build_agent_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
 
     # Register domain agent nodes
     builder.add_node("supervisor", supervisor_node)
+    builder.add_node("conversational_chat", conversational_chat_node)
     builder.add_node("code_explorer", code_explorer_node)
     builder.add_node("hitl_starting_point", hitl_starting_point_node)
     builder.add_node("pre_review", pre_review_node)
@@ -70,9 +72,13 @@ def build_agent_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
             "code_explorer": "code_explorer",
             "pre_review": "pre_review",
             "pr_drafter": "pr_drafter",
+            "conversational_chat": "conversational_chat",
             "end": END,
         },
     )
+
+    # Conversational Chat -> End
+    builder.add_edge("conversational_chat", END)
 
     # Code exploration -> HITL Checkpoint 1
     builder.add_edge("code_explorer", "hitl_starting_point")

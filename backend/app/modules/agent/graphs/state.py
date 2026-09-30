@@ -27,3 +27,5 @@ class AgentState(TypedDict):
     approval_status: Optional[str]
     user_feedback: Optional[str]
     next_step: Optional[str]
+    tagged_entities: list[dict[str, Any]]
+    entity_context: Optional[str]

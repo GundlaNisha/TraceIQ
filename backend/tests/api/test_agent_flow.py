@@ -227,3 +227,42 @@ async def test_agent_message_and_hitl_approval_flow(test_client: AsyncClient, db
     assert del_res.status_code == 200
 
     app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_conversational_chat_and_tagged_entities(test_client: AsyncClient, db_session, test_user: User):
+    """Verify conversational chat node responds to follow-up questions and handles @ tagged entities."""
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    ws = await _create_test_workspace(db_session, test_user)
+
+    # 1. Create session
+    create_res = await test_client.post(
+        "/api/v1/agent/sessions",
+        json={"workspace_id": str(ws.id), "title": "Conversational Agent Chat"},
+    )
+    assert create_res.status_code == 201
+    session_id = create_res.json()["id"]
+
+    # 2. Send conversational question with tagged entities
+    msg_res = await test_client.post(
+        f"/api/v1/agent/sessions/{session_id}/messages",
+        json={
+            "content": "Can you explain how caching and rate limits work in @repo:TraceIQ/backend?",
+            "tagged_entities": [
+                {"type": "repo", "id": "TraceIQ/backend", "label": "TraceIQ/backend"}
+            ],
+        },
+    )
+    assert msg_res.status_code == 200
+    msg_data = msg_res.json()
+    assert "user_message" in msg_data
+    assert len(msg_data["agent_messages"]) >= 1
+    # Conversational chat should not require HITL interrupt
+    assert msg_data.get("pending_approval") is None
+    ai_reply = msg_data["agent_messages"][-1]["content"]
+    assert len(ai_reply) > 10
+
+    # 3. Clean up
+    await test_client.delete(f"/api/v1/agent/sessions/{session_id}")
+    app.dependency_overrides.clear()
+

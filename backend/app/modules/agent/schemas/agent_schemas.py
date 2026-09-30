@@ -56,10 +56,17 @@ class AgentSessionResponse(BaseModel):
 # Message Schemas
 # ---------------------------------------------------------------------------
 
+class TaggedEntity(BaseModel):
+    type: str  # "repo" | "req" | "pr"
+    id: str
+    label: str
+
+
 class AgentMessageCreate(BaseModel):
     content: str
     message_type: str = "text"
     artifacts: dict[str, Any] = {}
+    tagged_entities: list[TaggedEntity] = []
 
 
 class AgentMessageResponse(BaseModel):

@@ -38,11 +38,14 @@ def _run_migrations() -> None:
         logger.warning(f"Alembic auto-migration notice: {e}")
 
 
+from app.core.cache import cache
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.database_url:
         asyncio.create_task(asyncio.to_thread(_run_migrations))
     yield
+    await cache.close()
 
 
 app = FastAPI(title="TraceIQ API", version="1.0.0", lifespan=lifespan)

@@ -46,9 +46,20 @@ async def create_agent_session(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> AgentSession:
-    """Create a new conversational agent session bound to an active workspace."""
+    """Create a new conversational agent session bound to an active workspace or personal context."""
+    target_ws = payload.workspace_id
+    if target_ws is None:
+        from app.modules.workspace.models.workspace import WorkspaceMember
+
+        ws_res = await db.execute(
+            select(WorkspaceMember.workspace_id)
+            .where(WorkspaceMember.user_id == current_user.id)
+            .limit(1)
+        )
+        target_ws = ws_res.scalar_one_or_none()
+
     session = AgentSession(
-        workspace_id=payload.workspace_id,
+        workspace_id=target_ws,
         user_id=str(current_user.id),
         repository_id=payload.repository_id,
         requirement_id=payload.requirement_id,
@@ -85,19 +96,15 @@ async def create_agent_session(
 
 @router.get("/sessions", response_model=list[AgentSessionResponse])
 async def list_agent_sessions(
-    workspace_id: uuid.UUID = Query(..., description="Active workspace ID"),
+    workspace_id: uuid.UUID | None = Query(None, description="Active workspace ID"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[AgentSession]:
-    """List agent sessions for the authenticated user within the specified workspace."""
-    stmt = (
-        select(AgentSession)
-        .where(
-            AgentSession.workspace_id == workspace_id,
-            AgentSession.user_id == str(current_user.id),
-        )
-        .order_by(AgentSession.updated_at.desc())
-    )
+    """List agent sessions for the authenticated user within the specified workspace or all user sessions."""
+    stmt = select(AgentSession).where(AgentSession.user_id == str(current_user.id))
+    if workspace_id is not None:
+        stmt = stmt.where(AgentSession.workspace_id == workspace_id)
+    stmt = stmt.order_by(AgentSession.updated_at.desc())
     result = await db.execute(stmt)
     return list(result.scalars().all())
 

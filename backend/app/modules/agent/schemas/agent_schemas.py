@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 # ---------------------------------------------------------------------------
 
 class AgentSessionCreate(BaseModel):
-    workspace_id: uuid.UUID
+    workspace_id: uuid.UUID | None = None
     repository_id: uuid.UUID | None = None
     requirement_id: uuid.UUID | None = None
     title: str = "New Agent Session"
@@ -32,7 +32,7 @@ class AgentSessionUpdate(BaseModel):
 
 class AgentSessionResponse(BaseModel):
     id: uuid.UUID
-    workspace_id: uuid.UUID
+    workspace_id: uuid.UUID | None = None
     user_id: str
     repository_id: uuid.UUID | None = None
     requirement_id: uuid.UUID | None = None

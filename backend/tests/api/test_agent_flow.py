@@ -161,6 +161,21 @@ async def test_create_and_list_agent_sessions(test_client: AsyncClient, db_sessi
     assert detail["session"]["id"] == session_id
     assert len(detail["messages"]) >= 1  # Initial greeting
 
+    # 4. Personal session without workspace_id
+    personal_create_res = await test_client.post(
+        "/api/v1/agent/sessions",
+        json={"title": "Personal Exploration Chat"},
+    )
+    assert personal_create_res.status_code == 201
+    personal_sess = personal_create_res.json()
+    assert personal_sess["title"] == "Personal Exploration Chat"
+
+    # List sessions without workspace_id query parameter
+    all_list_res = await test_client.get("/api/v1/agent/sessions")
+    assert all_list_res.status_code == 200
+    all_sessions = all_list_res.json()
+    assert any(s["id"] == personal_sess["id"] for s in all_sessions)
+
     app.dependency_overrides.clear()
 
 

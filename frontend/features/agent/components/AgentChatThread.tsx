@@ -11,6 +11,9 @@ import {
   Loader2,
   Cpu,
   AlertCircle,
+  FolderGit2,
+  Layers,
+  GitPullRequest,
 } from "lucide-react";
 import type { AgentApproval, AgentMessage, PRDraft } from "../types";
 import { StartingPointCard } from "./cards/StartingPointCard";
@@ -156,6 +159,34 @@ export function AgentChatThread({
               >
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
+
+              {/* Tagged Context Chips if attached to message */}
+              {msg.artifacts?.tagged_entities && Array.isArray(msg.artifacts.tagged_entities) && msg.artifacts.tagged_entities.length > 0 && (
+                <div className={`flex flex-wrap items-center gap-1.5 mt-3 pt-2.5 border-t ${isUser ? "border-white/20" : "border-border/50"}`}>
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${isUser ? "text-white/70" : "text-muted-foreground"}`}>
+                    Context:
+                  </span>
+                  {msg.artifacts.tagged_entities.map((tag: any, tIdx: number) => (
+                    <span
+                      key={tIdx}
+                      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium border shadow-2xs ${
+                        isUser
+                          ? "bg-white/15 text-white border-white/30"
+                          : tag.type === "repo"
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                          : tag.type === "req"
+                          ? "bg-purple-50 text-purple-700 border-purple-200"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      }`}
+                    >
+                      {tag.type === "repo" && <FolderGit2 className="h-3 w-3 shrink-0" />}
+                      {tag.type === "req" && <Layers className="h-3 w-3 shrink-0" />}
+                      {tag.type === "pr" && <GitPullRequest className="h-3 w-3 shrink-0" />}
+                      <span className="truncate max-w-[200px]">{tag.name || tag.id}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Interactive approval card rendered directly on last message or when pending */}
               {!isUser && isLastMessage && pendingApproval && renderApprovalCard(pendingApproval)}

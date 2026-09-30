@@ -5,6 +5,7 @@ import type {
   AgentMessage,
   AgentSession,
   AgentSessionDetail,
+  TaggedEntity,
 } from "../types";
 
 export function useAgentSessions(workspaceId?: string | null) {
@@ -102,12 +103,16 @@ export function useSendAgentMessage() {
       current_phase: string;
     },
     Error,
-    { sessionId: string; content: string }
+    { sessionId: string; content: string; tagged_entities?: TaggedEntity[] }
   >({
-    mutationFn: async ({ sessionId, content }) => {
+    mutationFn: async ({ sessionId, content, tagged_entities }) => {
+      const payload: Record<string, any> = { content };
+      if (tagged_entities && tagged_entities.length > 0) {
+        payload.tagged_entities = tagged_entities;
+      }
       const res = await fetchApi(`/api/v1/agent/sessions/${sessionId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Failed to send message to agent");
       return res.json();

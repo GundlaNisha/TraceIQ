@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Sparkles,
   Plus,
@@ -14,6 +14,9 @@ import {
   PanelLeftOpen,
   FolderGit2,
   Layers,
+  GitPullRequest,
+  AtSign,
+  X,
   ArrowRight,
   ShieldCheck,
   RefreshCw,
@@ -23,6 +26,7 @@ import { useWorkspaceStore } from "@/stores/workspace";
 import { useWorkspaces } from "@/features/workspace/api/queries";
 import { useRepositories } from "@/features/repositories/api/queries";
 import { useRequirements } from "@/features/requirements/api/queries";
+import { usePRReviews } from "@/features/pr-reviews/api/queries";
 import {
   useAgentSessions,
   useAgentSession,
@@ -34,7 +38,8 @@ import {
 import { useAgentStream } from "@/features/agent/hooks/useAgentStream";
 import { AgentChatThread } from "@/features/agent/components/AgentChatThread";
 import { AgentContextInspector } from "@/features/agent/components/AgentContextInspector";
-import type { AgentApproval } from "@/features/agent/types";
+import { AgentMentionMenu, type MentionItem } from "@/features/agent/components/AgentMentionMenu";
+import type { AgentApproval, TaggedEntity } from "@/features/agent/types";
 
 const QUICK_ACTIONS = [
   { label: "📍 Find Starting Points", prompt: "Where should I start in the codebase to implement this requirement?" },
@@ -66,8 +71,15 @@ export default function AgentPage() {
   // Queries
   const { data: repositories = [] } = useRepositories({ workspaceId: activeWorkspaceId });
   const { data: requirements = [] } = useRequirements(activeRepositoryId);
+  const { data: pullRequests = [] } = usePRReviews();
   const { data: sessions = [], isLoading: isLoadingSessions } = useAgentSessions(activeWorkspaceId);
   const { data: sessionDetail, refetch: refetchSessionDetail } = useAgentSession(selectedSessionId);
+
+  // Mention & Tagging State
+  const [isMentionOpen, setIsMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [taggedEntities, setTaggedEntities] = useState<TaggedEntity[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Mutations
   const createSessionMutation = useCreateAgentSession();
@@ -127,6 +139,80 @@ export default function AgentPage() {
     }
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInputContent(val);
+
+    const cursorPos = e.target.selectionStart ?? val.length;
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/(?:^|\s)@([a-zA-Z0-9_\-\.\/]*)$/);
+
+    if (mentionMatch) {
+      setMentionQuery(mentionMatch[1]);
+      setIsMentionOpen(true);
+    } else {
+      setIsMentionOpen(false);
+    }
+  };
+
+  const handleSelectMention = (item: MentionItem) => {
+    const newEntity: TaggedEntity = {
+      type: item.type,
+      id: item.id,
+      label: item.label,
+      name: item.label,
+    };
+    setTaggedEntities((prev) => {
+      if (prev.some((e) => e.type === newEntity.type && e.id === newEntity.id)) {
+        return prev;
+      }
+      return [...prev, newEntity];
+    });
+
+    if (textareaRef.current) {
+      const cursorPos = textareaRef.current.selectionStart ?? inputContent.length;
+      const textBeforeCursor = inputContent.slice(0, cursorPos);
+      const textAfterCursor = inputContent.slice(cursorPos);
+      const mentionMatch = textBeforeCursor.match(/(?:^|\s)@([a-zA-Z0-9_\-\.\/]*)$/);
+
+      if (mentionMatch) {
+        const matchIndex = textBeforeCursor.lastIndexOf("@" + mentionMatch[1]);
+        const beforeMention = textBeforeCursor.slice(0, matchIndex);
+        const inserted = `@${item.label} `;
+        const nextText = `${beforeMention}${inserted}${textAfterCursor}`;
+        setInputContent(nextText);
+
+        setTimeout(() => {
+          if (textareaRef.current) {
+            const newPos = beforeMention.length + inserted.length;
+            textareaRef.current.focus();
+            textareaRef.current.setSelectionRange(newPos, newPos);
+          }
+        }, 0);
+      }
+    }
+
+    setIsMentionOpen(false);
+    setMentionQuery("");
+  };
+
+  const handleRemoveTag = (type: string, id: string) => {
+    setTaggedEntities((prev) => prev.filter((e) => !(e.type === type && e.id === id)));
+  };
+
+  const handleTriggerMention = () => {
+    setIsMentionOpen(true);
+    setMentionQuery("");
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      const val = textareaRef.current.value;
+      if (!val.endsWith("@")) {
+        const updated = val + (val.length > 0 && !val.endsWith(" ") ? " @" : "@");
+        setInputContent(updated);
+      }
+    }
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend !== undefined ? textToSend : inputContent).trim();
     if (!text || sendMessageMutation.isPending) return;
@@ -153,7 +239,10 @@ export default function AgentPage() {
       }
     }
 
+    const currentTags = [...taggedEntities];
     setInputContent("");
+    setTaggedEntities([]);
+    setIsMentionOpen(false);
     setOptimisticUserMessage(text);
 
     try {
@@ -166,6 +255,7 @@ export default function AgentPage() {
       await sendMessageMutation.mutateAsync({
         sessionId: currentSessionId,
         content: text,
+        tagged_entities: currentTags.length > 0 ? currentTags : undefined,
       });
 
       await refetchSessionDetail();
@@ -408,7 +498,53 @@ export default function AgentPage() {
         </div>
 
         {/* Input Bar */}
-        <div className="border-t border-border/50 bg-white/90 p-4 backdrop-blur-md shrink-0">
+        <div className="relative border-t border-border/50 bg-white/90 p-4 backdrop-blur-md shrink-0">
+          {/* Floating Mention Autocomplete Menu */}
+          <AgentMentionMenu
+            isOpen={isMentionOpen}
+            query={mentionQuery}
+            repositories={repositories}
+            requirements={requirements}
+            pullRequests={pullRequests}
+            onSelect={handleSelectMention}
+            onClose={() => setIsMentionOpen(false)}
+          />
+
+          {/* Active Tagged Context Chips */}
+          {taggedEntities.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mr-1">
+                <AtSign className="h-3 w-3 text-accent" />
+                <span>Tagged Context:</span>
+              </span>
+              {taggedEntities.map((entity) => (
+                <span
+                  key={`${entity.type}-${entity.id}`}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium border shadow-2xs ${
+                    entity.type === "repo"
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : entity.type === "req"
+                      ? "bg-purple-50 text-purple-700 border-purple-200"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  }`}
+                >
+                  {entity.type === "repo" && <FolderGit2 className="h-3 w-3 shrink-0" />}
+                  {entity.type === "req" && <Layers className="h-3 w-3 shrink-0" />}
+                  {entity.type === "pr" && <GitPullRequest className="h-3 w-3 shrink-0" />}
+                  <span className="truncate max-w-[180px]">{entity.label || entity.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(entity.type, entity.id)}
+                    className="ml-0.5 rounded p-0.5 hover:bg-black/10 transition"
+                    title="Remove tag"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -416,12 +552,27 @@ export default function AgentPage() {
                 handleSendMessage(inputContent);
               }
             }}
-            className="flex items-center gap-3 rounded-2xl border border-border/80 bg-[#FAF8F5]/80 px-4 py-2.5 shadow-inner focus-within:border-accent focus-within:bg-white focus-within:ring-2 focus-within:ring-accent/10 transition"
+            className="flex items-center gap-2 rounded-2xl border border-border/80 bg-[#FAF8F5]/80 px-3 py-2 shadow-inner focus-within:border-accent focus-within:bg-white focus-within:ring-2 focus-within:ring-accent/10 transition"
           >
+            <button
+              type="button"
+              onClick={handleTriggerMention}
+              className="rounded-xl p-1.5 text-muted-foreground hover:text-accent hover:bg-black/[0.04] transition shrink-0"
+              title="Tag Repository, Story, or PR (@)"
+            >
+              <AtSign className="h-4 w-4" />
+            </button>
+
             <textarea
+              ref={textareaRef}
               value={inputContent}
-              onChange={(e) => setInputContent(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={(e) => {
+                if (isMentionOpen) {
+                  if (e.key === "Enter" || e.key === "Tab" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape") {
+                    return;
+                  }
+                }
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   if (inputContent.trim()) {
@@ -429,16 +580,16 @@ export default function AgentPage() {
                   }
                 }
               }}
-              placeholder="Ask the AI agent... (e.g. 'Where should I start for requirement PROJ-102?')"
+              placeholder="Ask the AI agent... Type @ to tag repos, stories, or PRs"
               rows={1}
               disabled={sendMessageMutation.isPending}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-none"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-none py-1"
             />
 
             <button
               type="submit"
               disabled={!inputContent.trim() || sendMessageMutation.isPending}
-              className="rounded-xl bg-accent p-2 text-white hover:bg-accent/90 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
+              className="rounded-xl bg-accent p-2 text-white hover:bg-accent/90 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-xs shrink-0"
             >
               {sendMessageMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

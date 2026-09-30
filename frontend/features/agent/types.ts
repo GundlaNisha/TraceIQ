@@ -1,3 +1,11 @@
+export interface TaggedEntity {
+  type: "repo" | "req" | "pr";
+  id: string;
+  label: string;
+  name?: string;
+  details?: string;
+}
+
 export interface AgentSession {
   id: string;
   workspace_id: string;

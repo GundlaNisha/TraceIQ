@@ -31,11 +31,28 @@ class Settings(BaseSettings):
     r2_bucket_name: str = ""
     r2_endpoint_url: str = ""
 
-    # AI & Embeddings (Google Gemini, OpenCode Zen, or custom LiteLLM provider)
+    # AI & Embeddings Multi-Provider Architecture (Gemini, OpenCode Zen, Groq)
     openai_api_key: str = ""
     openai_api_base: str = ""
     gemini_api_key: str = ""
+    gemini_model: str = "gemini/gemini-2.5-flash"
     google_api_key: str = ""
+
+    # OpenCode Zen (https://opencode.ai/zen/v1)
+    opencode_api_key: str = ""
+    opencode_base_url: str = "https://opencode.ai/zen/v1"
+    opencode_model: str = "openai/zen-v1"
+    zen_api_key: str = ""
+
+    # Groq (https://api.groq.com/openai/v1)
+    groq_api_key: str = ""
+    groq_model: str = "groq/llama-3.3-70b-versatile"
+
+    # Multi-Provider Routing Strategy ("round_robin" or "priority")
+    ai_strategy: str = "round_robin"
+    ai_provider_order: str = "gemini,opencode,groq"
+    ai_provider_cooldown_seconds: int = 60
+
     llm_base_url: str = ""
     llm_model: str = ""
     embedding_model: str = ""
@@ -115,3 +132,7 @@ if settings.gemini_api_key and "GEMINI_API_KEY" not in os.environ:
     os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
 if settings.google_api_key and "GOOGLE_API_KEY" not in os.environ:
     os.environ["GOOGLE_API_KEY"] = settings.google_api_key
+if settings.groq_api_key and "GROQ_API_KEY" not in os.environ:
+    os.environ["GROQ_API_KEY"] = settings.groq_api_key
+if settings.opencode_api_key and "OPENCODE_API_KEY" not in os.environ:
+    os.environ["OPENCODE_API_KEY"] = settings.opencode_api_key

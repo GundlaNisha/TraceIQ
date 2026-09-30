@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cached
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary")
+@cached(ttl=120, prefix="user:{current_user.id}:dashboard:summary")
 async def get_dashboard_summary(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):

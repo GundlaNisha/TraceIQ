@@ -21,10 +21,26 @@ from app.modules.traceability.schemas.traceability import (
     TraceabilitySummary,
 )
 
+from app.core.cache import cached
+
 router = APIRouter(prefix="/api/v1/traceability", tags=["traceability"])
 
 
+def _traceability_cache_key(
+    request: Request,
+    repository_id: str | None = None,
+    current_user: User | None = None,
+    **kwargs,
+) -> str:
+    target_ws = get_active_workspace_id(request)
+    if target_ws:
+        return f"ws:{target_ws}:traceability:{repository_id or 'all'}"
+    user_id = current_user.id if current_user else "anon"
+    return f"user:{user_id}:traceability:{repository_id or 'all'}"
+
+
 @router.get("", response_model=TraceabilityMatrixResponse)
+@cached(ttl=300, key_builder=_traceability_cache_key)
 async def get_traceability_matrix(
     request: Request,
     repository_id: str | None = Query(None),

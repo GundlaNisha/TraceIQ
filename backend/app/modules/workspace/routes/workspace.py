@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cache, cached
 from app.core.deps import get_current_user, get_current_user_optional
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.db.session import get_db
@@ -119,10 +120,12 @@ async def create_workspace(
     db.add(owner_member)
     await db.commit()
     await db.refresh(workspace)
+    await cache.invalidate_user(current_user.id)
     return workspace
 
 
 @router.get("", response_model=list[WorkspaceResponse])
+@cached(ttl=300, prefix="user:{current_user.id}:workspaces")
 async def list_workspaces(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -138,6 +141,7 @@ async def list_workspaces(
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
+@cached(ttl=300, prefix="ws:{workspace_id}:detail")
 async def get_workspace(
     workspace_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -154,6 +158,7 @@ async def get_workspace(
 
 
 @router.get("/{workspace_id}/summary", response_model=WorkspaceSummaryResponse)
+@cached(ttl=120, prefix="ws:{workspace_id}:summary")
 async def get_workspace_summary(
     workspace_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -218,6 +223,8 @@ async def update_workspace(
 
     await db.commit()
     await db.refresh(workspace)
+    await cache.invalidate_workspace(workspace_id)
+    await cache.invalidate_user(current_user.id)
     return workspace
 
 
@@ -236,6 +243,8 @@ async def delete_workspace(
 
     await db.delete(workspace)
     await db.commit()
+    await cache.invalidate_workspace(workspace_id)
+    await cache.invalidate_user(current_user.id)
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +253,7 @@ async def delete_workspace(
 
 
 @router.get("/{workspace_id}/repositories", response_model=list[RepoResponse])
+@cached(ttl=300, prefix="ws:{workspace_id}:repos")
 async def list_workspace_repositories(
     workspace_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -280,6 +290,9 @@ async def assign_repository_to_workspace(
     repo.workspace_id = workspace_id
     await db.commit()
     await db.refresh(repo)
+    await cache.invalidate_workspace(workspace_id)
+    await cache.delete(f"repo:{body.repository_id}:detail")
+    await cache.invalidate_user(current_user.id, "repos")
     return repo
 
 
@@ -303,10 +316,14 @@ async def unlink_repository_from_workspace(
     repo.workspace_id = None
     await db.commit()
     await db.refresh(repo)
+    await cache.invalidate_workspace(workspace_id)
+    await cache.delete(f"repo:{repository_id}:detail")
+    await cache.invalidate_user(current_user.id, "repos")
     return repo
 
 
 @router.get("/{workspace_id}/requirements", response_model=list[ReqResponse])
+@cached(ttl=300, prefix="ws:{workspace_id}:requirements")
 async def list_workspace_requirements(
     workspace_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -331,6 +348,7 @@ async def list_workspace_requirements(
 
 
 @router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberResponse])
+@cached(ttl=300, prefix="ws:{workspace_id}:members")
 async def list_members(
     workspace_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -387,6 +405,9 @@ async def update_member_role(
     target.role = WorkspaceRole(body.role)
     await db.commit()
     await db.refresh(target)
+    await cache.invalidate_workspace(workspace_id, "members")
+    await cache.invalidate_workspace(workspace_id, "summary")
+    await cache.invalidate_user(target_user_id)
 
     # Fetch user info for response
     u = await db.get(User, target_user_id)
@@ -428,6 +449,8 @@ async def remove_member(
 
     await db.delete(target)
     await db.commit()
+    await cache.invalidate_workspace(workspace_id)
+    await cache.invalidate_user(target_user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -470,10 +493,12 @@ async def invite_member(
     db.add(invitation)
     await db.commit()
     await db.refresh(invitation)
+    await cache.invalidate_workspace(workspace_id, "invites")
     return invitation
 
 
 @router.get("/invites/me", response_model=list[UserInvitationResponse])
+@cached(ttl=180, prefix="user:{current_user.id}:invites")
 async def list_my_invitations(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -606,6 +631,8 @@ async def accept_invite(
 
     invitation.accepted_at = datetime.now(UTC)
     await db.commit()
+    await cache.invalidate_workspace(invitation.workspace_id)
+    await cache.invalidate_user(current_user.id)
 
     workspace = await db.get(Workspace, invitation.workspace_id)
     return workspace
@@ -633,10 +660,12 @@ async def decline_invite(
 
     await db.delete(invitation)
     await db.commit()
+    await cache.invalidate_user(current_user.id, "invites")
     return {"status": "success", "message": "Invitation declined successfully"}
 
 
 @router.get("/{workspace_id}/invites", response_model=list[WorkspaceInviteResponse])
+@cached(ttl=180, prefix="ws:{workspace_id}:invites")
 async def list_invites(
     workspace_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -674,3 +703,4 @@ async def revoke_invite(
 
     await db.delete(inv)
     await db.commit()
+    await cache.invalidate_workspace(workspace_id, "invites")

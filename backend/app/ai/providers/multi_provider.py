@@ -269,6 +269,57 @@ class MultiProviderRouter(ProviderAdapter):
         logger.error(f"[AI Router] All providers failed. Attempt summary: {errors}")
         raise AllAIProvidersFailedError(errors)
 
+    async def chat_complete(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: int = 2048,
+    ) -> str:
+        """Dispatch conversational chat completion through round-robin scheduled provider with automatic instant failover."""
+        candidate_queue = await self._select_candidate_queue()
+        cooldown_sec = getattr(settings, "ai_provider_cooldown_seconds", 60)
+        errors: list[tuple[str, str]] = []
+
+        for provider in candidate_queue:
+            extra_kwargs: dict[str, Any] = {}
+            if provider.api_key:
+                extra_kwargs["api_key"] = provider.api_key
+            if provider.api_base:
+                extra_kwargs["api_base"] = provider.api_base
+
+            model_name = provider.model
+            if provider.api_base and not ("/" in model_name):
+                model_name = f"openai/{model_name}"
+
+            logger.info(
+                f"[AI Router] Routing chat_complete request to provider '{provider.name}' (model: {model_name})"
+            )
+
+            try:
+                response = await acompletion(
+                    model=model_name,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **extra_kwargs,
+                )
+                content = response.choices[0].message.content or ""
+                provider.mark_success()
+                logger.info(f"[AI Router] Provider '{provider.name}' completed chat request successfully.")
+                return content
+            except Exception as e:
+                err_msg = f"{type(e).__name__}: {e!s}"
+                provider.mark_failure(err_msg, cooldown_seconds=cooldown_sec)
+                errors.append((provider.name, err_msg))
+                logger.warning(
+                    f"[AI Failover] Provider '{provider.name}' ({model_name}) failed during chat_complete: {err_msg}. "
+                    "Initiating immediate failover to next provider..."
+                )
+
+        # If every candidate provider failed
+        logger.error(f"[AI Router] All providers failed in chat_complete. Attempt summary: {errors}")
+        raise AllAIProvidersFailedError(errors)
+
     def get_status(self) -> dict[str, Any]:
         """Return operational telemetry and health states for all managed providers."""
         now = time.time()

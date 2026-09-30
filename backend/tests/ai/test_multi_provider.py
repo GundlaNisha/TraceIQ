@@ -172,3 +172,42 @@ async def test_telemetry_status(mock_router):
     assert "opencode" in status["providers"]
     assert "groq" in status["providers"]
     assert status["providers"]["gemini"]["configured"] is True
+
+
+@pytest.mark.asyncio
+async def test_chat_complete_round_robin_and_failover(mock_router, monkeypatch):
+    """Verify chat_complete rotates providers and fails over gracefully."""
+    settings.ai_strategy = "round_robin"
+    call_log = []
+
+    class DummyChoice:
+        def __init__(self, content):
+            self.message = type("Msg", (), {"content": content})()
+
+    class DummyResponse:
+        def __init__(self, content):
+            self.choices = [DummyChoice(content)]
+
+    async def mock_acompletion(**kwargs):
+        model = kwargs.get("model", "")
+        call_log.append(model)
+        if "gemini" in model:
+            raise RuntimeError("Gemini Rate Limit 429")
+        return DummyResponse(f"Success from {model}")
+
+    import app.ai.providers.multi_provider as mp_mod
+
+    monkeypatch.setattr(mp_mod, "acompletion", mock_acompletion)
+
+    # First call: starts at gemini (fails) -> fails over to opencode (succeeds)
+    res1 = await mock_router.chat_complete([{"role": "user", "content": "Hello"}])
+    assert "Success from openai/zen-v1" in res1
+    assert "gemini/gemini-2.5-flash" in call_log
+    assert "openai/zen-v1" in call_log
+
+    # Gemini is now cooling down, next call should use groq
+    call_log.clear()
+    res2 = await mock_router.chat_complete([{"role": "user", "content": "Next turn"}])
+    assert "Success" in res2
+    assert "gemini" not in call_log[0]
+

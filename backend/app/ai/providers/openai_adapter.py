@@ -15,3 +15,13 @@ class LiteLLMAdapter(ProviderAdapter):
         self, system_prompt: str, user_prompt: str, response_model: type[BaseModel]
     ) -> BaseModel:
         return await self.router.complete(system_prompt, user_prompt, response_model)
+
+    async def chat_complete(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: int = 2048,
+    ) -> str:
+        return await self.router.chat_complete(
+            messages, temperature=temperature, max_tokens=max_tokens
+        )

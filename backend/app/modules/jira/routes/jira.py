@@ -12,6 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import build_cache_key, cache, cached
 from app.core.deps import get_active_workspace_id, get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
@@ -72,6 +73,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/jira", tags=["jira"])
 
 
+def _jira_key_builder(resource: str):
+    def builder(*args, **kwargs) -> str:
+        current_user = kwargs.get("current_user")
+        request = kwargs.get("request")
+        workspace_id = kwargs.get("workspace_id")
+        target_ws = workspace_id or (get_active_workspace_id(request) if request else None)
+        base = f"ws:{target_ws}:jira:{resource}" if target_ws else f"user:{current_user.id}:jira:{resource}"
+        filter_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k not in ("db", "session", "request", "current_user", "background_tasks", "workspace_id")
+            and v is not None
+        }
+        return build_cache_key(base, **filter_kwargs)
+
+    return builder
+
+
 # ---------------------------------------------------------------------------
 # Phase 1: Configuration
 # ---------------------------------------------------------------------------
@@ -101,7 +120,7 @@ async def save_config(
     """Verify credentials with Jira and save Jira integration configuration."""
     target_ws = workspace_id or get_active_workspace_id(request)
     base_url = get_request_base_url(request)
-    return await save_jira_config(
+    res = await save_jira_config(
         db=db,
         user_id=current_user.id,
         workspace_id=target_ws,
@@ -112,6 +131,11 @@ async def save_config(
         webhook_secret=body.webhook_secret,
         base_url=base_url,
     )
+    if target_ws:
+        await cache.invalidate_workspace(target_ws, "jira")
+    else:
+        await cache.invalidate_user(current_user.id, "jira")
+    return res
 
 
 @router.delete("/config", status_code=status.HTTP_204_NO_CONTENT)
@@ -124,6 +148,10 @@ async def remove_config(
     """Disconnect and remove saved Jira configuration."""
     target_ws = workspace_id or get_active_workspace_id(request)
     await delete_jira_config(db, current_user.id, target_ws)
+    if target_ws:
+        await cache.invalidate_workspace(target_ws, "jira")
+    else:
+        await cache.invalidate_user(current_user.id, "jira")
 
 
 @router.post("/test-connection", response_model=JiraTestConnectionResponse)
@@ -163,6 +191,7 @@ async def test_connection(
 
 
 @router.get("/projects", response_model=list[JiraProjectItem])
+@cached(ttl=600, key_builder=_jira_key_builder("projects"))
 async def get_projects(
     request: Request,
     workspace_id: uuid.UUID | None = None,
@@ -175,6 +204,7 @@ async def get_projects(
 
 
 @router.get("/issue-types", response_model=list[JiraIssueTypeItem])
+@cached(ttl=600, key_builder=_jira_key_builder("issue_types"))
 async def get_issue_types(
     request: Request,
     workspace_id: uuid.UUID | None = None,
@@ -187,6 +217,7 @@ async def get_issue_types(
 
 
 @router.get("/statuses", response_model=list[JiraStatusItem])
+@cached(ttl=600, key_builder=_jira_key_builder("statuses"))
 async def get_statuses(
     request: Request,
     workspace_id: uuid.UUID | None = None,
@@ -199,6 +230,7 @@ async def get_statuses(
 
 
 @router.get("/boards", response_model=list[JiraBoardItem])
+@cached(ttl=600, key_builder=_jira_key_builder("boards"))
 async def get_boards(
     request: Request,
     project_key: str | None = Query(None, description="Optional project key filter"),
@@ -212,6 +244,7 @@ async def get_boards(
 
 
 @router.get("/boards/{board_id}/sprints", response_model=list[JiraSprintItem])
+@cached(ttl=300, key_builder=_jira_key_builder("sprints"))
 async def get_board_sprints(
     board_id: int,
     request: Request,
@@ -230,6 +263,7 @@ async def get_board_sprints(
 
 
 @router.get("/issues", response_model=JiraSearchResponse)
+@cached(ttl=180, key_builder=_jira_key_builder("issues"))
 async def search_issues(
     request: Request,
     q: str = Query("", description="Search term for key or summary"),
@@ -288,6 +322,7 @@ async def get_transitions(
 
 
 @router.get("/issues/{issue_key}", response_model=JiraIssueDetailResponse)
+@cached(ttl=180, key_builder=_jira_key_builder("detail"))
 async def get_issue_detail(
     issue_key: str,
     request: Request,
@@ -320,7 +355,7 @@ async def import_single_issue(
 ):
     """Import a Jira issue as a requirement linked to a repository."""
     target_ws = workspace_id or get_active_workspace_id(request)
-    return await import_jira_issue(
+    res = await import_jira_issue(
         db=db,
         user_id=current_user.id,
         workspace_id=target_ws,
@@ -329,6 +364,12 @@ async def import_single_issue(
         custom_title=body.custom_title,
         custom_text=body.custom_text,
     )
+    if target_ws:
+        await cache.invalidate_workspace(target_ws, "requirements")
+        await cache.invalidate_workspace(target_ws, "summary")
+    else:
+        await cache.invalidate_user(current_user.id, "requirements")
+    return res
 
 
 @router.post("/import-batch", response_model=JiraBatchImportResponse, status_code=status.HTTP_201_CREATED)
@@ -341,13 +382,19 @@ async def import_batch_issues(
 ):
     """Import multiple Jira issues in batch."""
     target_ws = workspace_id or get_active_workspace_id(request)
-    return await batch_import_jira_issues(
+    res = await batch_import_jira_issues(
         db=db,
         user_id=current_user.id,
         workspace_id=target_ws,
         repo_id=body.repository_id,
         issue_keys=body.issue_keys,
     )
+    if target_ws:
+        await cache.invalidate_workspace(target_ws, "requirements")
+        await cache.invalidate_workspace(target_ws, "summary")
+    else:
+        await cache.invalidate_user(current_user.id, "requirements")
+    return res
 
 
 # ---------------------------------------------------------------------------
@@ -365,12 +412,19 @@ async def sync_requirement(
 ):
     """Fetch updated content from Jira and sync with the TraceIQ requirement."""
     target_ws = workspace_id or get_active_workspace_id(request)
-    return await sync_jira_requirement(
+    res = await sync_jira_requirement(
         db=db,
         user_id=current_user.id,
         requirement_id=req_id,
         workspace_id=target_ws,
     )
+    if target_ws:
+        await cache.invalidate_workspace(target_ws, "jira")
+        await cache.invalidate_workspace(target_ws, "requirements")
+    else:
+        await cache.invalidate_user(current_user.id, "jira")
+        await cache.invalidate_user(current_user.id, "requirements")
+    return res
 
 
 @router.post("/requirements/{req_id}/transition", response_model=JiraTransitionResponse)
@@ -388,7 +442,7 @@ async def transition_requirement_issue(
     Optionally post a confirmation comment to Jira after transitioning.
     """
     target_ws = workspace_id or get_active_workspace_id(request)
-    return await transition_jira_issue(
+    res = await transition_jira_issue(
         db=db,
         user_id=current_user.id,
         workspace_id=target_ws,
@@ -397,6 +451,13 @@ async def transition_requirement_issue(
         post_comment_flag=body.post_comment,
         comment_text=body.comment,
     )
+    if target_ws:
+        await cache.invalidate_workspace(target_ws, "jira")
+        await cache.invalidate_workspace(target_ws, "requirements")
+    else:
+        await cache.invalidate_user(current_user.id, "jira")
+        await cache.invalidate_user(current_user.id, "requirements")
+    return res
 
 
 @router.post("/requirements/{req_id}/post-comment", response_model=JiraPostCommentResponse)
@@ -493,6 +554,14 @@ async def _dispatch_webhook_background(
                 issue_data=issue_data,
                 changelog=changelog,
             )
+            try:
+                # Invalidate general Jira and requirement caches
+                await cache.delete_pattern("ws:*:jira*")
+                await cache.delete_pattern("ws:*:requirements*")
+                await cache.delete_pattern("user:*:jira*")
+                await cache.delete_pattern("user:*:requirements*")
+            except Exception:
+                pass
         except Exception as exc:
             logger.exception(f"Error in background Jira webhook execution: {exc}")
 

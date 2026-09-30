@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cache, cached
 from app.core.deps import get_active_workspace_id, get_current_user
 from app.db.session import get_db
 from app.modules.auth.models.user import User
@@ -23,7 +24,20 @@ router = APIRouter(prefix="/api/v1/repositories", tags=["repositories"])
 from app.modules.workspace.models.workspace import Workspace, WorkspaceMember
 
 
+def _repo_list_cache_key(*args, **kwargs) -> str:
+    current_user = kwargs.get("current_user")
+    request = kwargs.get("request")
+    workspace_id = kwargs.get("workspace_id")
+    all_param = kwargs.get("all", False)
+    target_ws = None if all_param else (workspace_id or get_active_workspace_id(request))
+    if target_ws:
+        return f"ws:{target_ws}:repos"
+    u_id = current_user.id if current_user else "anon"
+    return f"user:{u_id}:repos:all={all_param}"
+
+
 @router.get("", response_model=list[RepoResponse])
+@cached(ttl=300, key_builder=_repo_list_cache_key)
 async def list_repositories(
     request: Request,
     workspace_id: uuid.UUID | None = None,
@@ -146,6 +160,9 @@ async def add_repository(
     db.add(repo)
     await db.commit()
     await db.refresh(repo)
+    await cache.invalidate_user(current_user.id, "repos")
+    if target_ws:
+        await cache.invalidate_workspace(target_ws)
 
     sync_repository.delay(str(repo.id), str(current_user.id))
     return RepoResponse(
@@ -166,6 +183,7 @@ async def add_repository(
 
 
 @router.get("/{repo_id}", response_model=RepoResponse)
+@cached(ttl=300, prefix="repo:{repo_id}:detail")
 async def get_repository(
     repo_id: str,
     current_user: User = Depends(get_current_user),
@@ -279,6 +297,10 @@ async def update_repository_settings(
 
     await db.commit()
     await db.refresh(repo)
+    await cache.delete(f"repo:{repo_id}:detail")
+    await cache.invalidate_user(current_user.id, "repos")
+    if repo.workspace_id:
+        await cache.invalidate_workspace(repo.workspace_id)
 
     ws_name = None
     if repo.workspace_id:
@@ -333,6 +355,8 @@ async def delete_repository(
             raise HTTPException(status_code=403, detail="Only workspace admins/owners can delete this repository")
     elif not is_owner:
         raise HTTPException(status_code=403, detail="Not authorized to delete this repository")
+
+    ws_id_to_invalidate = repo.workspace_id
 
     # Cascading deletes
     from sqlalchemy import delete
@@ -399,6 +423,10 @@ async def delete_repository(
 
     await db.delete(repo)
     await db.commit()
+    await cache.delete(f"repo:{repo_id}:detail")
+    await cache.invalidate_user(current_user.id, "repos")
+    if ws_id_to_invalidate:
+        await cache.invalidate_workspace(ws_id_to_invalidate)
 
 
 @router.post("/{repo_id}/sync", status_code=202)
@@ -445,6 +473,10 @@ async def trigger_resync(
     )
     db.add(audit)
     await db.commit()
+    await cache.delete(f"repo:{repo_id}:detail")
+    if repo.workspace_id:
+        await cache.invalidate_workspace(repo.workspace_id, "repos")
+    await cache.invalidate_user(current_user.id, "repos")
 
     sync_repository.delay(repo_id, str(current_user.id))
     return {"status": "syncing", "message": "Repository sync initiated"}
@@ -493,6 +525,10 @@ async def cancel_repo_sync(
     )
     db.add(audit)
     await db.commit()
+    await cache.delete(f"repo:{repo_id}:detail")
+    if repo.workspace_id:
+        await cache.invalidate_workspace(repo.workspace_id, "repos")
+    await cache.invalidate_user(current_user.id, "repos")
 
     return {"status": "failed", "message": "Repository sync cancelled"}
 

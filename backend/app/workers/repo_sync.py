@@ -87,6 +87,11 @@ async def _update_status(repo_id: str, status: SyncStatus):
             .values(sync_status=status)
         )
         await session.commit()
+        try:
+            from app.core.cache import cache
+            await cache.delete(f"repo:{repo_id}:detail")
+        except Exception:
+            pass
 
 
 async def _create_snapshot(repo_id: str, storage_key: str, commit_sha: str):

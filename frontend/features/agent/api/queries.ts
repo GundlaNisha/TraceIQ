@@ -7,14 +7,17 @@ import type {
   AgentSessionDetail,
 } from "../types";
 
-export function useAgentSessions(workspaceId: string | null) {
+export function useAgentSessions(workspaceId?: string | null) {
   const { fetchApi } = useApiClient();
 
   return useQuery<AgentSession[]>({
-    queryKey: ["agent-sessions", workspaceId],
-    enabled: !!workspaceId,
+    queryKey: ["agent-sessions", workspaceId || "all"],
+    enabled: true,
     queryFn: async () => {
-      const res = await fetchApi(`/api/v1/agent/sessions?workspace_id=${workspaceId}`);
+      const url = workspaceId
+        ? `/api/v1/agent/sessions?workspace_id=${workspaceId}`
+        : `/api/v1/agent/sessions`;
+      const res = await fetchApi(url);
       if (!res.ok) throw new Error("Failed to fetch agent sessions");
       return res.json();
     },
@@ -42,13 +45,13 @@ export function useCreateAgentSession() {
   return useMutation<
     AgentSession,
     Error,
-    { workspace_id: string; repository_id?: string | null; requirement_id?: string | null; title?: string }
+    { workspace_id?: string | null; repository_id?: string | null; requirement_id?: string | null; title?: string }
   >({
     mutationFn: async (payload) => {
       const cleanPayload: Record<string, any> = {
-        workspace_id: payload.workspace_id,
         title: payload.title || "New Agent Session",
       };
+      if (payload.workspace_id) cleanPayload.workspace_id = payload.workspace_id;
       if (payload.repository_id) cleanPayload.repository_id = payload.repository_id;
       if (payload.requirement_id) cleanPayload.requirement_id = payload.requirement_id;
 
@@ -62,8 +65,8 @@ export function useCreateAgentSession() {
       }
       return res.json();
     },
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["agent-sessions", variables.workspace_id] });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agent-sessions"] });
     },
   });
 }
@@ -72,7 +75,7 @@ export function useDeleteAgentSession() {
   const { fetchApi } = useApiClient();
   const qc = useQueryClient();
 
-  return useMutation<{ deleted: boolean; id: string }, Error, { sessionId: string; workspaceId: string }>({
+  return useMutation<{ deleted: boolean; id: string }, Error, { sessionId: string; workspaceId?: string | null }>({
     mutationFn: async ({ sessionId }) => {
       const res = await fetchApi(`/api/v1/agent/sessions/${sessionId}`, {
         method: "DELETE",
@@ -81,7 +84,7 @@ export function useDeleteAgentSession() {
       return res.json();
     },
     onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["agent-sessions", variables.workspaceId] });
+      qc.invalidateQueries({ queryKey: ["agent-sessions"] });
       qc.removeQueries({ queryKey: ["agent-sessions", "detail", variables.sessionId] });
     },
   });

@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { useWorkspaces } from "@/features/workspace/api/queries";
 import { useRepositories } from "@/features/repositories/api/queries";
 import { useRequirements } from "@/features/requirements/api/queries";
 import {
@@ -44,13 +45,23 @@ const QUICK_ACTIONS = [
 ];
 
 export default function AgentPage() {
-  const { activeWorkspaceId, activeRepositoryId, setActiveRepositoryId } = useWorkspaceStore();
+  const { activeWorkspaceId, activeWorkspaceName, setActiveWorkspace, activeRepositoryId, setActiveRepositoryId } = useWorkspaceStore();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
   const [inputContent, setInputContent] = useState("");
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
   const [isSessionSidebarOpen, setIsSessionSidebarOpen] = useState(true);
   const [optimisticUserMessage, setOptimisticUserMessage] = useState<string | null>(null);
+
+  // Workspaces query to auto-resolve active workspace if unselected
+  const { data: workspaces = [] } = useWorkspaces();
+
+  // Auto-select workspace if available and not yet set
+  useEffect(() => {
+    if (!activeWorkspaceId && workspaces.length > 0) {
+      setActiveWorkspace(workspaces[0].id, workspaces[0].name);
+    }
+  }, [activeWorkspaceId, workspaces, setActiveWorkspace]);
 
   // Queries
   const { data: repositories = [] } = useRepositories({ workspaceId: activeWorkspaceId });
@@ -89,10 +100,10 @@ export default function AgentPage() {
   }, [sessions, selectedSessionId]);
 
   const handleCreateSession = async () => {
-    if (!activeWorkspaceId) return;
+    const wsId = activeWorkspaceId || (workspaces.length > 0 ? workspaces[0].id : null);
     try {
       const newSession = await createSessionMutation.mutateAsync({
-        workspace_id: activeWorkspaceId,
+        workspace_id: wsId || undefined,
         repository_id: activeRepositoryId,
         requirement_id: selectedReqId,
         title: "New Codebase Assistant Chat",
@@ -105,9 +116,8 @@ export default function AgentPage() {
 
   const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!activeWorkspaceId) return;
     try {
-      await deleteSessionMutation.mutateAsync({ sessionId, workspaceId: activeWorkspaceId });
+      await deleteSessionMutation.mutateAsync({ sessionId, workspaceId: activeWorkspaceId || undefined });
       if (selectedSessionId === sessionId) {
         const remaining = sessions.filter((s) => s.id !== sessionId);
         setSelectedSessionId(remaining.length > 0 ? remaining[0].id : null);
@@ -123,23 +133,22 @@ export default function AgentPage() {
 
     let currentSessionId = selectedSessionId;
     if (!currentSessionId) {
-      const wsId = activeWorkspaceId || useWorkspaceStore.getState().activeWorkspaceId;
-      if (wsId) {
-        try {
-          const newSession = await createSessionMutation.mutateAsync({
-            workspace_id: wsId,
-            repository_id: activeRepositoryId,
-            requirement_id: selectedReqId,
-            title: text.slice(0, 35) || "New Codebase Assistant Chat",
-          });
-          currentSessionId = newSession.id;
-          setSelectedSessionId(newSession.id);
-        } catch (err) {
-          console.error("Failed to auto-create session:", err);
-          return;
-        }
-      } else {
-        console.error("No active workspace to create session");
+      const wsId =
+        activeWorkspaceId ||
+        useWorkspaceStore.getState().activeWorkspaceId ||
+        (workspaces.length > 0 ? workspaces[0].id : null);
+
+      try {
+        const newSession = await createSessionMutation.mutateAsync({
+          workspace_id: wsId || undefined,
+          repository_id: activeRepositoryId,
+          requirement_id: selectedReqId,
+          title: text.slice(0, 35) || "New Codebase Assistant Chat",
+        });
+        currentSessionId = newSession.id;
+        setSelectedSessionId(newSession.id);
+      } catch (err) {
+        console.error("Failed to auto-create session:", err);
         return;
       }
     }
@@ -211,12 +220,17 @@ export default function AgentPage() {
         <aside className="flex w-64 md:w-72 flex-col h-full min-h-0 border-r border-border/50 bg-slate-50/60 backdrop-blur-md shrink-0 transition-all duration-300 overflow-hidden">
           {/* Header with New Session button & Collapse toggle */}
           <div className="border-b border-border/50 p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-accent/10 p-1.5 text-accent">
-                <Bot className="h-4 w-4" />
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="rounded-xl bg-accent/10 p-1.5 text-accent shrink-0">
+                  <Bot className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-bold font-serif uppercase tracking-wider text-foreground">
+                  Agent Chats
+                </span>
               </div>
-              <span className="text-xs font-bold font-serif uppercase tracking-wider text-foreground">
-                Agent Chats
+              <span className="text-[10px] text-muted-foreground ml-7 truncate max-w-[120px]">
+                {activeWorkspaceName || "Personal"}
               </span>
             </div>
 
@@ -224,7 +238,7 @@ export default function AgentPage() {
               <button
                 type="button"
                 onClick={handleCreateSession}
-                disabled={createSessionMutation.isPending || !activeWorkspaceId}
+                disabled={createSessionMutation.isPending}
                 className="inline-flex items-center gap-1 rounded-xl bg-accent px-2.5 py-1 text-xs font-semibold text-white hover:bg-accent/90 transition shadow-2xs disabled:opacity-50"
               >
                 <Plus className="h-3.5 w-3.5" />

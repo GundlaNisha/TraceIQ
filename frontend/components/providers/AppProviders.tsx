@@ -1,15 +1,18 @@
 "use client";
 
 import { ClerkProvider } from "@clerk/nextjs";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "@/lib/query-client";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { queryClient, persistOptions } from "@/lib/query-client";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={persistOptions}
+      >
         {children}
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ClerkProvider>
   );
 }

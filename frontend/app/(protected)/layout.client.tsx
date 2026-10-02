@@ -8,7 +8,7 @@ import { useEnsureBackendUser } from "@/features/auth/api/queries";
 import { UserButton, useUser } from "@clerk/nextjs";
 import { WorkspaceSwitcher } from "@/features/workspace/components/WorkspaceSwitcher";
 import { NotificationsMenu } from "@/features/notifications/components/NotificationsMenu";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { EditProfileModal } from "@/features/auth/components/EditProfileModal";
 import {
   LayoutDashboard,
@@ -24,12 +24,15 @@ import {
   Loader2,
   Users,
   UserCog,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Repositories", href: "/repositories", icon: FolderGit2 },
   { label: "Requirements", href: "/requirements", icon: Layers },
+  { label: "AI Agent", href: "/agent", icon: Sparkles },
   { label: "Impact Analysis", href: "/analysis", icon: Activity },
   { label: "Pull Requests", href: "/pull-requests", icon: GitPullRequest },
   { label: "PR Reviews", href: "/pr-reviews", icon: CheckSquare },
@@ -45,6 +48,23 @@ export default function ProtectedLayoutClient({
   const pathname = usePathname();
   const { user } = useUser();
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("traceiq-sidebar-collapsed");
+    if (saved !== null) {
+      setIsSidebarCollapsed(saved === "true");
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("traceiq-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
+
   const {
     data: backendUser,
     isLoading: backendUserLoading,
@@ -100,30 +120,58 @@ export default function ProtectedLayoutClient({
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground antialiased selection:bg-accent/20 selection:text-accent">
-      {/* Sidebar - permanently locked in place */}
-      <aside className="w-64 bg-slate-50/60 backdrop-blur-md border-r border-border/50 flex flex-col py-6 px-4 gap-2 shrink-0 h-full overflow-y-auto z-30 select-none justify-between">
+      {/* Sidebar - collapsible for spacious workstation viewing */}
+      <aside
+        className={`${
+          isSidebarCollapsed ? "w-[4.5rem] px-2.5" : "w-64 px-4"
+        } bg-slate-50/60 backdrop-blur-md border-r border-border/50 flex flex-col py-6 gap-2 shrink-0 h-full overflow-y-auto z-30 select-none justify-between transition-all duration-300 ease-in-out`}
+      >
         <div className="flex flex-col">
-          {/* Brand Logo Header */}
-          <Link href="/dashboard" className="flex items-center gap-2.5 px-3 mb-8 group transition-opacity hover:opacity-90">
-            <div className="w-8 h-8 flex items-center justify-center shrink-0">
-              <Image
-                src="/logo.png"
-                alt="TraceIQ"
-                width={32}
-                height={32}
-                className="w-8 h-8 object-contain drop-shadow-xs transition-transform group-hover:scale-105"
-                priority
-              />
-            </div>
-            <div>
-              <div className="text-xl font-bold font-serif text-foreground tracking-tight leading-none">
-                TraceIQ
+          {/* Brand Logo Header & Collapse Toggle */}
+          <div className={`flex items-center ${isSidebarCollapsed ? "justify-center flex-col gap-3" : "justify-between px-2"} mb-8`}>
+            <Link
+              href="/dashboard"
+              className={`flex items-center gap-2.5 group transition-opacity hover:opacity-90 ${
+                isSidebarCollapsed ? "justify-center" : ""
+              }`}
+              title="TraceIQ - Code Intelligence"
+            >
+              <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                <Image
+                  src="/logo.png"
+                  alt="TraceIQ"
+                  width={32}
+                  height={32}
+                  className="w-8 h-8 object-contain drop-shadow-xs transition-transform group-hover:scale-105"
+                  priority
+                />
               </div>
-              <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mt-0.5">
-                Code Intelligence
-              </div>
-            </div>
-          </Link>
+              {!isSidebarCollapsed && (
+                <div>
+                  <div className="text-xl font-bold font-serif text-foreground tracking-tight leading-none">
+                    TraceIQ
+                  </div>
+                  <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mt-0.5">
+                    Code Intelligence
+                  </div>
+                </div>
+              )}
+            </Link>
+
+            {/* Sidebar toggle button */}
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="p-1.5 text-muted-foreground hover:text-accent hover:bg-black/[0.04] rounded-lg transition-colors"
+              title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar (Show Icons Only)"}
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4" />
+              )}
+            </button>
+          </div>
 
           {/* Navigation Items */}
           <nav className="flex flex-col gap-1">
@@ -134,14 +182,21 @@ export default function ProtectedLayoutClient({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  title={item.label}
+                  className={`flex items-center ${
+                    isSidebarCollapsed ? "justify-center px-0 py-3" : "gap-3 px-3.5 py-2.5"
+                  } rounded-xl text-xs font-semibold transition-all ${
                     isActive
                       ? "bg-white shadow-sm text-accent border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.03)]"
                       : "text-muted hover:text-foreground hover:bg-black/[0.03] border border-transparent"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? "text-accent" : "text-muted-foreground"}`} />
-                  <span>{item.label}</span>
+                  <Icon
+                    className={`w-4 h-4 shrink-0 transition-colors ${
+                      isActive ? "text-accent" : "text-muted-foreground"
+                    }`}
+                  />
+                  {!isSidebarCollapsed && <span>{item.label}</span>}
                 </Link>
               );
             })}
@@ -150,33 +205,43 @@ export default function ProtectedLayoutClient({
 
         {/* Sidebar Footer User Card */}
         <div className="pt-4 border-t border-border/50">
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/70 border border-border/50 shadow-xs hover:border-accent/40 transition-all">
+          {isSidebarCollapsed ? (
             <div
               onClick={() => setEditProfileOpen(true)}
-              className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1 mr-2"
-              title="Click to edit username & profile"
+              className="w-9 h-9 rounded-xl bg-accent/10 hover:bg-accent/20 flex items-center justify-center text-accent text-xs font-bold mx-auto cursor-pointer transition-colors border border-border/50"
+              title={`${displayName} (${displayEmail}) - Click to edit profile`}
             >
-              <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent text-xs font-bold shrink-0">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1">
-                  <span>{displayName}</span>
-                </div>
-                <div className="text-[10px] text-muted-foreground truncate">
-                  {displayEmail}
-                </div>
-              </div>
+              {displayName.charAt(0).toUpperCase()}
             </div>
-            <button
-              type="button"
-              onClick={() => setEditProfileOpen(true)}
-              className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded-lg transition-colors shrink-0"
-              title="Edit username & profile"
-            >
-              <UserCog className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          ) : (
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/70 border border-border/50 shadow-xs hover:border-accent/40 transition-all">
+              <div
+                onClick={() => setEditProfileOpen(true)}
+                className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1 mr-2"
+                title="Click to edit username & profile"
+              >
+                <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent text-xs font-bold shrink-0">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1">
+                    <span>{displayName}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground truncate">
+                    {displayEmail}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditProfileOpen(true)}
+                className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded-lg transition-colors shrink-0"
+                title="Edit username & profile"
+              >
+                <UserCog className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -245,12 +310,18 @@ export default function ProtectedLayoutClient({
           backendUser={backendUser}
         />
 
-        {/* Scrollable Page Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="w-full max-w-[1400px] mx-auto px-6 md:px-10 py-8 md:py-10">
+        {/* Page Content: full viewport fit with no outer scrollbar for AI Agent, scrollable container for other pages */}
+        {pathname?.startsWith("/agent") ? (
+          <main className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col bg-background">
             {children}
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="flex-1 overflow-y-auto min-h-0">
+            <div className="w-full max-w-[1400px] mx-auto px-6 md:px-10 py-8 md:py-10">
+              {children}
+            </div>
+          </main>
+        )}
       </div>
     </div>
   );

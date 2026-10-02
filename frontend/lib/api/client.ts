@@ -23,12 +23,30 @@ export function useApiClient() {
       headers.set("Content-Type", "application/json");
     }
     
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
-    
-    return response;
+    const primaryUrl = `${API_BASE_URL}${endpoint}`;
+    try {
+      const response = await fetch(primaryUrl, {
+        ...options,
+        headers,
+      });
+      return response;
+    } catch (err) {
+      // Fallback between localhost and 127.0.0.1 if IPv6/IPv4 loopback fails
+      if (primaryUrl.includes("localhost:8000")) {
+        const fallbackUrl = primaryUrl.replace("localhost:8000", "127.0.0.1:8000");
+        return await fetch(fallbackUrl, {
+          ...options,
+          headers,
+        });
+      } else if (primaryUrl.includes("127.0.0.1:8000")) {
+        const fallbackUrl = primaryUrl.replace("127.0.0.1:8000", "localhost:8000");
+        return await fetch(fallbackUrl, {
+          ...options,
+          headers,
+        });
+      }
+      throw err;
+    }
   };
   
   return { fetchApi };

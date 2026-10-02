@@ -70,3 +70,11 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> Any:
 async def liveness_probe() -> dict[str, str]:
     """Lightweight probe for Kubernetes/ECS liveness checks."""
     return {"status": "alive"}
+
+
+@router.get("/ai", summary="AI Multi-Provider Status and Telemetry")
+async def ai_provider_status() -> dict[str, Any]:
+    """Check AI provider availability, cooldown status, and routing telemetry."""
+    from app.ai.providers.multi_provider import ai_router
+
+    return ai_router.get_status()

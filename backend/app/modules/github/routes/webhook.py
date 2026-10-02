@@ -100,6 +100,16 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                         await db.commit()
                         await db.refresh(pr_review)
                         run_pr_review.delay(str(pr_review.id))
+
+                        try:
+                            from app.core.cache import cache
+                            await cache.delete(f"repo:{repo.id}:detail")
+                            if repo.workspace_id:
+                                await cache.invalidate_workspace(repo.workspace_id)
+                            if repo.user_id:
+                                await cache.invalidate_user(repo.user_id, "dashboard")
+                        except Exception:
+                            pass
                     else:
                         logger.info(
                             f"Auto-review disabled for {repo.name}. Skipping automatic trigger for PR #{pr_number}."

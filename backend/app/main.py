@@ -17,6 +17,7 @@ from app.modules.github.routes.prs import router as github_prs_router
 from app.modules.github.routes.webhook import router as github_webhook_router
 from app.modules.health.routes.health import router as health_router
 from app.modules.impact.routes.analysis import router as analysis_router
+from app.modules.agent.routes.agent_router import router as agent_router
 from app.modules.jira.routes.jira import router as jira_router
 from app.modules.repository.routes.repo import router as repo_router
 from app.modules.requirement.routes.req import router as req_router
@@ -37,18 +38,29 @@ def _run_migrations() -> None:
         logger.warning(f"Alembic auto-migration notice: {e}")
 
 
+from app.core.cache import cache
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.database_url:
         asyncio.create_task(asyncio.to_thread(_run_migrations))
     yield
+    await cache.close()
 
 
 app = FastAPI(title="TraceIQ API", version="1.0.0", lifespan=lifespan)
 
+raw_allowed = (
+    settings.allowed_origins
+    if isinstance(settings.allowed_origins, list)
+    else [s.strip() for s in settings.allowed_origins.split(",") if s.strip()]
+    if settings.allowed_origins
+    else []
+)
 cors_origins = list(dict.fromkeys(
-    ([settings.frontend_url] if settings.frontend_url else [])
-    + (settings.allowed_origins if isinstance(settings.allowed_origins, list) else [settings.allowed_origins] if settings.allowed_origins else [])
+    ["http://localhost:3000", "http://127.0.0.1:3000"]
+    + ([settings.frontend_url] if settings.frontend_url else [])
+    + raw_allowed
 ))
 
 app.add_middleware(
@@ -77,6 +89,7 @@ app.include_router(github_prs_router)
 app.include_router(github_checks_router)
 app.include_router(workspace_router)
 app.include_router(jira_router)
+app.include_router(agent_router)
 
 
 @app.get("/health")

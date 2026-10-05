@@ -16,8 +16,9 @@ COPY pyproject.toml uv.lock* ./
 RUN uv sync --no-dev --frozen
 
 # Copy application and database migration configurations
+# NOTE: migrations live in app/db/migrations (see alembic.ini script_location),
+# so only alembic.ini + app/ are needed — there is no top-level alembic/ dir.
 COPY alembic.ini ./
-COPY alembic/ ./alembic/
 COPY app/ ./app/
 
 EXPOSE 8000

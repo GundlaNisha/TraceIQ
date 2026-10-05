@@ -1,0 +1,21 @@
+# Keep the image lean and secret-free: only pyproject.toml, uv.lock,
+# alembic.ini and app/ are COPY'd by the Dockerfile. Everything else is
+# build context noise (never lands in the image, but slows the upload).
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.git/
+.gitignore
+.env
+.env.*
+!.env.production.example
+data/
+tests/
+src/
+*.md
+Dockerfile
+.dockerignore

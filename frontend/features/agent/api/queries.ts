@@ -81,7 +81,10 @@ export function useDeleteAgentSession() {
       const res = await fetchApi(`/api/v1/agent/sessions/${sessionId}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Failed to delete agent session");
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        throw new Error(`Failed to delete agent session (${res.status}): ${errorText}`);
+      }
       return res.json();
     },
     onSuccess: (_, variables) => {

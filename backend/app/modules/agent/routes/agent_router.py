@@ -181,6 +181,15 @@ async def delete_agent_session(
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent session not found")
 
+    # Delete children explicitly first: some long-lived databases were created
+    # before ON DELETE CASCADE constraints existed (migrations use
+    # CREATE TABLE IF NOT EXISTS), so DB-level cascades cannot be relied upon.
+    from sqlalchemy import delete as sa_delete
+
+    await db.execute(
+        sa_delete(AgentActionApproval).where(AgentActionApproval.session_id == session_id)
+    )
+    await db.execute(sa_delete(AgentMessage).where(AgentMessage.session_id == session_id))
     await db.delete(session)
     await db.commit()
     return {"deleted": True, "id": str(session_id)}

@@ -13,7 +13,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import { AgentMarkdown } from "./AgentMarkdown";
 import type { AgentSessionDetail, PRDraft } from "../types";
 
 interface AgentContextInspectorProps {
@@ -236,7 +236,7 @@ export function AgentContextInspector({
                 </div>
 
                 <div className="rounded-xl border border-border/60 bg-[#FAF8F5]/50 p-3.5 text-foreground prose prose-slate prose-xs max-w-none prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-accent prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
-                  <ReactMarkdown>{prDraft.raw_markdown}</ReactMarkdown>
+                  <AgentMarkdown content={prDraft.raw_markdown} />
                 </div>
               </div>
             )}

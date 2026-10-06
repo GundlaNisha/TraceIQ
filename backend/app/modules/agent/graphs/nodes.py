@@ -475,7 +475,9 @@ async def verify_implementation_node(state: AgentState) -> dict[str, Any]:
                 "## Evidence (map each requirement point to files found, or state what is missing), "
                 "## Gaps (concrete missing pieces, if any). "
                 "Base the verdict ONLY on the evidence provided. If evidence is thin, say Partially "
-                "or Not implemented — never claim code exists that is not listed."
+                "or Not implemented — never claim code exists that is not listed. "
+                "Format in valid GitHub-Flavored Markdown (header row + | --- | delimiter + one row "
+                "per line for tables, no HTML tags)."
             )},
             {"role": "user", "content": (
                 f"Requirement: {req_details.get('title', '(from conversation)') if req_details else '(from conversation)'}\n"
@@ -717,7 +719,8 @@ async def pr_drafter_node(state: AgentState) -> dict[str, Any]:
                 "description in Markdown with these sections: ## Summary, ## Changes, "
                 "## Blast Radius & Risk, ## Testing Checklist, ## Rollback Plan. "
                 "Ground every claim ONLY in the context provided. Never invent file names, "
-                "metrics, or test results. Keep it under 400 words."
+                "metrics, or test results. Keep it under 400 words. Use valid GitHub-Flavored "
+                "Markdown (tables need header + | --- | delimiter + one row per line, no HTML tags)."
             )},
             {"role": "user", "content": (
                 f"Requirement: {req_title} ({requirement_id})\n{req_text}\n\n"
@@ -853,7 +856,10 @@ async def conversational_chat_node(state: AgentState) -> dict[str, Any]:
         "2. When explaining code, architecture, or design patterns, reference the provided code symbols and files.\n"
         "3. If the engineer is asking follow-up questions ('why?', 'explain line X', 'how does error handling work?'), maintain conversational continuity and reason step-by-step.\n"
         "4. If Human-in-the-Loop actions (such as starting point confirmation, standards audits, or drafting PRs) are relevant to the user's intent, guide them on how to trigger or approve them.\n"
-        "5. Be concise, direct, and avoid robotic boilerplate."
+        "5. Be concise, direct, and avoid robotic boilerplate.\n"
+        "6. Formatting: use valid GitHub-Flavored Markdown. Tables MUST have a header row, "
+        "a delimiter row (| --- | --- |), and one row per line. NEVER use HTML tags like <br> "
+        "for line breaks — use real newlines. Put code in fenced blocks with a language tag."
     )
 
     context_blocks = []

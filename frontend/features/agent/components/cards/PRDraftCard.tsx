@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { GitPullRequest, Copy, Check, Edit3, Eye } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import { AgentMarkdown } from "../AgentMarkdown";
 import type { PRDraft } from "../../types";
 
 interface PRDraftCardProps {
@@ -96,7 +96,7 @@ export function PRDraftCard({ prDraft }: PRDraftCardProps) {
           />
         ) : (
           <div className="prose prose-slate prose-xs max-w-none text-foreground leading-relaxed space-y-2 prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-[#1B2A4A] prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
-            <ReactMarkdown>{editedMarkdown}</ReactMarkdown>
+            <AgentMarkdown content={editedMarkdown} />
           </div>
         )}
       </div>

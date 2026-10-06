@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { AgentMarkdown } from "./AgentMarkdown";
 import {
   Sparkles,
   User,
@@ -157,7 +157,7 @@ export function AgentChatThread({
                     : "prose-slate text-foreground prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-accent prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded"
                 }`}
               >
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                <AgentMarkdown content={msg.content} />
               </div>
 
               {/* Tagged Context Chips if attached to message */}
@@ -233,7 +233,7 @@ export function AgentChatThread({
 
             {streamingContent ? (
               <div className="prose prose-slate prose-xs max-w-none break-words leading-relaxed text-foreground prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-accent prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
-                <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                <AgentMarkdown content={streamingContent} />
               </div>
             ) : (
               <div className="flex items-center gap-1.5 py-1 text-muted-foreground text-xs">

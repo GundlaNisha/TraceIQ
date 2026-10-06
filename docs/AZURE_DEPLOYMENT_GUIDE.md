@@ -355,7 +355,8 @@ az containerapp secret set --name $APP -g $RG --secrets \
   clerk-secret="<CLERK_SECRET_KEY>" \
   clerk-pub="<CLERK_PUBLISHABLE_KEY>" \
   clerk-jwks="<CLERK_JWKS_URL>" \
-  github-key="<GITHUB_PRIVATE_KEY_BASE64_OR_ESCAPED>" \
+  github-key="<GITHUB_PRIVATE_KEY>" \
+  github-webhook="<GITHUB_WEBHOOK_SECRET>" \
   1>/dev/null
 
 az containerapp update --name $APP -g $RG --set-env-vars \
@@ -368,7 +369,7 @@ az containerapp update --name $APP -g $RG --set-env-vars \
   CLERK_JWKS_URL=secretref:clerk-jwks \
   GITHUB_APP_ID="<123456>" \
   GITHUB_PRIVATE_KEY=secretref:github-key \
-  GITHUB_WEBHOOK_SECRET=secretref:github-key \
+  GITHUB_WEBHOOK_SECRET=secretref:github-webhook \
   FRONTEND_URL="https://<your-swa>.azurestaticapps.net" \
   ALLOWED_ORIGINS="https://<your-swa>.azurestaticapps.net" \
   LLM_MODEL="gemini/gemini-2.5-flash" \
@@ -762,3 +763,35 @@ az consumption usage list --start-date 2026-10-01 --end-date 2026-10-31 2>/dev/n
 ---
 
 *End of guide. Next action: complete Phase 0 (resource group + budget alert), then Phase 1 (NeonDB ~10 min + Upstash ~5 min) — you will have database + Redis wired before spending a single cent of the $100.*
+
+---
+
+## 19. Live deployment log — October 5, 2026 (this repo)
+
+Record of the actual deployment performed against an **Azure for Students** subscription, including deviations from the steps above.
+
+**Live URLs:**
+- Frontend: `https://icy-bay-0c7bfd700.1.azurestaticapps.net` (SWA Free)
+- Backend: `https://ca-traceiq-backend.wonderfulocean-09abe1f3.centralindia.azurecontainerapps.io` (ACA Consumption)
+- Health: `GET /api/v1/health` → `{"status":"healthy",...,"database":"healthy","redis":"healthy"}` · Docs: `/docs` → 200
+
+**Resources in `rg-traceiq-prod` (4 total, no Azure Postgres/Redis):**
+
+| Resource | Region | Notes |
+|---|---|---|
+| `log-traceiq-prod` (Log Analytics) | Central India | 30-day retention, 1 GB/day cap |
+| `cae-traceiq-prod` (Container Apps env) | Central India | Express/Consumption, single shared env |
+| `ca-traceiq-backend` | Central India | 0.5 vCPU / 1 GiB, min 0 / max 2, external ingress :8000, private GHCR pull |
+| `swa-traceiq` (Static Web Apps, Free) | East Asia | Hybrid Next.js via Oryx, GitHub Actions deploy |
+
+**Deviations / lessons (read before reproducing):**
+
+1. **Regions:** student-subscription policy blocks `eastus`/`eastus2` for Log Analytics and SWA (`RequestDisallowedByAzure`). Used **Central India** (compute/logs) + **East Asia** (SWA). Bonus: closer to the NeonDB `ap-southeast-1` database than `eastus` would be.
+2. **Backend Dockerfile fix (committed):** removed stale `COPY alembic/ ./alembic/` (migrations live in `app/db/migrations` per `alembic.ini`) and added `backend/.dockerignore` (keeps `.venv`, `.env*` secrets, `data/` out of the image/context).
+3. **GHCR push from laptop fails:** classic PAT returned `permission_denied: create_package` despite `write:packages` scope. Used the repo's own **GitHub Actions workflow (`.github/workflows/backend-aca.yml`, `GITHUB_TOKEN` + lowercase-owner step)** to build/push instead. Keep using Actions for image updates.
+4. **Runtime `DATABASE_URL` must be asyncpg:** repo `.env.production` ships `postgresql+psycopg://...&channel_binding=require`, but `session.py`/`env.py` use `create_async_engine` → convert to `postgresql+asyncpg://...?ssl=require` for the Container App secret (pooled Neon host works through PgBouncer — verified `database: healthy`).
+5. **Sandbox has no port 5432/6379 egress:** DB work runs from CI/Actions, not locally. Added `.github/workflows/db-migrate.yml` (`workflow_dispatch`: `scripts/ci_db_bootstrap.py` for `vector`/`pg_trgm` + `alembic upgrade head`, using repo secret `PROD_DATABASE_URL`). Re-run it after every backend release that ships migrations.
+6. **`az containerapp exec` is unreliable here:** needs a pty (`script -qec ...`), takes a single `--command` token, and can't run compound commands — prefer the CI migrate workflow over exec for all DB work. (Container Apps **Jobs** are unavailable: this env is Express-type, `ExpressEnvironmentResourceNotSupported`.)
+7. **SWA decoupled creation:** `az staticwebapp create` without `--source` (GitHub OAuth can't complete headlessly), then manual workflow (`.github/workflows/azure-static-web-apps.yml`) with the token from `az staticwebapp secrets list --query properties.apiKey` (note: `properties.` prefix required — bare `--query apiKey` returns empty).
+8. **Separate GitHub secrets:** `GITHUB_PRIVATE_KEY` and `GITHUB_WEBHOOK_SECRET` are distinct secrets (the guide previously reused one entry — fixed in §6.4).
+9. **Still manual (browser):** Cost Management $80 budget alert (CLI rejected on student sub); Clerk Dashboard allowed origins (`swa` host + backend FQDN) + sign-in test; GitHub App / Jira webhook URLs if using auto-reviews.

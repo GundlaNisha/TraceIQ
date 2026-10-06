@@ -104,7 +104,7 @@ class MultiProviderRouter(ProviderAdapter):
             or os.getenv("GEMINI_API_KEY", "")
             or os.getenv("GOOGLE_API_KEY", "")
         )
-        gemini_model = settings.gemini_model or "gemini/gemini-2.5-flash"
+        gemini_model = settings.gemini_model or "gemini/gemini-3.5-flash-lite"
         if not gemini_model.startswith("gemini/"):
             gemini_model = f"gemini/{gemini_model}"
         providers["gemini"] = AIProviderConfig(
@@ -134,7 +134,7 @@ class MultiProviderRouter(ProviderAdapter):
 
         # 3. Groq
         groq_key = settings.groq_api_key or os.getenv("GROQ_API_KEY", "")
-        groq_model = settings.groq_model or "groq/llama-3.3-70b-versatile"
+        groq_model = settings.groq_model or "groq/openai/gpt-oss-120b"
         if not groq_model.startswith("groq/"):
             groq_model = f"groq/{groq_model}"
         providers["groq"] = AIProviderConfig(

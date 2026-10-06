@@ -39,6 +39,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
+_EXPLORE_KEYWORDS = (
+    "start", "starting point", "where should i", "find code", "explore",
+    "implement", "jira", "requirement", "story", "blast radius", "impact",
+    "analyze this repo", "analyse this repo", "analyze the repo",
+    "owasp", "vulnerab", "audit", "review", "standards", "test gap",
+    "missing test", "coverage",
+)
+
+
+def _message_needs_repository(content: str) -> bool:
+    """Heuristic: does this message ask for repo-grounded analysis?"""
+    lower = (content or "").lower()
+    return any(k in lower for k in _EXPLORE_KEYWORDS)
+
 
 @router.post("/sessions", response_model=AgentSessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent_session(
@@ -204,6 +218,7 @@ async def post_agent_message(
     entity_context_parts: list[str] = []
     effective_repo_id = session.repository_id
     effective_req_id = session.requirement_id
+    pr_diff_text: str | None = None
 
     for ent in raw_entities:
         e_type = ent.get("type", "")
@@ -258,7 +273,7 @@ async def post_agent_message(
                         f"ID: {repo_row.id} | URL: {repo_row.repo_url} | Branch: {repo_row.default_branch}"
                     )
             elif e_type in ("pr", "pr_review"):
-                from app.modules.pr_review.models.review import PRReview
+                from app.modules.review.models.rev_models import PRFileDiff, PRReview
 
                 is_valid_uuid = False
                 try:
@@ -273,13 +288,131 @@ async def post_agent_message(
                 pr_res = await db.execute(pr_query)
                 pr_row = pr_res.scalar_one_or_none()
                 if pr_row:
+                    effective_repo_id = pr_row.repository_id
+                    if pr_row.requirement_id and not effective_req_id:
+                        effective_req_id = pr_row.requirement_id
                     entity_context_parts.append(
                         f"🔀 [Tagged Pull Request #{pr_row.pr_number}: {pr_row.pr_title}]\n"
                         f"Status: {pr_row.status} | Risk Score: {pr_row.risk_score}\n"
                         f"Summary: {pr_row.summary or 'N/A'}"
                     )
+                    # Load stored per-file patches so pre-review audits the real diff.
+                    try:
+                        diff_stmt = (
+                            select(PRFileDiff)
+                            .where(PRFileDiff.pr_review_id == pr_row.id)
+                            .order_by(PRFileDiff.file_path.asc())
+                        )
+                        diff_rows = (await db.execute(diff_stmt)).scalars().all()
+                        if diff_rows:
+                            pr_diff_text = "\n".join(
+                                f"--- a/{d.file_path}\n+++ b/{d.file_path}\n{d.patch}"
+                                for d in diff_rows
+                            )
+                            entity_context_parts.append(
+                                f"📎 [PR diff loaded: {len(diff_rows)} file(s), "
+                                f"{len(pr_diff_text)} chars — pre-review will audit it]"
+                            )
+                    except Exception as diff_err:
+                        logger.warning(f"Could not load PR diffs for review {pr_row.id}: {diff_err}")
+                        pr_diff_text = None
         except Exception as err:
             logger.warning(f"Error resolving tagged entity {ent}: {err}")
+
+    # --- Message-level header selections (repo/requirement dropdowns) ---
+    # These re-bind the session even when it was created before selecting.
+    if payload.repository_id and session.repository_id != payload.repository_id:
+        session.repository_id = payload.repository_id
+        effective_repo_id = payload.repository_id
+    if payload.requirement_id and session.requirement_id != payload.requirement_id:
+        session.requirement_id = payload.requirement_id
+        effective_req_id = payload.requirement_id
+
+    # --- Natural-language @owner/repo mentions + bare Jira keys ---
+    # Users often type "@acme/webapp" or "PROJ-123" as plain text instead of
+    # using the mention menu. Resolve those so context binds correctly.
+    unresolved_repo_tokens: list[str] = []
+    if not effective_repo_id:
+        from app.modules.agent.services.repo_resolve import (
+            extract_mention_tokens,
+            resolve_repository_from_text,
+        )
+
+        match, candidates = await resolve_repository_from_text(
+            db,
+            payload.content,
+            str(session.workspace_id) if session.workspace_id else None,
+            str(current_user.id),
+        )
+        if match:
+            effective_repo_id = uuid.UUID(match["id"])
+            session.repository_id = effective_repo_id
+            entity_context_parts.append(
+                f"📁 [Repository: {match['name']}]\n"
+                f"ID: {match['id']} | URL: {match['repo_url']} | Branch: {match['branch']}"
+            )
+        elif candidates:
+            unresolved_repo_tokens = [c["name"] for c in candidates]
+        elif extract_mention_tokens(payload.content):
+            unresolved_repo_tokens = extract_mention_tokens(payload.content)[:3]
+    if not effective_req_id:
+        from app.modules.agent.services.repo_resolve import resolve_requirement_from_text as _rr
+
+        req_match = await _rr(
+            db,
+            payload.content,
+            str(session.workspace_id) if session.workspace_id else None,
+            str(current_user.id),
+        )
+        if req_match:
+            effective_req_id = uuid.UUID(req_match["id"])
+            session.requirement_id = effective_req_id
+            entity_context_parts.append(
+                f"📌 [Requirement: {req_match['title']}]\nID: {req_match['id']} | Jira Key: {req_match['jira_key']}"
+            )
+
+    # --- Diff inputs for pre-review: pasted fences first, then tagged PR ---
+    from app.modules.agent.services.repo_resolve import extract_fenced_diff
+
+    diff_text = extract_fenced_diff(payload.content) or pr_diff_text
+
+    # --- Needs-repository gate: never fabricate analysis without a repo ---
+    if not effective_repo_id and _message_needs_repository(payload.content):
+        if unresolved_repo_tokens:
+            hint = "\n".join(f"- `{t}`" for t in unresolved_repo_tokens)
+            clarify = (
+                "### 🔎 Which repository should I analyze?\n\n"
+                f"I found {len(unresolved_repo_tokens)} possible match(es), but I need you to confirm:\n\n{hint}\n\n"
+                "Reply with the exact name, pick it from the **repository dropdown** above, or tag it with `@` from the mention menu — then ask me again."
+            )
+        else:
+            clarify = (
+                "### 🔎 Which repository should I analyze?\n\n"
+                "I couldn't tell which repository you mean, so I won't guess — analyzing the wrong codebase is worse than asking.\n\n"
+                "Please do one of:\n"
+                "- Pick the repository from the **dropdown** above the chat, then resend your question, or\n"
+                "- Tag it inline like `@owner/repo-name`, or\n"
+                "- Tell me the exact repository name."
+            )
+        user_msg = AgentMessage(
+            session_id=session.id, sender="user", content=payload.content, message_type="text",
+            artifacts={"tagged_entities": raw_entities} if raw_entities else {},
+        )
+        db.add(user_msg)
+        agent_msg = AgentMessage(
+            session_id=session.id, sender="agent", agent_role="supervisor",
+            content=clarify, message_type="text", artifacts={},
+        )
+        db.add(agent_msg)
+        session.current_phase = "needs_repository"
+        session.updated_at = datetime.now(UTC)
+        await db.commit()
+        return {
+            "user_message": AgentMessageResponse.model_validate(user_msg),
+            "agent_messages": [AgentMessageResponse.model_validate(agent_msg)],
+            "pending_approval": None,
+            "current_phase": session.current_phase,
+        }
 
     # Synchronize session state with discovered tags if not already bound
     if effective_repo_id and session.repository_id != effective_repo_id:
@@ -338,6 +471,7 @@ async def post_agent_message(
         "next_step": None,
         "tagged_entities": raw_entities,
         "entity_context": entity_context_str,
+        "diff_text": diff_text,
     }
 
     # 3. Stream LangGraph execution

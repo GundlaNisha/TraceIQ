@@ -14,7 +14,12 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
 
     lines = diff_text.splitlines()
+    current_file: str | None = None
     for idx, line in enumerate(lines, 1):
+        m = re.match(r"^\+\+\+\s+b/(.+)$", line.strip())
+        if m:
+            current_file = m.group(1).strip()
+            continue
         clean_line = line.lstrip("+-").strip()
         # 1. Hardcoded API keys / Secrets
         if re.search(r"(?:api_key|secret|password|token)\s*=\s*['\"][A-Za-z0-9_\-]{8,}['\"]", clean_line, re.IGNORECASE):
@@ -23,6 +28,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
                 "category": "security",
                 "rule": "no-hardcoded-secrets",
                 "line": idx,
+                "file": current_file,
                 "message": "Potential hardcoded secret or token detected. Use environment variables or secret manager.",
                 "snippet": line.strip()[:100],
             })
@@ -34,6 +40,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
                 "category": "security",
                 "rule": "sql-injection-risk",
                 "line": idx,
+                "file": current_file,
                 "message": "Dynamic SQL construction using string formatting detected. Use parameterized queries.",
                 "snippet": line.strip()[:100],
             })
@@ -45,6 +52,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
                 "category": "error-handling",
                 "rule": "no-bare-except",
                 "line": idx,
+                "file": current_file,
                 "message": "Bare 'except:' catches SystemExit and KeyboardInterrupt. Catch specific exceptions instead.",
                 "snippet": line.strip(),
             })
@@ -56,6 +64,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
                 "category": "code-style",
                 "rule": "no-debug-logs",
                 "line": idx,
+                "file": current_file,
                 "message": "Direct console logging detected in production path. Use standard logging framework.",
                 "snippet": line.strip()[:80],
             })
@@ -67,6 +76,7 @@ def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
                 "category": "code-quality",
                 "rule": "pending-todo",
                 "line": idx,
+                "file": current_file,
                 "message": "Unresolved TODO or FIXME comment in modified line.",
                 "snippet": line.strip()[:80],
             })

@@ -4,7 +4,9 @@ import logging
 from typing import Any, Optional
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
+from sqlalchemy import func, select
 
+from app.db.session import AsyncSessionLocal
 from app.modules.agent.graphs.state import AgentState
 from app.modules.agent.tools.codebase_tools import (
     read_source_file_snippet_fn,
@@ -167,17 +169,72 @@ async def code_explorer_node(state: AgentState) -> dict[str, Any]:
     Code Explorer & Starting Point Agent Node:
     Performs symbol AST search, semantic vector retrieval, and initial blast radius calculations
     to surface suggested starting points for the developer.
+
+    Never fabricates results: with no bound repository it asks for one, with an
+    empty index it says the repo is not indexed yet, and with zero matches it
+    says so instead of inventing files.
     """
-    workspace_id = state["workspace_id"]
     repository_id = state.get("repository_id")
     requirement_id = state.get("requirement_id")
+
+    if not repository_id:
+        return {
+            "starting_points": [],
+            "impact_summary": {},
+            "pending_approval": None,
+            "current_phase": "needs_repository",
+            "next_step": "completed",
+            "messages": [AIMessage(content=(
+                "### 🔎 Which repository should I analyze?\n\n"
+                "I couldn't tell which repository you mean, so I won't guess. "
+                "Pick it from the **repository dropdown**, tag it with `@owner/repo-name`, "
+                "or tell me the exact name — then ask me again."
+            ))],
+        }
 
     # 1. Retrieve requirement specification if linked
     req_details: Optional[dict[str, Any]] = None
     if requirement_id:
         req_details = await fetch_requirement_details_fn(requirement_id)
 
-    # 2. Extract search query from requirement or user message
+    # 2. Verify the repository actually has an index (files + symbols)
+    from app.modules.indexing.models.index_models import RepositoryFile
+    from app.modules.repository.models.repo import Repository
+
+    repo_name = str(repository_id)
+    indexed_files = 0
+    try:
+        async with AsyncSessionLocal() as _s:
+            repo_row = await _s.get(Repository, repository_id)
+            if repo_row is not None:
+                repo_name = repo_row.name
+            indexed_files = (
+                await _s.execute(
+                    select(func.count())
+                    .select_from(RepositoryFile)
+                    .where(RepositoryFile.repository_id == repository_id)
+                )
+            ).scalar_one()
+    except Exception as e:
+        logger.warning(f"Could not check index status for repo {repository_id}: {e}")
+
+    if not indexed_files:
+        return {
+            "starting_points": [],
+            "impact_summary": {},
+            "pending_approval": None,
+            "current_phase": "needs_indexing",
+            "next_step": "completed",
+            "messages": [AIMessage(content=(
+                f"### 📂 Repository `{repo_name}` isn't indexed yet\n\n"
+                "I found the repository, but its code index is empty — so I have nothing to search. "
+                "There is no point in me guessing files.\n\n"
+                "**Next step:** open **Repositories →** your repo **→ Sync / Re-index**, wait for indexing "
+                "to finish, then ask me again."
+            ))],
+        }
+
+    # 3. Extract search query from requirement or user message
     query_text = ""
     if req_details and req_details.get("title"):
         query_text = f"{req_details.get('title')} {req_details.get('description', '')[:200]}"
@@ -190,7 +247,7 @@ async def code_explorer_node(state: AgentState) -> dict[str, Any]:
     if not query_text:
         query_text = "service handler entrypoint controller"
 
-    # 3. Search symbols and semantic code chunks
+    # 4. Search symbols and semantic code chunks
     symbols_found = await search_code_symbols_fn(
         repository_id=repository_id,
         query=query_text,
@@ -202,63 +259,60 @@ async def code_explorer_node(state: AgentState) -> dict[str, Any]:
         top_k=5,
     )
 
-    # 4. Formulate suggested starting points
+    # 5. Formulate suggested starting points from REAL results only
     starting_points: list[dict[str, Any]] = []
 
     if symbols_found:
         for item in symbols_found[:4]:
             sym_name = item.get("symbol_name") or item.get("name") or "UnknownSymbol"
             starting_points.append({
-                "file_path": item.get("file_path", "app/main.py"),
+                "file_path": item.get("file_path", "unknown"),
                 "symbol_name": sym_name,
                 "symbol_type": item.get("symbol_type", "function"),
                 "line_start": item.get("start_line", 1),
                 "line_end": item.get("end_line", 50),
-                "confidence": 0.88,
+                "confidence": 0.7,
                 "reasoning": f"Symbol '{sym_name}' matched keywords in requirement context.",
             })
-    elif semantic_chunks:
+    if semantic_chunks:
         for chunk in semantic_chunks[:3]:
-            fpath = chunk.get("file_path", "app/main.py")
+            fpath = chunk.get("file_path", "unknown")
+            if any(sp["file_path"] == fpath for sp in starting_points):
+                continue
             starting_points.append({
                 "file_path": fpath,
                 "symbol_name": chunk.get("module_name") or "ModuleRoot",
                 "symbol_type": "module",
                 "line_start": chunk.get("start_line", 1),
                 "line_end": chunk.get("end_line", 40),
-                "confidence": round(chunk.get("similarity", 0.75), 2),
-                "reasoning": "High semantic similarity score to requirement requirements.",
+                "confidence": round(float(chunk.get("similarity", 0.75)), 2),
+                "reasoning": "High semantic similarity score to requirement context.",
             })
-    else:
-        # Fallback candidate when index is empty or cold
-        starting_points.append({
-            "file_path": "backend/app/main.py",
-            "symbol_name": "app",
-            "symbol_type": "variable",
-            "line_start": 1,
-            "line_end": 50,
-            "confidence": 0.65,
-            "reasoning": "Primary application bootstrap router entrypoint.",
-        })
 
-    # 5. Compute initial blast radius
-    seed_files = [sp["file_path"] for sp in starting_points if "file_path" in sp]
-    impact_data = {}
-    if repository_id and seed_files:
-        impact_data = await get_blast_radius_fn(
-            repository_id=repository_id,
-            seed_files=seed_files,
-        )
-    else:
-        impact_data = {
-            "blast_radius_score": 0.35,
-            "risk_level": "medium",
-            "impacted_files_count": len(starting_points),
-            "affected_callers": ["api_router", "background_workers"],
-            "downstream_routes": ["/api/v1/resources"],
+    if not starting_points:
+        return {
+            "starting_points": [],
+            "impact_summary": {},
+            "pending_approval": None,
+            "current_phase": "exploring",
+            "next_step": "completed",
+            "messages": [AIMessage(content=(
+                f"### 🔍 No matches in `{repo_name}`\n\n"
+                f"I searched the indexed code for `{query_text[:120]}` but found no matching symbols or chunks.\n\n"
+                "Try rephrasing (e.g. name a file, function, or feature area), or tag a requirement so I can ground the search."
+            ))],
         }
 
-    # 6. Format explanation message
+    # 6. Compute initial blast radius from real seeds only
+    seed_files = [sp["file_path"] for sp in starting_points if sp.get("file_path")]
+    impact_data = await get_blast_radius_fn(
+        repository_id=repository_id,
+        seed_files=seed_files,
+    )
+    if not isinstance(impact_data, dict):
+        impact_data = {"risk_level": "low", "impacted_files_count": 0}
+
+    # 7. Format explanation message
     sp_lines = []
     for idx, sp in enumerate(starting_points, start=1):
         sp_lines.append(
@@ -268,11 +322,11 @@ async def code_explorer_node(state: AgentState) -> dict[str, Any]:
 
     formatted_points = "\n".join(sp_lines)
     summary_text = (
-        f"### 📍 Suggested Starting Points\n\n"
-        f"I analyzed the codebase against your requirement and identified the following candidate starting points:\n\n"
+        f"### 📍 Suggested Starting Points (`{repo_name}`)\n\n"
+        f"I analyzed the indexed codebase against your requirement and identified the following candidate starting points:\n\n"
         f"{formatted_points}\n\n"
-        f"**Estimated Blast Radius:** `{impact_data.get('risk_level', 'medium').upper()}` risk "
-        f"({impact_data.get('impacted_files_count', len(starting_points))} potentially affected files).\n\n"
+        f"**Estimated Blast Radius:** `{str(impact_data.get('risk_level', 'low')).upper()}` risk "
+        f"({impact_data.get('impacted_files_count', 0)} potentially affected files).\n\n"
         f"---\n"
         f"✋ **Human-in-the-Loop Confirmation Required:**\n"
         f"Please verify these locations. Click **'Confirm & Proceed'** to continue to dependency impact and coding standards audits, or **'Reject / Revise'** to specify different files."
@@ -338,56 +392,59 @@ async def hitl_starting_point_node(state: AgentState) -> dict[str, Any]:
 async def pre_review_node(state: AgentState) -> dict[str, Any]:
     """
     Standards & Pre-Review Agent Node:
-    Audits candidate files or diffs for coding standards, security vulnerabilities,
-    and missing unit test coverage.
+    Audits a REAL developer-supplied diff (pasted ```diff fence or tagged PR
+    with stored patches) for coding standards, security vulnerabilities,
+    and missing unit test coverage. Never invents findings: with no diff it
+    asks for one instead of auditing fabricated code.
     """
-    workspace_id = state["workspace_id"]
+    import re as _re
+
     repository_id = state.get("repository_id")
     starting_points = state.get("starting_points", [])
+    diff_text = (state.get("diff_text") or "").strip()
 
-    file_paths = [sp["file_path"] for sp in starting_points if "file_path" in sp]
-    if not file_paths:
-        file_paths = ["backend/app/main.py"]
+    if not diff_text:
+        return {
+            "review_findings": [],
+            "test_gaps": [],
+            "pending_approval": None,
+            "current_phase": "needs_diff",
+            "next_step": "completed",
+            "messages": [AIMessage(content=(
+                "### 🛡️ I need your diff to pre-review\n\n"
+                "I can't audit code I can't see — and I won't pretend a guess is an audit.\n\n"
+                "Please do one of:\n"
+                "- Paste the diff in a fenced block (```diff ... ```), or\n"
+                "- Tag the pull request with `@` from the mention menu (I read its stored patches), or\n"
+                "- Tell me the file paths + line ranges to inspect."
+            ))],
+        }
 
-    # 1. Audit Coding Standards
-    sample_diff = "\n".join([f"--- a/{fp}\n+++ b/{fp}\n@@ -1,5 +1,10 @@\n+# Modified for requirement" for fp in file_paths])
-    standards_result = audit_diff_standards_fn(diff_text=sample_diff)
+    # 1. Audit the real diff against coding standards
+    standards_result = audit_diff_standards_fn(diff_text=diff_text)
     review_findings = standards_result.get("findings", [])
 
-    # If no findings from empty diff, supply standard health check insights
-    if not review_findings:
-        review_findings = [
-            {
-                "file_path": file_paths[0],
-                "rule_id": "STD-AUTH-001",
-                "severity": "medium",
-                "line_number": starting_points[0].get("line_start", 10) if starting_points else 10,
-                "message": "Ensure RBAC tenant verification decorator is applied on all new endpoints.",
-                "recommendation": "Import `require_workspace_role` and attach to router handler.",
-            },
-            {
-                "file_path": file_paths[0],
-                "rule_id": "STD-SEC-002",
-                "severity": "low",
-                "line_number": starting_points[0].get("line_start", 15) if starting_points else 15,
-                "message": "Use parameterized ORM queries to prevent potential injection.",
-                "recommendation": "Pass query parameters via SQLAlchemy select expressions.",
-            },
-        ]
+    # 2. Derive touched files from unified-diff headers for test-gap mapping
+    touched_files = _re.findall(r"^\+\+\+\s+b/(.+)$", diff_text, _re.MULTILINE)
+    if not touched_files:
+        touched_files = [sp["file_path"] for sp in starting_points if sp.get("file_path")]
 
-    # 2. Audit Missing Unit Test Gaps
+    # 3. Audit Missing Unit Test Gaps against the touched files
     test_result = await audit_missing_tests_fn(
         repository_id=repository_id,
-        modified_files=file_paths,
+        modified_files=touched_files,
     )
     test_gaps = test_result.get("missing_coverage", [])
 
     # 3. Format Review Message
     findings_md = []
     for f in review_findings:
+        f_file = f.get("file") or f.get("file_path") or (touched_files[0] if touched_files else "unknown file")
+        f_line = f.get("line", f.get("line_number", "?"))
+        f_fix = f.get("recommendation") or "See rule guidance for this file."
         findings_md.append(
-            f"- ⚠️ **[{f.get('severity', 'medium').upper()}]** `{f.get('file_path')}` (L{f.get('line_number', '?')}): {f.get('message')}\n"
-            f"  *Fix:* {f.get('recommendation')}"
+            f"- ⚠️ **[{f.get('severity', 'medium').upper()}]** `{f_file}` (L{f_line}): {f.get('message')}\n"
+            f"  *Fix:* {f_fix}"
         )
 
     tests_md = []
@@ -475,7 +532,18 @@ async def pr_drafter_node(state: AgentState) -> dict[str, Any]:
     review_findings = state.get("review_findings", [])
     test_gaps = state.get("test_gaps", [])
 
-    pr_title = f"feat({requirement_id.lower()}): implement requirement changes with verified blast radius"
+    req_title = ""
+    req_text = ""
+    if state.get("requirement_id"):
+        try:
+            _req = await fetch_requirement_details_fn(state["requirement_id"])
+            if _req:
+                req_title = _req.get("title", "")
+                req_text = (_req.get("text", "") or "")[:800]
+        except Exception as e:
+            logger.warning(f"Could not fetch requirement for PR draft: {e}")
+
+    pr_title = f"feat({str(requirement_id).lower()}): implement requirement changes with verified blast radius"
 
     # Compile files list
     files_list_md = "\n".join([f"- `{sp['file_path']}`: {sp.get('reasoning', 'Core logic entrypoint')}" for sp in starting_points]) or "- No specific files specified"
@@ -488,7 +556,37 @@ async def pr_drafter_node(state: AgentState) -> dict[str, Any]:
         "- [ ] Missing unit tests implemented for target functions"
     )
 
-    pr_markdown = f"""## 📌 Linked Requirement
+    # Try an LLM-drafted description grounded in real context; fall back to template.
+    pr_markdown: str | None = None
+    try:
+        _draft_prompt = [
+            {"role": "system", "content": (
+                "You are TraceIQ PR Drafter. Write a concise, production-ready GitHub pull request "
+                "description in Markdown with these sections: ## Summary, ## Changes, "
+                "## Blast Radius & Risk, ## Testing Checklist, ## Rollback Plan. "
+                "Ground every claim ONLY in the context provided. Never invent file names, "
+                "metrics, or test results. Keep it under 400 words."
+            )},
+            {"role": "user", "content": (
+                f"Requirement: {req_title} ({requirement_id})\n{req_text}\n\n"
+                f"Starting points: {files_list_md}\n\n"
+                f"Risk: {impact_summary.get('risk_level', 'unknown')} "
+                f"({impact_summary.get('impacted_files_count', len(starting_points))} files)\n"
+                f"Standards findings: {len(review_findings)}, test gaps: {len(test_gaps)}."
+            )},
+        ]
+        _llm_md = await ai_router.chat_complete(_draft_prompt, temperature=0.3, max_tokens=1200)
+        if _llm_md and len(_llm_md.strip()) > 40:
+            pr_markdown = (
+                f"## 📌 Linked Requirement\n**Jira / Requirement ID:** `{requirement_id}`\n\n"
+                + _llm_md.strip()
+                + "\n\n---\n*Generated automatically by TraceIQ AI Code Impact & Review Assistant.*"
+            )
+    except Exception as e:
+        logger.warning(f"LLM PR drafting failed, using template fallback: {e}")
+
+    if not pr_markdown:
+        pr_markdown = f"""## 📌 Linked Requirement
 **Jira / Requirement ID:** `{requirement_id}`
 
 ### 📝 Summary of Changes

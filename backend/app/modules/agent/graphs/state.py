@@ -29,3 +29,6 @@ class AgentState(TypedDict):
     next_step: Optional[str]
     tagged_entities: list[dict[str, Any]]
     entity_context: Optional[str]
+    # Pasted unified diff supplied with the triggering message (```diff fences
+    # or a tagged PR with stored patches). Consumed by the pre-review node.
+    diff_text: Optional[str]

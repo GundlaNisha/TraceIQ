@@ -67,6 +67,10 @@ class AgentMessageCreate(BaseModel):
     message_type: str = "text"
     artifacts: dict[str, Any] = {}
     tagged_entities: list[TaggedEntity] = []
+    # Active header selections (repo/requirement dropdowns) re-sent per message
+    # so binding survives even when the session was created before selecting.
+    repository_id: uuid.UUID | None = None
+    requirement_id: uuid.UUID | None = None
 
 
 class AgentMessageResponse(BaseModel):

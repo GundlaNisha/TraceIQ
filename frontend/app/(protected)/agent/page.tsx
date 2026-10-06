@@ -49,6 +49,28 @@ const QUICK_ACTIONS = [
   { label: "📝 Draft PR Description", prompt: "Generate a production-ready Pull Request description linked to this requirement." },
 ];
 
+// Human-friendly labels for backend session phases (raw values are snake_case).
+const PHASE_LABELS: Record<string, string> = {
+  idle: "Idle",
+  exploring: "Exploring",
+  chatting: "Chatting",
+  reviewing: "Reviewing",
+  drafting_pr: "Drafting PR",
+  drafting: "Drafting PR",
+  awaiting_starting_point_approval: "Waiting for your approval",
+  awaiting_pr_approval: "Waiting for your approval",
+  awaiting_confirm_review_standards: "Waiting for your approval",
+  starting_points_approved: "Starting point confirmed",
+  review_approved: "Review acknowledged",
+  pr_drafted: "PR draft ready",
+  needs_repository: "Needs repository",
+  needs_indexing: "Indexing required",
+  needs_diff: "Needs your diff",
+  starting_points_rejected: "Rejected",
+  review_rejected: "Rejected",
+  completed: "Done",
+};
+
 export default function AgentPage() {
   const { activeWorkspaceId, activeWorkspaceName, setActiveWorkspace, activeRepositoryId, setActiveRepositoryId } = useWorkspaceStore();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -256,6 +278,10 @@ export default function AgentPage() {
         sessionId: currentSessionId,
         content: text,
         tagged_entities: currentTags.length > 0 ? currentTags : undefined,
+        // Re-send header selections so binding survives sessions created
+        // before a repo/requirement was picked.
+        repository_id: activeRepositoryId || undefined,
+        requirement_id: selectedReqId || undefined,
       });
 
       await refetchSessionDetail();
@@ -417,7 +443,7 @@ export default function AgentPage() {
             </h2>
             {sessionDetail?.session.current_phase && (
               <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-mono uppercase text-accent border border-accent/20 font-semibold">
-                {sessionDetail.session.current_phase}
+                {PHASE_LABELS[sessionDetail.session.current_phase] ?? sessionDetail.session.current_phase.replace(/_/g, " ")}
               </span>
             )}
           </div>

@@ -38,6 +38,21 @@ def _route_starting_point_hitl(state: AgentState) -> str:
     return "end"
 
 
+def _route_after_explorer(state: AgentState) -> str:
+    """Skips the starting-point HITL checkpoint when there is nothing to confirm
+    (missing repo / empty index / zero matches) — the node already answered."""
+    if (state.get("current_phase") or "").startswith("needs_"):
+        return "end"
+    return "hitl_starting_point"
+
+
+def _route_after_review(state: AgentState) -> str:
+    """Skips the pre-review HITL checkpoint when there is no audit to confirm."""
+    if (state.get("current_phase") or "").startswith("needs_"):
+        return "end"
+    return "hitl_pre_review"
+
+
 def _route_pre_review_hitl(state: AgentState) -> str:
     """Routes after developer acknowledges pre-review audit findings."""
     if state.get("approval_status") == "approved":
@@ -80,8 +95,15 @@ def build_agent_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
     # Conversational Chat -> End
     builder.add_edge("conversational_chat", END)
 
-    # Code exploration -> HITL Checkpoint 1
-    builder.add_edge("code_explorer", "hitl_starting_point")
+    # Code exploration -> HITL Checkpoint 1 (skipped when nothing to confirm)
+    builder.add_conditional_edges(
+        "code_explorer",
+        _route_after_explorer,
+        {
+            "hitl_starting_point": "hitl_starting_point",
+            "end": END,
+        },
+    )
 
     # HITL Checkpoint 1 -> Pre-Review or End
     builder.add_conditional_edges(
@@ -93,8 +115,15 @@ def build_agent_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
         },
     )
 
-    # Pre-Review -> HITL Checkpoint 2
-    builder.add_edge("pre_review", "hitl_pre_review")
+    # Pre-Review -> HITL Checkpoint 2 (skipped when there is no audit)
+    builder.add_conditional_edges(
+        "pre_review",
+        _route_after_review,
+        {
+            "hitl_pre_review": "hitl_pre_review",
+            "end": END,
+        },
+    )
 
     # HITL Checkpoint 2 -> PR Drafter or End
     builder.add_conditional_edges(

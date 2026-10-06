@@ -68,64 +68,77 @@ async def test_agent_tools_direct():
 
 @pytest.mark.asyncio
 async def test_agent_graph_state_machine_flow():
-    """Verify complete multi-agent LangGraph workflow execution with HITL interrupts and approvals."""
+    """Verify the honest no-fabrication contract of the LangGraph workflow.
+
+    - No bound repository -> needs_repository, END, no interrupt, clarification message.
+    - Repository with an empty index -> needs_indexing, END, no interrupt.
+    - Pre-review without a diff -> needs_diff, END, no interrupt.
+    """
     from langchain_core.messages import HumanMessage
     from langgraph.checkpoint.memory import MemorySaver
-    from langgraph.types import Command
     from app.modules.agent.graphs.workflow import build_agent_graph
 
-    saver = MemorySaver()
-    graph = build_agent_graph(checkpointer=saver)
+    def _base_state(**overrides):
+        state = {
+            "messages": [HumanMessage(content="Where should I start for requirement REQ-404?")],
+            "session_id": "test-session-flow-1",
+            "workspace_id": "00000000-0000-0000-0000-000000000000",
+            "repository_id": None,
+            "requirement_id": None,
+            "current_phase": "idle",
+            "starting_points": [],
+            "impact_summary": {},
+            "review_findings": [],
+            "test_gaps": [],
+            "pr_draft": {},
+            "pending_approval": None,
+            "approval_status": None,
+            "user_feedback": None,
+            "next_step": None,
+            "tagged_entities": [],
+            "entity_context": None,
+            "diff_text": None,
+        }
+        state.update(overrides)
+        return state
+
+    # Case 1: no repository -> clarification, END, no interrupt, no fabricated files
+    graph = build_agent_graph(checkpointer=MemorySaver())
     config = {"configurable": {"thread_id": "test-session-flow-1"}}
-
-    init_state = {
-        "messages": [HumanMessage(content="Where should I start for requirement REQ-404?")],
-        "session_id": "test-session-flow-1",
-        "workspace_id": "00000000-0000-0000-0000-000000000000",
-        "repository_id": None,
-        "requirement_id": "REQ-404",
-        "current_phase": "idle",
-        "starting_points": [],
-        "impact_summary": {},
-        "review_findings": [],
-        "test_gaps": [],
-        "pr_draft": {},
-        "pending_approval": None,
-        "approval_status": None,
-        "user_feedback": None,
-        "next_step": None,
-    }
-
-    # Step 1: User message triggers supervisor -> code_explorer -> hitl_starting_point interrupt
-    async for _ in graph.astream(init_state, config):
+    async for _ in graph.astream(_base_state(), config):
         pass
-
     state1 = await graph.aget_state(config)
-    assert "hitl_starting_point" in state1.next
-    assert state1.values.get("current_phase") == "awaiting_starting_point_approval"
-    assert len(state1.values.get("starting_points", [])) >= 1
+    assert state1.next == ()
+    assert not state1.tasks or not getattr(state1.tasks[0], "interrupts", None)
+    assert state1.values.get("current_phase") == "needs_repository"
+    assert state1.values.get("starting_points", []) == []
+    assert "which repository" in str(state1.values["messages"][-1].content).lower()
 
-    # Step 2: Resume Checkpoint 1 (Developer confirms starting point)
-    async for _ in graph.astream(Command(resume={"status": "approved"}), config):
+    # Case 2: repository bound but index empty (fake UUID, no DB rows) -> needs_indexing
+    graph2 = build_agent_graph(checkpointer=MemorySaver())
+    config2 = {"configurable": {"thread_id": "test-session-flow-2"}}
+    async for _ in graph2.astream(
+        _base_state(repository_id="11111111-1111-1111-1111-111111111111"), config2
+    ):
         pass
+    state2 = await graph2.aget_state(config2)
+    assert state2.next == ()
+    assert state2.values.get("current_phase") == "needs_indexing"
+    assert "isn't indexed yet" in str(state2.values["messages"][-1].content)
 
-    state2 = await graph.aget_state(config)
-    assert "hitl_pre_review" in state2.next
-    assert state2.values.get("current_phase") == "awaiting_pr_approval"
-    assert len(state2.values.get("review_findings", [])) >= 1
+    # Case 3: pre-review with no diff -> needs_diff, END, no fabricated findings
+    from app.modules.agent.graphs.nodes import pre_review_node
 
-    # Step 3: Resume Checkpoint 2 (Developer acknowledges pre-review audit)
-    async for _ in graph.astream(Command(resume={"status": "approved"}), config):
-        pass
-
-    state3 = await graph.aget_state(config)
-    assert state3.next == ()  # Reached END node
-    assert state3.values.get("current_phase") == "pr_drafted"
-    pr_draft = state3.values.get("pr_draft", {})
-    assert pr_draft.get("title") is not None
-    assert "feat(" in pr_draft.get("title", "")
-    assert pr_draft.get("raw_markdown") is not None
-    assert "## 📌 Linked Requirement" in pr_draft.get("raw_markdown", "")
+    out = await pre_review_node(
+        _base_state(
+            repository_id="11111111-1111-1111-1111-111111111111",
+            current_phase="reviewing",
+            diff_text=None,
+        )
+    )
+    assert out["current_phase"] == "needs_diff"
+    assert out["review_findings"] == []
+    assert "need your diff" in str(out["messages"][0].content)
 
 
 @pytest.mark.asyncio
@@ -181,7 +194,7 @@ async def test_create_and_list_agent_sessions(test_client: AsyncClient, db_sessi
 
 @pytest.mark.asyncio
 async def test_agent_message_and_hitl_approval_flow(test_client: AsyncClient, db_session, test_user: User):
-    """Verify user message processing, HITL interrupt generation, and approval resumption."""
+    """Verify user message processing asks for a repository instead of fabricating analysis."""
     app.dependency_overrides[get_current_user] = lambda: test_user
     ws = await _create_test_workspace(db_session, test_user)
 
@@ -196,7 +209,7 @@ async def test_agent_message_and_hitl_approval_flow(test_client: AsyncClient, db
     assert create_res.status_code == 201
     session_id = create_res.json()["id"]
 
-    # Post message that triggers starting point exploration
+    # Post exploration message with NO repository bound anywhere
     msg_res = await test_client.post(
         f"/api/v1/agent/sessions/{session_id}/messages",
         json={"content": "Where should I start to implement webhook retry logic for Jira story PROJ-101?"},
@@ -206,21 +219,10 @@ async def test_agent_message_and_hitl_approval_flow(test_client: AsyncClient, db
     assert "user_message" in msg_data
     assert len(msg_data["agent_messages"]) >= 1
 
-    # Verify a pending approval checkpoint was generated by HITL interrupt
-    pending_app = msg_data.get("pending_approval")
-    assert pending_app is not None
-    assert pending_app["action_type"] == "confirm_starting_point"
-    assert pending_app["status"] == "pending"
-
-    # Confirm / Approve the starting point
-    approval_id = pending_app["id"]
-    approval_res = await test_client.post(
-        f"/api/v1/agent/sessions/{session_id}/approvals/{approval_id}",
-        json={"action": "approve", "user_feedback": "Looks great, please proceed to pre-review!"},
-    )
-    assert approval_res.status_code == 200
-    app_data = approval_res.json()
-    assert app_data["status"] == "approved"
+    # No fabrication: clarification instead of a fake HITL interrupt
+    assert msg_data.get("pending_approval") is None
+    assert msg_data.get("current_phase") == "needs_repository"
+    assert "which repository" in msg_data["agent_messages"][-1]["content"].lower()
 
     # Clean up session
     del_res = await test_client.delete(f"/api/v1/agent/sessions/{session_id}")

@@ -103,13 +103,15 @@ export function useSendAgentMessage() {
       current_phase: string;
     },
     Error,
-    { sessionId: string; content: string; tagged_entities?: TaggedEntity[] }
+    { sessionId: string; content: string; tagged_entities?: TaggedEntity[]; repository_id?: string; requirement_id?: string }
   >({
-    mutationFn: async ({ sessionId, content, tagged_entities }) => {
+    mutationFn: async ({ sessionId, content, tagged_entities, repository_id, requirement_id }) => {
       const payload: Record<string, any> = { content };
       if (tagged_entities && tagged_entities.length > 0) {
         payload.tagged_entities = tagged_entities;
       }
+      if (repository_id) payload.repository_id = repository_id;
+      if (requirement_id) payload.requirement_id = requirement_id;
       const res = await fetchApi(`/api/v1/agent/sessions/${sessionId}/messages`, {
         method: "POST",
         body: JSON.stringify(payload),

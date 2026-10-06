@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_api_base: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini/gemini-2.5-flash"
+    gemini_model: str = "gemini/gemini-3.5-flash-lite"
     google_api_key: str = ""
 
     # OpenCode Zen (https://opencode.ai/zen/v1)
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Groq (https://api.groq.com/openai/v1)
     groq_api_key: str = ""
-    groq_model: str = "groq/llama-3.3-70b-versatile"
+    groq_model: str = "groq/openai/gpt-oss-120b"
 
     # Multi-Provider Routing Strategy ("round_robin" or "priority")
     ai_strategy: str = "round_robin"

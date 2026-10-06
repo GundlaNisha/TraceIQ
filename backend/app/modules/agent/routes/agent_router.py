@@ -343,6 +343,7 @@ async def post_agent_message(
     unresolved_repo_tokens: list[str] = []
     if not effective_repo_id:
         from app.modules.agent.services.repo_resolve import (
+            extract_fenced_diff,
             extract_mention_tokens,
             resolve_repository_from_text,
         )
@@ -380,10 +381,70 @@ async def post_agent_message(
                 f"📌 [Requirement: {req_match['title']}]\nID: {req_match['id']} | Jira Key: {req_match['jira_key']}"
             )
 
-    # --- Diff inputs for pre-review: pasted fences first, then tagged PR ---
-    from app.modules.agent.services.repo_resolve import extract_fenced_diff
-
+    # Fenced pasted diffs and stored PR patches, resolved before live fetch
+    # so the network is only hit when there is nothing local to audit.
     diff_text = extract_fenced_diff(payload.content) or pr_diff_text
+
+    # --- Live GitHub PR diff: fetched in background, never pasted by hand ---
+    # A referenced PR (tag, "PR #7", "#7", or "this PR" after an earlier one)
+    # resolves to real patches via the installed GitHub App.
+    from app.modules.agent.services.pr_fetch import (
+        extract_pr_numbers,
+        fetch_pr_diff_from_github,
+        parse_repo_full_name,
+    )
+
+    pr_numbers = extract_pr_numbers(payload.content)
+    for ent in raw_entities:
+        if ent.get("type") in ("pr", "pr_review"):
+            try:
+                _n = int(str(ent.get("id", "")))
+                if _n not in pr_numbers:
+                    pr_numbers.insert(0, _n)
+            except (ValueError, TypeError):
+                for _n in extract_pr_numbers(ent.get("label", "")):
+                    if _n not in pr_numbers:
+                        pr_numbers.append(_n)
+    if not pr_numbers:
+        _remembered = (session.context_metadata or {}).get("last_pr_number")
+        if _remembered and re.search(
+            r"\b(this|that|the)\s+(pr|pull request|change)\b|\bthis change\b",
+            payload.content,
+            re.IGNORECASE,
+        ):
+            pr_numbers = [int(_remembered)]
+
+    if pr_numbers and effective_repo_id and not diff_text:
+        try:
+            from app.modules.repository.models.repo import Repository as _Repo
+
+            _repo_row = await db.get(_Repo, effective_repo_id)
+            _full = parse_repo_full_name(
+                _repo_row.repo_url if _repo_row else None, None
+            )
+            _live = await fetch_pr_diff_from_github(_full, pr_numbers[0])
+            if _live.get("ok") and _live.get("diff_text"):
+                diff_text = _live["diff_text"]
+                entity_context_parts.append(
+                    f"🔀 [Live PR #{_live['number']}: {_live.get('title', '')} ({_live.get('state', '')})]\n"
+                    f"URL: {_live.get('html_url', '')}\n"
+                    f"Touched files ({len(_live.get('file_paths', []))}): "
+                    + ", ".join(f"`{p}`" for p in _live.get("file_paths", [])[:15])
+                    + (" (truncated)" if _live.get("truncated") else "")
+                )
+                _ctx = dict(session.context_metadata or {})
+                _ctx["last_pr_number"] = pr_numbers[0]
+                _ctx["last_pr_title"] = _live.get("title", "")
+                _ctx["last_pr_files"] = _live.get("file_paths", [])[:25]
+                session.context_metadata = _ctx
+            elif _live.get("reason") == "no_installation":
+                entity_context_parts.append(
+                    "⚠️ Could not fetch the PR live from GitHub: the TraceIQ GitHub App "
+                    "isn't installed on that repository. Install it (or paste the diff) "
+                    "and I'll audit it."
+                )
+        except Exception as _e:
+            logger.warning(f"Live PR fetch wiring failed: {_e}")
 
     # --- Needs-repository gate: never fabricate analysis without a repo ---
     if not effective_repo_id and _message_needs_repository(payload.content):

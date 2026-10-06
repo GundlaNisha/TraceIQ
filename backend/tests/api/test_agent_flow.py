@@ -67,6 +67,35 @@ async def test_agent_tools_direct():
 
 
 @pytest.mark.asyncio
+async def test_pr_number_extraction():
+    """PR references (PR #7, #7) are parsed for background fetching."""
+    from app.modules.agent.services.pr_fetch import extract_pr_numbers
+
+    assert extract_pr_numbers("what are the findings in this PR #7?") == [7]
+    assert extract_pr_numbers("audit #12 and #7") == [12, 7]
+    assert extract_pr_numbers("no references here") == []
+
+
+@pytest.mark.asyncio
+async def test_intent_routing_verify_and_review():
+    """Verify-implementation and review/blast-radius phrases route deterministically."""
+    from app.modules.agent.graphs.nodes import _determine_user_intent
+
+    assert (
+        await _determine_user_intent(
+            "audit this requirement, verify whether the feature is implemented", "idle"
+        )
+        == "verify"
+    )
+    assert (
+        await _determine_user_intent("What is the estimated blast radius for this change?", "idle")
+        == "explore"
+    )
+    assert await _determine_user_intent("What are the findings in this PR #7?", "idle") == "review"
+    assert await _determine_user_intent("Draft a PR description for my changes", "idle") == "draft_pr"
+
+
+@pytest.mark.asyncio
 async def test_agent_graph_state_machine_flow():
     """Verify the honest no-fabrication contract of the LangGraph workflow.
 

@@ -40,17 +40,56 @@ def _extract_intent_from_text(text: str) -> str:
     return "chat"
 
 
+_VERIFY_PHRASES = (
+    "verify",
+    "is it implemented",
+    "is this implemented",
+    "implemented or not",
+    "already implemented",
+    "has been implemented",
+    "was implemented",
+    "implementation status",
+    "is this done",
+    "is it done",
+    "progress on",
+    "whether the feature",
+    "whether it is implemented",
+    "whether this is implemented",
+    "already exists",
+    "was this built",
+    "is this built",
+)
+
+_EXPLORE_KEYWORDS = (
+    "blast radius", "blast-radius", "downstream", "dependencies",
+    "affected", "ripple", "impact of",
+)
+
+_REVIEW_KEYWORDS = (
+    "findings", "vulnerabilities", "vulnerability", "owasp",
+    "security issues", "security issue",
+)
+
+
 async def _determine_user_intent(last_human_text: str, current_phase: str) -> str:
     """Classifies user intent using MultiProviderRouter with fast fallback heuristics."""
     if not last_human_text or not last_human_text.strip():
         return "chat"
 
     lower = last_human_text.lower().strip()
+    # Verification of implementation status beats generic review/explore keywords
+    # ("audit this requirement, verify whether the feature is implemented").
+    if any(k in lower for k in _VERIFY_PHRASES):
+        return "verify"
     # Direct high-confidence phrase matches
     if any(k in lower for k in ["draft pr", "pr draft", "generate pr", "pr description"]):
         return "draft_pr"
     if any(k in lower for k in ["pre-review", "prereview", "audit standards", "test gap", "audit diff"]):
         return "review"
+    if any(k in lower for k in _REVIEW_KEYWORDS):
+        return "review"
+    if any(k in lower for k in _EXPLORE_KEYWORDS):
+        return "explore"
     if any(k in lower for k in ["where to start", "find starting point", "starting point"]):
         return "explore"
 
@@ -61,12 +100,13 @@ async def _determine_user_intent(last_human_text: str, current_phase: str) -> st
                 "role": "system",
                 "content": (
                     "You are a routing intent classifier for TraceIQ AI Coding Agent.\n"
-                    "Classify the user message into one of four actions:\n"
-                    "- explore: User specifically asks where to start implementing code, finding entrypoints, or locating files for a task/requirement.\n"
-                    "- review: User asks to audit code against coding standards or check missing test coverage.\n"
+                    "Classify the user message into one of five actions:\n"
+                    "- explore: User specifically asks where to start implementing code, finding entrypoints, locating files, blast radius, downstream dependencies, or impacted modules.\n"
+                    "- review: User asks to audit code/diffs/PRs against coding standards, find vulnerabilities or findings, or check missing test coverage.\n"
                     "- draft_pr: User asks to draft a pull request description.\n"
+                    "- verify: User asks whether a requirement/feature is already implemented, wants implementation status, or asks to check what exists for a requirement.\n"
                     "- chat: User is asking follow-up questions, asking for code explanations ('why?', 'explain line X'), discussing architecture, asking general programming questions, or conversing.\n\n"
-                    "Reply ONLY with the exact word: explore, review, draft_pr, or chat."
+                    "Reply ONLY with the exact word: explore, review, draft_pr, verify, or chat."
                 ),
             },
             {"role": "user", "content": last_human_text},
@@ -77,6 +117,8 @@ async def _determine_user_intent(last_human_text: str, current_phase: str) -> st
             return "explore"
         if "review" in decision_clean:
             return "review"
+        if "verif" in decision_clean:
+            return "verify"
         if "draft" in decision_clean or "pr" in decision_clean:
             return "draft_pr"
         return "chat"
@@ -145,6 +187,11 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
         return {
             "current_phase": "exploring",
             "next_step": "code_explorer",
+        }
+    elif intent == "verify":
+        return {
+            "current_phase": "verifying",
+            "next_step": "verify_implementation",
         }
     elif intent == "review":
         return {
@@ -312,6 +359,21 @@ async def code_explorer_node(state: AgentState) -> dict[str, Any]:
     if not isinstance(impact_data, dict):
         impact_data = {"risk_level": "low", "impacted_files_count": 0}
 
+    # 6b. When a real diff is attached (fetched PR / pasted patch), ground the
+    # blast radius in its touched files so "blast radius for this change" works.
+    import re as _re_diff
+
+    _diff_text = (state.get("diff_text") or "").strip()
+    _diff_files = _re_diff.findall(r"^\+\+\+\s+b/(.+)$", _diff_text, _re_diff.MULTILINE) if _diff_text else []
+    if _diff_files:
+        seed_files = list(dict.fromkeys([f.strip() for f in _diff_files if f.strip()] + seed_files))
+        impact_data = await get_blast_radius_fn(
+            repository_id=repository_id,
+            seed_files=seed_files,
+        )
+        if not isinstance(impact_data, dict):
+            impact_data = {"risk_level": "low", "impacted_files_count": 0}
+
     # 7. Format explanation message
     sp_lines = []
     for idx, sp in enumerate(starting_points, start=1):
@@ -348,6 +410,96 @@ async def code_explorer_node(state: AgentState) -> dict[str, Any]:
         "current_phase": "awaiting_starting_point_approval",
         "next_step": "hitl_starting_point",
         "messages": [AIMessage(content=summary_text)],
+    }
+
+
+async def verify_implementation_node(state: AgentState) -> dict[str, Any]:
+    """
+    Implementation Verifier Node:
+    Answers "is this requirement/feature already implemented?" by grounding an
+    LLM verdict in real index evidence (symbols + chunks) — never a guess.
+    Ends the turn (no HITL); the user can drill in with follow-ups.
+    """
+    repository_id = state.get("repository_id")
+    requirement_id = state.get("requirement_id")
+
+    if not repository_id:
+        return {
+            "current_phase": "needs_repository",
+            "next_step": "completed",
+            "messages": [AIMessage(content=(
+                "### 🔎 Which repository should I check?\n\n"
+                "Pick it from the **repository dropdown**, tag it with `@owner/repo-name`, "
+                "or tell me the exact name — then ask me again."
+            ))],
+        }
+
+    req_details: Optional[dict[str, Any]] = None
+    if requirement_id:
+        try:
+            req_details = await fetch_requirement_details_fn(requirement_id)
+        except Exception as e:
+            logger.warning(f"Could not fetch requirement for verification: {e}")
+
+    query_text = ""
+    if req_details and (req_details.get("title") or req_details.get("text")):
+        query_text = f"{req_details.get('title', '')} {(req_details.get('text', '') or '')[:600]}"
+    else:
+        for msg in reversed(state.get("messages", [])):
+            if isinstance(msg, HumanMessage) or getattr(msg, "type", "") == "human":
+                query_text = str(msg.content)
+                break
+
+    symbols_found = await search_code_symbols_fn(repository_id, query_text or "handler service", limit=10)
+    semantic_chunks = await semantic_code_search_fn(repository_id, query_text or "handler service", top_k=6)
+
+    evidence_lines = []
+    for item in (symbols_found or [])[:8]:
+        evidence_lines.append(
+            f"- `{item.get('file_path')}`: {item.get('symbol_type')} **{item.get('symbol_name')}** "
+            f"(L{item.get('start_line')}-{item.get('end_line')})"
+        )
+    for chunk in (semantic_chunks or [])[:6]:
+        fp = chunk.get("file_path", "unknown")
+        if not any(fp in line for line in evidence_lines):
+            evidence_lines.append(f"- `{fp}` (semantic match, similarity {chunk.get('similarity', '?')})")
+    evidence_md = "\n".join(evidence_lines) if evidence_lines else "(no matching code found in the index)"
+
+    verdict_md: str | None = None
+    try:
+        _prompt = [
+            {"role": "system", "content": (
+                "You are TraceIQ Implementation Verifier. Given a requirement and code evidence "
+                "from the repository index, judge implementation status. Reply in Markdown with: "
+                "## Verdict (one of: ✅ Implemented / 🟡 Partially implemented / ❌ Not implemented), "
+                "## Evidence (map each requirement point to files found, or state what is missing), "
+                "## Gaps (concrete missing pieces, if any). "
+                "Base the verdict ONLY on the evidence provided. If evidence is thin, say Partially "
+                "or Not implemented — never claim code exists that is not listed."
+            )},
+            {"role": "user", "content": (
+                f"Requirement: {req_details.get('title', '(from conversation)') if req_details else '(from conversation)'}\n"
+                f"{(req_details.get('text', '') or '')[:1500] if req_details else ''}\n\n"
+                f"Code evidence from index:\n{evidence_md}"
+            )},
+        ]
+        _out = await ai_router.chat_complete(_prompt, temperature=0.2, max_tokens=1200)
+        if _out and len(_out.strip()) > 40:
+            verdict_md = _out.strip()
+    except Exception as e:
+        logger.warning(f"LLM verification failed, using evidence-only fallback: {e}")
+
+    if not verdict_md:
+        verdict_md = (
+            "### 🔍 Implementation check (evidence only — AI verdict unavailable)\n\n"
+            f"**Code found in the index:**\n{evidence_md}\n\n"
+            "Review the files above against the requirement to judge completeness."
+        )
+
+    return {
+        "current_phase": "verified",
+        "next_step": "completed",
+        "messages": [AIMessage(content=verdict_md)],
     }
 
 

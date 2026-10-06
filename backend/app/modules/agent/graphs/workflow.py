@@ -14,6 +14,7 @@ from app.modules.agent.graphs.nodes import (
     pre_review_node,
     pr_drafter_node,
     supervisor_node,
+    verify_implementation_node,
 )
 from app.modules.agent.graphs.state import AgentState
 
@@ -26,7 +27,7 @@ _default_checkpointer: BaseCheckpointSaver = MemorySaver()
 def _route_supervisor(state: AgentState) -> str:
     """Routes execution from supervisor to appropriate domain agent node or terminates."""
     next_step = state.get("next_step")
-    if next_step in ("code_explorer", "pre_review", "pr_drafter", "conversational_chat"):
+    if next_step in ("code_explorer", "pre_review", "pr_drafter", "conversational_chat", "verify_implementation"):
         return next_step
     return "end"
 
@@ -71,6 +72,7 @@ def build_agent_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
     builder.add_node("supervisor", supervisor_node)
     builder.add_node("conversational_chat", conversational_chat_node)
     builder.add_node("code_explorer", code_explorer_node)
+    builder.add_node("verify_implementation", verify_implementation_node)
     builder.add_node("hitl_starting_point", hitl_starting_point_node)
     builder.add_node("pre_review", pre_review_node)
     builder.add_node("hitl_pre_review", hitl_pre_review_node)
@@ -88,9 +90,13 @@ def build_agent_graph(checkpointer: Optional[BaseCheckpointSaver] = None):
             "pre_review": "pre_review",
             "pr_drafter": "pr_drafter",
             "conversational_chat": "conversational_chat",
+            "verify_implementation": "verify_implementation",
             "end": END,
         },
     )
+
+    # Verification verdict -> End (no HITL; user drills in with follow-ups)
+    builder.add_edge("verify_implementation", END)
 
     # Conversational Chat -> End
     builder.add_edge("conversational_chat", END)

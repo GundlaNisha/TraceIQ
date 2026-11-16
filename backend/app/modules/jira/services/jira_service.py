@@ -21,12 +21,16 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraImportResult,
     JiraIssueDetailResponse,
     JiraIssueTypeItem,
+    JiraPostCommentResponse,
     JiraProjectItem,
     JiraSearchResponse,
     JiraSprintItem,
     JiraStatusItem,
     JiraSyncResponse,
     JiraTestConnectionResponse,
+    JiraTransitionResponse,
+    JiraWebhookSecretResponse,
+    JiraWebhookTestResponse,
 )
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement, RequirementVersion

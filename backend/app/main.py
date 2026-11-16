@@ -1,13 +1,19 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from alembic.config import Config
 from alembic import command
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.db.session import get_db
 from app.modules.auth.routes.auth import router as auth_router
 from app.modules.auth.routes.webhook import router as webhook_router
 from app.modules.dashboard.routes.dashboard import router as dashboard_router
@@ -27,6 +33,8 @@ from app.modules.traceability.routes.traceability import router as traceability_
 from app.modules.workspace.routes.workspace import router as workspace_router
 
 logger = logging.getLogger(__name__)
+
+_START_TIME = time.time()
 
 
 def _run_migrations() -> None:
@@ -92,6 +100,77 @@ app.include_router(jira_router)
 app.include_router(agent_router)
 
 
-@app.get("/health")
-async def health() -> dict:
-    return {"status": "ok"}
+@app.get("/", summary="TraceIQ Root API Index", tags=["general"])
+async def root() -> dict[str, Any]:
+    return {
+        "name": "TraceIQ API",
+        "description": "Autonomous Code Impact Blast Radius Analysis, AST Code Graph Traversal & Automated PR Review Intelligence",
+        "version": "1.0.0",
+        "status": "operational",
+        "environment": settings.environment,
+        "docs_url": "/docs",
+        "redoc_url": "/redoc",
+        "openapi_url": "/openapi.json",
+        "health_check_url": "/health",
+        "endpoints": {
+            "health": "/health",
+            "api_health": "/api/v1/health",
+            "ai_health": "/api/v1/health/ai",
+            "liveness": "/api/v1/health/liveness",
+            "repositories": "/api/v1/repos",
+            "impact_analysis": "/api/v1/impact",
+            "pr_reviews": "/api/v1/pr-reviews",
+            "requirements": "/api/v1/requirements",
+            "traceability": "/api/v1/traceability",
+            "jira": "/api/v1/jira",
+            "workspaces": "/api/v1/workspaces",
+            "agent": "/api/v1/agent",
+        },
+    }
+
+
+@app.get("/health", summary="Service Health Check", tags=["health"])
+async def health(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    services: dict[str, str] = {}
+    is_healthy = True
+
+    # 1. Database Connectivity Probe
+    if settings.database_url:
+        try:
+            await db.execute(text("SELECT 1"))
+            services["database"] = "healthy"
+        except Exception as e:
+            services["database"] = f"unhealthy: {e!s}"
+            is_healthy = False
+    else:
+        services["database"] = "not_configured"
+
+    # 2. Redis Connection Probe
+    if settings.redis_url:
+        try:
+            import redis.asyncio as aioredis
+
+            r = aioredis.from_url(settings.redis_url, socket_timeout=2.0)
+            await r.ping()
+            await r.aclose()
+            services["redis"] = "healthy"
+        except Exception as e:
+            services["redis"] = f"unhealthy: {e!s}"
+            if not getattr(settings, "celery_always_eager", False):
+                is_healthy = False
+    else:
+        services["redis"] = "not_configured"
+
+    uptime_seconds = int(time.time() - _START_TIME)
+
+    return {
+        "status": "healthy" if is_healthy else "degraded",
+        "version": "1.0.0",
+        "environment": settings.environment,
+        "uptime_seconds": uptime_seconds,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "services": services,
+        "celery": {
+            "always_eager": getattr(settings, "is_celery_eager", False),
+        },
+    }

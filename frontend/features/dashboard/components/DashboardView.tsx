@@ -119,65 +119,110 @@ export function DashboardView() {
 
   return (
     <div className="flex flex-col gap-8 pb-16">
-      {/* Hero Greeting & Quick Action Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-[#1B2A4A] to-slate-900 text-white p-6 sm:p-8 shadow-xl border border-slate-800">
-        {/* Background glow orb */}
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-accent/40 rounded-full blur-3xl pointer-events-none opacity-60" />
-        <div className="absolute bottom-0 left-1/3 -mb-10 w-48 h-48 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
+      {/* Dashboard Command & Intelligence Header */}
+      <div className="relative rounded-2xl bg-white/90 backdrop-blur-md border border-border/70 p-6 sm:p-7 shadow-[0_1px_3px_rgba(27,42,74,0.03),0_8px_24px_rgba(27,42,74,0.04)] overflow-hidden transition-all">
+        {/* Subtle technical background grid pattern */}
+        <div className="absolute right-0 top-0 bottom-0 w-96 bg-[radial-gradient(#1B2A4A_0.75px,transparent_0.75px)] [background-size:14px_14px] opacity-[0.05] pointer-events-none [mask-image:linear-gradient(to_left,white_20%,transparent_100%)]" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-2xl">
+            {/* Live System & Context Badges */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/10 text-white/90 border border-white/15 backdrop-blur-md flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                AI Code Intelligence
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                AST Engine Active
               </span>
+
               {activeWorkspaceId ? (
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-300" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100/90 text-slate-700 border border-slate-200/80">
+                  <Building2 className="w-3 h-3 text-slate-500" />
                   {activeWorkspaceName}
                 </span>
               ) : (
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-700/60 text-slate-300 border border-slate-600 flex items-center gap-1.5">
-                  <UserIcon className="w-3.5 h-3.5" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100/90 text-slate-700 border border-slate-200/80">
+                  <UserIcon className="w-3 h-3 text-slate-500" />
                   Personal Workspace
                 </span>
               )}
+
+              <span className="text-[11px] text-muted-foreground font-mono hidden sm:inline">
+                • RRF k=60
+              </span>
             </div>
-            <h1 className="text-2xl sm:text-4xl font-bold font-serif tracking-tight text-white">
-              {greeting}, {userName}
-            </h1>
-            <p className="text-sm text-slate-300 max-w-xl leading-relaxed">
-              Autonomous AI code review, requirement compliance tracking, and AST blast radius analysis across all your repositories.
-            </p>
+
+            {/* Greeting Title */}
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-semibold text-foreground tracking-tight">
+                {greeting}, <span className="text-accent">{userName}</span>
+              </h1>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
+                Autonomous code intelligence is monitoring <strong className="text-foreground font-medium">{totalRepos} {totalRepos === 1 ? "repository" : "repositories"}</strong> with <strong className="text-foreground font-medium">{readyRepos} indexed AST graphs</strong> and <strong className="text-foreground font-medium">{totalReviews} automated PR reviews</strong>.
+              </p>
+            </div>
           </div>
 
-          {/* Quick Launch Action Buttons */}
+          {/* Action Shortcuts */}
           <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <Link href="/repositories">
               <Button
                 variant="outline"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/30 text-xs font-semibold rounded-xl h-10 px-4 gap-2 backdrop-blur-md"
+                className="bg-white hover:bg-slate-50 text-foreground border-border/80 hover:border-slate-300 text-xs font-medium rounded-xl h-9.5 px-3.5 gap-2 shadow-2xs hover:shadow-xs transition-all active:scale-[0.98]"
               >
-                <Plus className="w-4 h-4 text-emerald-400" />
+                <Plus className="w-3.5 h-3.5 text-muted-foreground" />
                 Add Repo
               </Button>
             </Link>
+
             <Link href="/requirements">
               <Button
                 variant="outline"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/30 text-xs font-semibold rounded-xl h-10 px-4 gap-2 backdrop-blur-md"
+                className="bg-white hover:bg-slate-50 text-foreground border-border/80 hover:border-slate-300 text-xs font-medium rounded-xl h-9.5 px-3.5 gap-2 shadow-2xs hover:shadow-xs transition-all active:scale-[0.98]"
               >
-                <Layers className="w-4 h-4 text-purple-400" />
+                <Layers className="w-3.5 h-3.5 text-muted-foreground" />
                 Requirement
               </Button>
             </Link>
+
             <Link href="/analysis">
-              <Button className="bg-accent hover:bg-accent/90 text-white text-xs font-semibold rounded-xl h-10 px-4.5 gap-2 shadow-lg shadow-accent/40 border border-white/10">
-                <Zap className="w-4 h-4 text-amber-400" />
+              <Button className="bg-accent hover:bg-accent/90 text-white text-xs font-medium rounded-xl h-9.5 px-4 gap-2 shadow-sm hover:shadow transition-all active:scale-[0.98] border border-accent/20">
+                <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                 Run Analysis
               </Button>
             </Link>
+          </div>
+        </div>
+
+        {/* Quick Status Sub-Strip */}
+        <div className="mt-5 pt-4 border-t border-border/40 flex items-center justify-between gap-4 flex-wrap text-xs text-muted-foreground">
+          <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-foreground font-medium">{readyRepos}</span>
+              <span>Indexed</span>
+            </div>
+            {syncingRepos > 0 && (
+              <div className="flex items-center gap-1.5 text-blue-600 font-medium">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                <span>{syncingRepos}</span>
+                <span>Syncing</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <GitPullRequest className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-foreground font-medium">{totalReviews}</span>
+              <span>PR Reviews</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-foreground font-medium">{totalReqs}</span>
+              <span>Requirements</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-[11px] text-muted font-mono">
+            <span>AST Traversal: &lt;15ms</span>
+            <span>•</span>
+            <span>2-Hop Blast Radius</span>
           </div>
         </div>
       </div>

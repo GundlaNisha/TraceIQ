@@ -174,3 +174,9 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
             "always_eager": getattr(settings, "is_celery_eager", False),
         },
     }
+
+
+@app.api_route("/api/machines/host/sync", methods=["GET", "POST", "OPTIONS"])
+async def machines_host_sync():
+    return {"status": "ok", "synced": True}
+

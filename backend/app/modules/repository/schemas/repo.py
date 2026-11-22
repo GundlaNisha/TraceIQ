@@ -26,8 +26,8 @@ class RepoResponse(BaseModel):
     default_branch: str
     github_installation_id: int | None = None
     is_private: bool = False
-    auto_review_prs: bool = False
-    auto_post_comments: bool = False
+    auto_review_prs: bool = True
+    auto_post_comments: bool = True
     default_requirement_id: UUID | None = None
     workspace_id: UUID | None = None
     workspace_name: str | None = None

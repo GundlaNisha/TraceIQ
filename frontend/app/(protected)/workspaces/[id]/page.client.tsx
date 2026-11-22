@@ -363,11 +363,19 @@ export default function WorkspaceDetailClient({
 
                     <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
                       <span>Branch: <strong>{repo.default_branch}</strong></span>
-                      {repo.auto_review_prs && (
+                      {repo.auto_review_prs !== false && (
+                        <>
+                          <span>·</span>
+                          <span className="text-blue-600 font-semibold flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> Auto Review
+                          </span>
+                        </>
+                      )}
+                      {repo.auto_post_comments !== false && (
                         <>
                           <span>·</span>
                           <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" /> Auto PR Review
+                            <Sparkles className="w-3 h-3" /> Auto Comment
                           </span>
                         </>
                       )}

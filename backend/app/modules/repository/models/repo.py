@@ -34,8 +34,8 @@ class Repository(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
     )
     is_private: Mapped[bool] = mapped_column(Boolean, default=False)
-    auto_review_prs: Mapped[bool] = mapped_column(Boolean, default=False)
-    auto_post_comments: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_review_prs: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_post_comments: Mapped[bool] = mapped_column(Boolean, default=True)
     default_requirement_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("requirements.id", ondelete="SET NULL"),
         nullable=True,

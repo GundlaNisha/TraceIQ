@@ -182,6 +182,8 @@ async def github_app_callback(
                             github_installation_id=installation_id,
                             is_private=is_private,
                             sync_status="pending",
+                            auto_review_prs=True,
+                            auto_post_comments=True,
                         )
                         db.add(new_repo)
     except Exception as exc:

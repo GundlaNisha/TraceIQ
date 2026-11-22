@@ -62,12 +62,13 @@ export function AgentMentionMenu({
 
     // 2. Requirements / Jira Stories
     for (const req of requirements) {
+      const jiraKey = req.jira_issue_key || req.jira_key;
       items.push({
         type: "req",
-        id: String(req.id || req.jira_key || ""),
-        label: req.jira_key ? `[${req.jira_key}] ${req.title}` : req.title,
+        id: String(req.id || jiraKey || ""),
+        label: jiraKey ? `[${jiraKey}] ${req.title}` : req.title,
         subtitle: req.jira_status ? `Status: ${req.jira_status}` : "Requirement Story",
-        badge: req.jira_key || "BRD",
+        badge: jiraKey || "BRD",
         raw: req,
       });
     }

@@ -95,7 +95,7 @@ export function PRDraftCard({ prDraft }: PRDraftCardProps) {
             rows={14}
           />
         ) : (
-          <div className="prose prose-slate prose-xs max-w-none text-foreground leading-relaxed space-y-2 prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground prose-code:text-[#1B2A4A] prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
+          <div className="prose prose-slate prose-xs max-w-none text-foreground leading-relaxed space-y-2 prose-headings:font-serif prose-headings:font-bold prose-headings:text-foreground">
             <AgentMarkdown content={editedMarkdown} />
           </div>
         )}

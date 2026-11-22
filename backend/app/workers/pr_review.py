@@ -17,9 +17,11 @@ from app.modules.github.services.auth import (
 )
 from app.modules.github.services.checks import build_ci_context, fetch_pr_checks
 from app.modules.impact.models.impact import AnalysisJob, ImpactResult
+from app.modules.impact.services.auto_blast_radius import ensure_pr_blast_radius
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
 from app.modules.review.models.rev_models import PRFileDiff, PRReview, PRReviewFinding
+from app.modules.review.services.pr_matcher import resolve_requirement_for_pr
 from app.workers.celery_app import celery_app
 from app.workers.runner import run_async
 
@@ -109,6 +111,32 @@ async def _fetch_pr_diff(repo_full_name: str, pr_number: int, token: str | None)
 
         logger.error(f"Failed to fetch PR diff for {repo_full_name}#{pr_number}")
         return ""
+
+
+async def _fetch_pr_metadata(
+    repo_full_name: str, pr_number: int, token: str | None
+) -> dict:
+    """Fetch PR metadata (title, body, head branch ref) from GitHub API."""
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            resp = await client.get(
+                f"https://api.github.com/repos/{repo_full_name}/pulls/{pr_number}",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception as exc:
+            logger.warning(
+                f"Could not fetch PR metadata for {repo_full_name}#{pr_number}: {exc!s}"
+            )
+    return {}
 
 
 async def _post_pr_review_to_github(
@@ -238,7 +266,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
                 )
 
             repo_full_name = _extract_full_name(repository)
-            auto_post_comments = bool(repository.auto_post_comments)
+            auto_post_comments = repository.auto_post_comments is not False
             if not repo_full_name:
                 raise ValueError(
                     f"Could not determine repo_full_name for repo {repository.id}"
@@ -282,56 +310,70 @@ async def _process_pr_review(pr_review_id: str) -> None:
                             f"Could not get user installation token: {exc!s}"
                         )
 
-            # 5. Fetch PR diff from GitHub
+            # 5. Fetch PR diff & metadata from GitHub
             pr_diff = await _fetch_pr_diff(repo_full_name, pr_number, token)
             if not pr_diff:
                 raise ValueError("Empty PR diff — cannot review.")
 
-            # 6. Fetch linked requirement text and impact analysis (if any)
-            req_text = ""
-            analysis_context = ""
-            impacted_paths: list[dict] = []
+            pr_metadata = await _fetch_pr_metadata(repo_full_name, pr_number, token)
+            pr_body = pr_metadata.get("body") or ""
+            head_ref = (pr_metadata.get("head") or {}).get("ref", "")
+            if pr_metadata.get("title") and pr_title in ("Pull Request Review", ""):
+                pr_title = pr_metadata.get("title")
+                pr_review.pr_title = pr_title
+                await session.commit()
 
-            if requirement_id:
+            # 6. Autonomous Requirement Resolution & Grounding
+            req_record = None
+            if not requirement_id:
+                logger.info(
+                    f"No requirement_id linked on PRReview {pr_review_id}. Autonomously resolving..."
+                )
+                matched_req, resolution_method = await resolve_requirement_for_pr(
+                    db=session,
+                    repository=repository,
+                    pr_title=pr_title,
+                    pr_body=pr_body,
+                    head_ref=head_ref,
+                    pr_number=pr_number,
+                )
+                if matched_req:
+                    requirement_id = matched_req.id
+                    pr_review.requirement_id = matched_req.id
+                    req_record = matched_req
+                    await session.commit()
+                    logger.info(
+                        f"Autonomously attached requirement {matched_req.id} ({resolution_method}) to PRReview {pr_review_id}"
+                    )
+            else:
                 req_result = await session.execute(
                     select(Requirement).where(Requirement.id == requirement_id)
                 )
                 req_record = req_result.scalar_one_or_none()
-                if req_record:
-                    req_text = f"Title: {req_record.title}\nVersion: {req_record.version_number}\nDescription:\n{req_record.text}"
 
-                    impact_result_db = await session.execute(
-                        select(ImpactResult)
-                        .join(AnalysisJob, ImpactResult.job_id == AnalysisJob.id)
-                        .where(
-                            AnalysisJob.requirement_id == requirement_id,
-                            AnalysisJob.repository_id == repository_id,
-                            AnalysisJob.status == "completed",
-                        )
-                        .order_by(AnalysisJob.created_at.desc())
-                        .limit(1)
+            req_text = ""
+            analysis_context = ""
+            impacted_paths: list[dict] = []
+
+            # 7. High-Performance Multi-File Chunking
+            file_patches = _parse_diff_into_file_patches(pr_diff)
+
+            # 8. Autonomous 2-Hop AST Blast Radius Computation
+            if req_record:
+                req_text = f"Title: {req_record.title}\nVersion: {req_record.version_number}\nDescription:\n{req_record.text}"
+                try:
+                    analysis_context, impacted_paths = await ensure_pr_blast_radius(
+                        db=session,
+                        repository=repository,
+                        requirement=req_record,
+                        file_patches=file_patches,
                     )
-                    impact_rec = impact_result_db.scalar_one_or_none()
-                    if impact_rec and impact_rec.impacted_files:
-                        files_data = impact_rec.impacted_files.get("files", [])
-                        impacted_paths = [
-                            {"file_path": f.get("file_path", "")}
-                            for f in files_data
-                            if f.get("file_path")
-                        ]
-                        if files_data:
-                            file_lines = []
-                            for f in files_data:
-                                file_lines.append(
-                                    f"- {f.get('file_path')} (confidence: {f.get('confidence')}, risk: {f.get('risk_level', 'medium')}): {f.get('reasoning', '')}"
-                                )
-                            analysis_context = (
-                                "Impacted files predicted by prior analysis:\n"
-                                + "\n".join(file_lines)
-                            )
+                except Exception as blast_err:
+                    logger.warning(
+                        f"ensure_pr_blast_radius encountered non-fatal error: {blast_err!s}"
+                    )
 
-            # 6b. Fetch live CI status so the review reads failing checks.
-            # Never raises (service degrades to "unknown"); never blocks review.
+            # 8b. Fetch live CI status so the review reads failing checks.
             ci_context = ""
             try:
                 ci_summary = await fetch_pr_checks(
@@ -341,8 +383,7 @@ async def _process_pr_review(pr_review_id: str) -> None:
             except Exception as exc:
                 logger.warning(f"CI context fetch skipped (non-fatal): {exc!s}")
 
-            # 7. High-Performance Multi-File Chunking & Parallel AI Review
-            file_patches = _parse_diff_into_file_patches(pr_diff)
+            # 9. Parallel / Chunked AI Review Execution
             all_findings: list[PRReviewFindingOutput] = []
             final_summary = ""
 
@@ -450,6 +491,36 @@ async def _process_pr_review(pr_review_id: str) -> None:
                     logger.warning(
                         f"Auto-post comments enabled for {repo_full_name}, but no GitHub token was available."
                     )
+
+            # 11. Sync review audit to linked Jira ticket (if requirement is Jira-linked)
+            if req_record and req_record.jira_issue_key:
+                try:
+                    from app.modules.jira.services.jira_service import get_active_jira_client
+
+                    jira_client, _ = await get_active_jira_client(
+                        session, repository.user_id, repository.workspace_id
+                    )
+                    high_cnt = sum(1 for f in saved_findings if f.severity == "high")
+                    med_cnt = sum(1 for f in saved_findings if f.severity == "medium")
+                    low_cnt = sum(1 for f in saved_findings if f.severity == "low")
+                    verdict_str = (
+                        "⚠️ Changes Requested"
+                        if high_cnt
+                        else ("🟡 Warnings" if med_cnt else "✅ Approved")
+                    )
+                    jira_comment = (
+                        f"🤖 *TraceIQ Autonomous Code Intelligence Review*\n\n"
+                        f"Pull Request [#{pr_number}|{pr_review.pr_html_url}] has been reviewed.\n\n"
+                        f"*Verdict:* {verdict_str}\n"
+                        f"*Findings:* 🔴 {high_cnt} High · 🟡 {med_cnt} Medium · 🔵 {low_cnt} Low\n\n"
+                        f"*Summary:*\n{final_summary[:600]}..."
+                    )
+                    await jira_client.post_comment(req_record.jira_issue_key, jira_comment)
+                    logger.info(
+                        f"✅ Synced review summary to Jira issue {req_record.jira_issue_key}"
+                    )
+                except Exception as jira_err:
+                    logger.warning(f"Jira audit sync non-fatal error: {jira_err!s}")
 
             logger.info(
                 f"⚡ PRReview {pr_review_id} completed successfully ({len(saved_findings)} findings)."

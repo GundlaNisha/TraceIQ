@@ -74,6 +74,8 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             pr_number = pull_request.get("number")
             pr_title = pull_request.get("title", "")
             pr_html_url = pull_request.get("html_url", "")
+            pr_body = pull_request.get("body", "") or ""
+            head_ref = (pull_request.get("head") or {}).get("ref", "")
             repo_url = payload.get("repository", {}).get("html_url")
 
             if pr_number and repo_url:
@@ -83,9 +85,22 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 repo = result.scalar_one_or_none()
 
                 if repo:
-                    if repo.auto_review_prs:
+                    if repo.auto_review_prs is not False:
+                        from app.modules.review.services.pr_matcher import resolve_requirement_for_pr
+
+                        matched_req, method = await resolve_requirement_for_pr(
+                            db=db,
+                            repository=repo,
+                            pr_title=pr_title,
+                            pr_body=pr_body,
+                            head_ref=head_ref,
+                            pr_number=pr_number,
+                        )
+                        resolved_req_id = matched_req.id if matched_req else repo.default_requirement_id
+
                         logger.info(
-                            f"Triggering automated AI review for PR #{pr_number} in {repo_url} with requirement {repo.default_requirement_id}"
+                            f"Triggering automated AI review for PR #{pr_number} in {repo_url} "
+                            f"(requirement: {resolved_req_id}, resolved via: {method})"
                         )
                         pr_review = PRReview(
                             repository_id=repo.id,
@@ -93,7 +108,7 @@ async def github_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                             pr_number=pr_number,
                             pr_title=pr_title,
                             pr_html_url=pr_html_url,
-                            requirement_id=repo.default_requirement_id,
+                            requirement_id=resolved_req_id,
                             status="queued",
                         )
                         db.add(pr_review)

@@ -90,7 +90,7 @@ async def _determine_user_intent(last_human_text: str, current_phase: str) -> st
         return "review"
     if any(k in lower for k in _EXPLORE_KEYWORDS):
         return "explore"
-    if any(k in lower for k in ["where to start", "find starting point", "starting point"]):
+    if any(k in lower for k in ["where to start", "where should i", "where to begin", "find starting point", "starting point", "how to start"]):
         return "explore"
 
     # MultiProviderRouter LLM Classification for diverse or conversational phrasings
@@ -409,6 +409,7 @@ async def code_explorer_node(state: AgentState) -> dict[str, Any]:
         "pending_approval": pending_approval,
         "current_phase": "awaiting_starting_point_approval",
         "next_step": "hitl_starting_point",
+        "tool_invocations": ["search_code_symbols_fn", "semantic_code_search_fn", "calculate_impact_blast_radius_fn"],
         "messages": [AIMessage(content=summary_text)],
     }
 
@@ -501,6 +502,7 @@ async def verify_implementation_node(state: AgentState) -> dict[str, Any]:
     return {
         "current_phase": "verified",
         "next_step": "completed",
+        "tool_invocations": ["search_code_symbols_fn", "semantic_code_search_fn", "verify_requirement_implementation_fn"],
         "messages": [AIMessage(content=verdict_md)],
     }
 
@@ -607,12 +609,91 @@ async def pre_review_node(state: AgentState) -> dict[str, Any]:
             f"- 🧪 `{t.get('file_path')}`: {t.get('recommendation', 'Missing unit test suite')}"
         )
 
+    testable_count = test_result.get("testable_files_count", len(touched_files))
+    if not tests_md:
+        if testable_count == 0:
+            test_section_content = "All modified files are configuration, schemas, or static assets (no unit tests required)."
+        else:
+            test_section_content = "All associated unit test suites are present."
+    else:
+        test_section_content = "\n".join(tests_md)
+
+    # Detect whether this audit is for an existing Pull Request
+    messages = state.get("messages", [])
+    last_human_text = ""
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage) or getattr(msg, "type", "") == "human":
+            last_human_text = str(msg.content)
+            break
+
+    tagged_entities = state.get("tagged_entities", [])
+    entity_context = state.get("entity_context") or ""
+
+    pr_tag = next((e for e in tagged_entities if e.get("type") == "pr"), None)
+    pr_num_match = _re.search(r"\b(?:PR|pull\s*request)\s*#?(\d+)\b", last_human_text, _re.IGNORECASE)
+    live_pr_match = _re.search(r"\[Live PR #(\d+):\s*([^\]]+)\]", entity_context)
+
+    is_existing_pr = bool(
+        pr_tag
+        or pr_num_match
+        or live_pr_match
+        or _re.search(r"\b(?:review\s+(?:this\s+)?pr|audit\s+(?:this\s+)?pr)\b", last_human_text, _re.IGNORECASE)
+    )
+
+    if is_existing_pr:
+        pr_label = ""
+        pr_title = ""
+        if live_pr_match:
+            pr_label = f"#{live_pr_match.group(1)}"
+            pr_title = live_pr_match.group(2).strip()
+        elif pr_tag:
+            pr_label = pr_tag.get("label") or pr_tag.get("name") or (f"#{pr_num_match.group(1)}" if pr_num_match else "")
+        elif pr_num_match:
+            pr_label = f"#{pr_num_match.group(1)}"
+
+        header_line = f"### 🛡️ Pull Request {pr_label} Code Review & Quality Audit\n\n" if pr_label else "### 🛡️ Pull Request Code Review & Quality Audit\n\n"
+        if pr_title:
+            header_line += f"**Title:** {pr_title}\n\n"
+
+        has_high = any(f.get("severity") == "high" for f in review_findings)
+        has_medium = any(f.get("severity") == "medium" for f in review_findings)
+        has_gaps = len(test_gaps) > 0
+
+        if has_high:
+            verdict = "❌ **Verdict: Changes Requested** — High-severity security or standards violations detected. Must be resolved before merge."
+        elif has_medium or has_gaps:
+            verdict = "⚠️ **Verdict: Caution / Review Needed** — No critical vulnerabilities, but warnings or missing test suites require attention."
+        else:
+            verdict = "✅ **Verdict: Approved / Clean** — No coding standards violations or unit test gaps detected."
+
+        summary_text = (
+            header_line
+            + f"**Scope:** {len(touched_files)} files modified\n\n"
+            + f"**Coding Standards & Security Findings:**\n"
+            + ("\n".join(findings_md) if findings_md else "No standards violations or security vulnerabilities detected.")
+            + f"\n\n**Missing Unit Test Coverage:**\n"
+            + test_section_content
+            + f"\n\n---\n"
+            + f"{verdict}\n\n"
+            + "You can ask me to inspect specific files, explain any finding, assess blast radius dependencies, or suggest code improvements."
+        )
+
+        return {
+            "review_findings": review_findings,
+            "test_gaps": test_gaps,
+            "pending_approval": None,
+            "current_phase": "pr_reviewed",
+            "next_step": "completed",
+            "tool_invocations": ["audit_diff_standards_fn", "audit_missing_tests_fn"],
+            "messages": [AIMessage(content=summary_text)],
+        }
+
     summary_text = (
         f"### 🛡️ Pre-Review & Test Gap Analysis\n\n"
         f"**Coding Standards & Security Findings:**\n"
         + ("\n".join(findings_md) if findings_md else "No standards violations detected.")
         + f"\n\n**Missing Unit Test Coverage:**\n"
-        + ("\n".join(tests_md) if tests_md else "All associated test suites are present.")
+        + test_section_content
         + f"\n\n---\n"
         f"✋ **Human-in-the-Loop Confirmation Required:**\n"
         f"Please inspect the pre-review findings and missing test coverage. Click **'Generate PR Draft'** to synthesize the requirement-linked Pull Request description."
@@ -633,6 +714,7 @@ async def pre_review_node(state: AgentState) -> dict[str, Any]:
         "pending_approval": pending_approval,
         "current_phase": "awaiting_pr_approval",
         "next_step": "hitl_pre_review",
+        "tool_invocations": ["audit_diff_standards_fn", "audit_missing_tests_fn"],
         "messages": [AIMessage(content=summary_text)],
     }
 
@@ -785,6 +867,7 @@ This pull request introduces changes addressing requirement **{requirement_id}**
         "pr_draft": pr_draft,
         "current_phase": "pr_drafted",
         "next_step": "completed",
+        "tool_invocations": ["synthesize_pull_request_spec_fn"],
         "messages": [AIMessage(content=message_text)],
     }
 

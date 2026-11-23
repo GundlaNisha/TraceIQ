@@ -263,14 +263,35 @@ export function AgentChatThread({
                     </button>
 
                     {reasoningOpen && (
-                      <div className="mt-1 rounded-lg border border-border/60 bg-[#FAF8F5] p-2 font-mono text-[10px] text-muted-foreground space-y-0.5">
+                      <div className="mt-1 rounded-lg border border-border/60 bg-[#FAF8F5] p-2 font-mono text-[10px] text-muted-foreground space-y-1">
                         <div className="flex items-center gap-1 text-accent font-semibold">
                           <Terminal className="h-3 w-3" />
                           <span>Tool Invocation Log</span>
                         </div>
-                        <p className="text-slate-600">
-                          Executed autonomous AST symbol lookup and blast radius graph traversal across PostgreSQL dependency tables.
-                        </p>
+                        {Array.isArray(msg.artifacts?.tool_invocations) && msg.artifacts.tool_invocations.length > 0 ? (
+                          <div className="space-y-0.5 pt-0.5">
+                            {msg.artifacts.tool_invocations.map((tool: string, idx: number) => (
+                              <div key={idx} className="flex items-center gap-1.5 text-slate-700">
+                                <span className="text-emerald-600 font-bold">&bull;</span>
+                                <span>{tool}()</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-slate-600">
+                            {msg.agent_role === "code_explorer"
+                              ? "Executed AST symbol lookup and 2-hop blast radius graph traversal across dependency tables."
+                              : msg.agent_role === "pre_review"
+                              ? "Audited code diff against security standards, quality rules, and unit test coverage."
+                              : msg.agent_role === "pr_drafter"
+                              ? "Synthesized requirement-linked Pull Request description and impact checklist."
+                              : msg.agent_role === "verify_implementation"
+                              ? "Verified acceptance criteria against AST symbols and repository files."
+                              : msg.agent_role === "conversational_chat"
+                              ? "Processed conversation query with workspace and codebase context."
+                              : "Executed autonomous agent reasoning and tool invocation across workspace context."}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -319,7 +340,7 @@ export function AgentChatThread({
                           {tag.type === "repo" && <FolderGit2 className="h-2.5 w-2.5 shrink-0" />}
                           {tag.type === "req" && <Layers className="h-2.5 w-2.5 shrink-0" />}
                           {tag.type === "pr" && <GitPullRequest className="h-2.5 w-2.5 shrink-0" />}
-                          <span className="truncate max-w-[160px]">{tag.name || tag.id}</span>
+                          <span className="truncate max-w-[160px]">{tag.label || tag.name || tag.id}</span>
                         </span>
                       ))}
                     </div>

@@ -48,8 +48,11 @@ def _route_after_explorer(state: AgentState) -> str:
 
 
 def _route_after_review(state: AgentState) -> str:
-    """Skips the pre-review HITL checkpoint when there is no audit to confirm."""
-    if (state.get("current_phase") or "").startswith("needs_"):
+    """Skips the pre-review HITL checkpoint when there is no audit to confirm or review completed."""
+    if (
+        (state.get("current_phase") or "").startswith("needs_")
+        or state.get("current_phase") in ("pr_reviewed", "completed")
+    ):
         return "end"
     return "hitl_pre_review"
 

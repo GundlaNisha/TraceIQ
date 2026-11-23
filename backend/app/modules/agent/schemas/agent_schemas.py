@@ -60,6 +60,7 @@ class TaggedEntity(BaseModel):
     type: str  # "repo" | "req" | "pr"
     id: str
     label: str
+    name: str | None = None
 
 
 class AgentMessageCreate(BaseModel):

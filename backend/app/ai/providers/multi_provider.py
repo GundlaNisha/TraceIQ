@@ -19,8 +19,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import instructor
+import litellm
 from litellm import acompletion
 from pydantic import BaseModel
+
+# Suppress noisy LiteLLM banner logging on retry/failover
+litellm.suppress_debug_info = True
 
 from app.ai.providers.base import ProviderAdapter
 from app.core.config import settings

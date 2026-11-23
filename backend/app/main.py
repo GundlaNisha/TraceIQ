@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from alembic.config import Config
 from alembic import command
 from sqlalchemy import text
@@ -80,6 +81,27 @@ app.add_middleware(
     allow_headers=["*"],
     allow_private_network=True,
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Ensure unhandled 500 exceptions still return CORS headers so browsers receive clear JSON errors."""
+    logger.exception(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
+    origin = request.headers.get("origin")
+    headers: dict[str, str] = {}
+    if origin and (
+        origin in cors_origins
+        or any(origin.startswith(p) for p in ("http://localhost:", "http://127.0.0.1:", "https://"))
+    ):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": f"Internal server error: {exc!s}"},
+        headers=headers,
+    )
 
 # Routers
 app.include_router(auth_router)

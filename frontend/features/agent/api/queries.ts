@@ -119,7 +119,20 @@ export function useSendAgentMessage() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Failed to send message to agent");
+      if (!res.ok) {
+        let errorMsg = "Failed to send message to agent";
+        try {
+          const errData = await res.json();
+          if (errData?.detail) {
+            errorMsg = typeof errData.detail === "string" ? errData.detail : JSON.stringify(errData.detail);
+          } else if (errData?.message) {
+            errorMsg = errData.message;
+          }
+        } catch {
+          // ignore json parse error
+        }
+        throw new Error(errorMsg);
+      }
       return res.json();
     },
     onSuccess: (_, variables) => {

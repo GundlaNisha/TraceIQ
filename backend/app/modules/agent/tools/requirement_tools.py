@@ -35,9 +35,9 @@ async def fetch_requirement_details_fn(
         "id": str(req.id),
         "title": req.title,
         "text": req.text,
-        "jira_key": req.jira_key,
+        "jira_key": req.jira_issue_key,
         "version": req.version_number,
-        "source": req.source,
+        "source": getattr(req, "source", "jira" if req.jira_issue_key else "manual"),
         "workspace_id": str(req.workspace_id) if req.workspace_id else None,
     }
 
@@ -72,7 +72,7 @@ async def list_workspace_requirements_fn(
         requirements.append({
             "id": str(req.id),
             "title": req.title,
-            "jira_key": req.jira_key,
+            "jira_key": req.jira_issue_key,
             "summary": req.text[:120] if req.text else "",
         })
     return requirements

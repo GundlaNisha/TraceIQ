@@ -34,6 +34,16 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     jira_issue_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     jira_synced_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
+    @property
+    def jira_key(self) -> str | None:
+        """Alias for jira_issue_key to support tools/nodes accessing .jira_key."""
+        return self.jira_issue_key
+
+    @property
+    def source(self) -> str:
+        """Requirement source ('jira' or 'manual')."""
+        return "jira" if self.jira_issue_key else "manual"
+
 
 
 

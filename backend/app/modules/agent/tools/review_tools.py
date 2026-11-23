@@ -1,3 +1,4 @@
+import os
 import re
 import uuid
 from typing import Any
@@ -7,6 +8,109 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionLocal
 from app.modules.indexing.models.index_models import RepositoryFile
+
+_EXCLUDED_EXTENSIONS = {
+    # Web & static assets
+    ".html", ".htm", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".eot",
+    # Stylesheets
+    ".css", ".scss", ".sass", ".less", ".styl",
+    # Schemas, migrations & queries
+    ".prisma", ".sql", ".graphql", ".gql", ".proto",
+    # Config, markup & data
+    ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".cnf", ".conf", ".env", ".lock", ".lockb",
+    # Documentation & text
+    ".md", ".markdown", ".rst", ".txt", ".csv", ".tsv",
+}
+
+_EXCLUDED_FILENAMES = {
+    "dockerfile", "docker-compose.yml", "docker-compose.yaml",
+    "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb",
+    "tsconfig.json", "tsconfig.node.json", "jsconfig.json",
+    "alembic.ini", "pytest.ini", "pyproject.toml", "poetry.lock", "uv.lock", "requirements.txt",
+    "license", "license.md", "license.txt", "readme", "readme.md",
+}
+
+
+def _is_test_file_path(file_path: str) -> bool:
+    """Check if a file path is already part of a test suite."""
+    p_lower = file_path.lower()
+    parts = p_lower.split("/")
+    filename = parts[-1]
+
+    if any(p in ("tests", "test", "__tests__", "spec", "specs", "e2e", "cypress") for p in parts[:-1]):
+        return True
+    if filename.startswith("test_") or filename.endswith(("_test.py", "_test.go", "_test.rs")):
+        return True
+    if any(filename.endswith(f".{t}.{ext}") for t in ("test", "spec") for ext in ("ts", "tsx", "js", "jsx")):
+        return True
+    return False
+
+
+def _is_testable_code_file(file_path: str) -> bool:
+    """Determine whether a modified file should have associated unit test coverage."""
+    p_lower = file_path.lower()
+    parts = p_lower.split("/")
+    filename = parts[-1]
+    name_no_ext, ext = os.path.splitext(filename)
+
+    # Exclude directories that should not be unit-tested
+    if any(p in ("migrations", "alembic", "generated", "dist", "build", ".next", ".git", "vendor", "node_modules") for p in parts):
+        return False
+
+    # Exclude search engine or domain verification files (e.g. google125d201a20233e56.html)
+    if filename.startswith("google") and ext in (".html", ".htm"):
+        return False
+    if filename in ("robots.txt", "sitemap.xml", "favicon.ico"):
+        return False
+
+    # Exclude exact filenames and config extensions
+    if filename in _EXCLUDED_FILENAMES or name_no_ext in _EXCLUDED_FILENAMES:
+        return False
+    if ext in _EXCLUDED_EXTENSIONS or filename.startswith(".env"):
+        return False
+
+    # Exclude if it's already a test file
+    if _is_test_file_path(file_path):
+        return False
+
+    # Exclude TypeScript declaration files
+    if filename.endswith(".d.ts"):
+        return False
+
+    # Only include recognized programming languages
+    code_extensions = {
+        ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+        ".go", ".rs", ".java", ".kt", ".c", ".cpp", ".cc", ".h", ".hpp",
+        ".cs", ".rb", ".php", ".swift",
+    }
+    return ext in code_extensions
+
+
+def _generate_test_recommendation(file_path: str) -> str:
+    """Generates an accurate, language-tailored test creation recommendation."""
+    filename = file_path.split("/")[-1]
+    name_no_ext, ext = os.path.splitext(filename)
+    parts = file_path.split("/")
+    parent_dir = parts[-2] if len(parts) > 1 else ""
+
+    if ext == ".py":
+        return f"Create test_{name_no_ext}.py or tests/test_{name_no_ext}.py covering newly modified logic paths."
+    elif ext in (".tsx", ".jsx"):
+        if name_no_ext in ("page", "index", "layout", "view") and parent_dir:
+            return f"Create {parent_dir}.test{ext} or {name_no_ext}.test{ext} covering component renders and user interactions."
+        return f"Create {name_no_ext}.test{ext} covering component renders and user interactions."
+    elif ext in (".ts", ".js", ".mjs"):
+        if name_no_ext in ("route", "index") and parent_dir:
+            return f"Create {parent_dir}.test{ext} or {name_no_ext}.test{ext} covering API endpoints or logic paths."
+        return f"Create {name_no_ext}.test{ext} or __tests__/{name_no_ext}.test{ext} covering newly modified logic paths."
+    elif ext == ".go":
+        return f"Create {name_no_ext}_test.go covering modified functions."
+    elif ext == ".rs":
+        return f"Add unit test suite in {name_no_ext}.rs or tests/{name_no_ext}_test.rs."
+    elif ext in (".java", ".kt"):
+        return f"Create {name_no_ext}Test{ext} covering modified public methods."
+    else:
+        return f"Create unit test file for {filename} covering newly modified logic paths."
 
 
 def audit_diff_standards_fn(diff_text: str) -> dict[str, Any]:
@@ -131,24 +235,42 @@ async def audit_missing_tests_fn(
         result = await db.execute(stmt)
         test_files = [r[0] for r in result.all()]
 
+    # Filter modified files for testable business logic code only
+    testable_files = [f for f in modified_files if _is_testable_code_file(f)]
+
     missing_coverage: list[dict[str, Any]] = []
 
-    for file_path in modified_files:
-        # Check if file has a corresponding test
-        base_name = file_path.split("/")[-1].split(".")[0]
-        has_matching_test = any(
-            base_name in tf.split("/")[-1] for tf in test_files
-        )
+    for file_path in testable_files:
+        filename = file_path.split("/")[-1]
+        name_no_ext, ext = os.path.splitext(filename)
+        parts = file_path.split("/")
+        parent_dir = parts[-2] if len(parts) > 1 else ""
+
+        has_matching_test = False
+        for tf in test_files:
+            tf_lower = tf.lower()
+            tf_file = tf.split("/")[-1].lower()
+            if name_no_ext.lower() in tf_file:
+                if name_no_ext.lower() not in ("page", "index", "route", "layout", "main", "types"):
+                    has_matching_test = True
+                    break
+                elif parent_dir and parent_dir.lower() in tf_lower:
+                    has_matching_test = True
+                    break
+            if parent_dir and len(parent_dir) > 2 and (f"{parent_dir.lower()}.test" in tf_file or f"{parent_dir.lower()}_test" in tf_file):
+                has_matching_test = True
+                break
 
         if not has_matching_test:
             missing_coverage.append({
                 "file_path": file_path,
                 "status": "missing_test_file",
-                "recommendation": f"Create test_{base_name}.py or {base_name}.test.ts covering newly modified logic paths.",
+                "recommendation": _generate_test_recommendation(file_path),
             })
 
     return {
         "total_modified_files": len(modified_files),
+        "testable_files_count": len(testable_files),
         "test_files_detected_in_repo": len(test_files),
         "missing_coverage_count": len(missing_coverage),
         "missing_coverage": missing_coverage,

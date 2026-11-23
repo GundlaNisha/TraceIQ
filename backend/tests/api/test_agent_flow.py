@@ -1,6 +1,7 @@
 import uuid
 import pytest
 from httpx import AsyncClient
+from langchain_core.messages import HumanMessage
 
 from app.core.deps import get_current_user
 from app.main import app
@@ -95,6 +96,31 @@ async def test_intent_routing_verify_and_review():
     assert await _determine_user_intent("Draft a PR description for my changes", "idle") == "draft_pr"
 
 
+def _base_state(**overrides):
+    state = {
+        "messages": [HumanMessage(content="Where should I start for requirement REQ-404?")],
+        "session_id": "test-session-flow-1",
+        "workspace_id": "00000000-0000-0000-0000-000000000000",
+        "repository_id": None,
+        "requirement_id": None,
+        "current_phase": "idle",
+        "starting_points": [],
+        "impact_summary": {},
+        "review_findings": [],
+        "test_gaps": [],
+        "pr_draft": {},
+        "pending_approval": None,
+        "approval_status": None,
+        "user_feedback": None,
+        "next_step": None,
+        "tagged_entities": [],
+        "entity_context": None,
+        "diff_text": None,
+    }
+    state.update(overrides)
+    return state
+
+
 @pytest.mark.asyncio
 async def test_agent_graph_state_machine_flow():
     """Verify the honest no-fabrication contract of the LangGraph workflow.
@@ -103,33 +129,8 @@ async def test_agent_graph_state_machine_flow():
     - Repository with an empty index -> needs_indexing, END, no interrupt.
     - Pre-review without a diff -> needs_diff, END, no interrupt.
     """
-    from langchain_core.messages import HumanMessage
     from langgraph.checkpoint.memory import MemorySaver
     from app.modules.agent.graphs.workflow import build_agent_graph
-
-    def _base_state(**overrides):
-        state = {
-            "messages": [HumanMessage(content="Where should I start for requirement REQ-404?")],
-            "session_id": "test-session-flow-1",
-            "workspace_id": "00000000-0000-0000-0000-000000000000",
-            "repository_id": None,
-            "requirement_id": None,
-            "current_phase": "idle",
-            "starting_points": [],
-            "impact_summary": {},
-            "review_findings": [],
-            "test_gaps": [],
-            "pr_draft": {},
-            "pending_approval": None,
-            "approval_status": None,
-            "user_feedback": None,
-            "next_step": None,
-            "tagged_entities": [],
-            "entity_context": None,
-            "diff_text": None,
-        }
-        state.update(overrides)
-        return state
 
     # Case 1: no repository -> clarification, END, no interrupt, no fabricated files
     graph = build_agent_graph(checkpointer=MemorySaver())
@@ -296,4 +297,136 @@ async def test_conversational_chat_and_tagged_entities(test_client: AsyncClient,
     # 3. Clean up
     await test_client.delete(f"/api/v1/agent/sessions/{session_id}")
     app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_requirement_model_properties_and_router_scoping():
+    """Verify Requirement model provides jira_key and source aliases, and agent router module-level imports."""
+    import uuid
+    from app.modules.requirement.models.req import Requirement
+    import app.modules.agent.routes.agent_router as ar
+
+    # Verify Requirement model properties
+    req = Requirement(
+        id=uuid.uuid4(),
+        user_id="user_1",
+        repository_id=uuid.uuid4(),
+        title="Test Requirement",
+        text="Description",
+        jira_issue_key="PROJ-999",
+    )
+    assert req.jira_key == "PROJ-999"
+    assert req.source == "jira"
+
+    req_manual = Requirement(
+        id=uuid.uuid4(),
+        user_id="user_1",
+        repository_id=uuid.uuid4(),
+        title="Manual Requirement",
+        text="Description",
+        jira_issue_key=None,
+    )
+    assert req_manual.jira_key is None
+    assert req_manual.source == "manual"
+
+    # Verify agent_router module-level functions exist and are not local-unbound
+    assert callable(ar.extract_fenced_diff)
+    assert callable(ar.extract_mention_tokens)
+    assert callable(ar.resolve_repository_from_text)
+    assert callable(ar.resolve_requirement_from_text)
+    assert callable(ar.fetch_pr_diff_from_github)
+
+
+@pytest.mark.asyncio
+async def test_audit_missing_tests_filters_non_code_files_and_targets_languages():
+    """Verify audit_missing_tests_fn excludes static/schema/config files and tailors test recommendations."""
+    from app.modules.agent.tools.review_tools import audit_missing_tests_fn
+
+    repo_id = str(uuid.uuid4())
+    # Mix of non-code files and real frontend/backend files (identical to the user's PR #7)
+    modified = [
+        "google125d201a20233e56.html",
+        "prisma/schema.prisma",
+        "README.md",
+        "package.json",
+        "src/app/(main)/billing/page.tsx",
+        "src/app/(main)/editor/Footer.tsx",
+        "src/app/(main)/editor/HeaderAlignmentButton.tsx",
+        "backend/app/services/billing.py",
+    ]
+
+    res = await audit_missing_tests_fn(
+        repository_id=repo_id,
+        modified_files=modified,
+    )
+
+    assert res["total_modified_files"] == len(modified)
+    # google HTML, prisma schema, readme, package.json must be excluded from testable files
+    assert res["testable_files_count"] == 4
+
+    missing_paths = [m["file_path"] for m in res["missing_coverage"]]
+    assert "google125d201a20233e56.html" not in missing_paths
+    assert "prisma/schema.prisma" not in missing_paths
+    assert "README.md" not in missing_paths
+    assert "package.json" not in missing_paths
+
+    assert "src/app/(main)/billing/page.tsx" in missing_paths
+    assert "src/app/(main)/editor/Footer.tsx" in missing_paths
+    assert "backend/app/services/billing.py" in missing_paths
+
+    # Check that recommendations are language-aware
+    rec_by_path = {m["file_path"]: m["recommendation"] for m in res["missing_coverage"]}
+    assert "Footer.test.tsx" in rec_by_path["src/app/(main)/editor/Footer.tsx"]
+    assert "test_billing.py" in rec_by_path["backend/app/services/billing.py"]
+    assert ".test.py" not in rec_by_path["src/app/(main)/editor/Footer.tsx"]
+
+
+@pytest.mark.asyncio
+async def test_pre_review_node_existing_pr_review_vs_draft_flow():
+    """Verify pre_review_node distinguishes between reviewing an existing PR vs drafting a new PR."""
+    from app.modules.agent.graphs.nodes import pre_review_node
+    from langchain_core.messages import HumanMessage
+
+    repo_id = str(uuid.uuid4())
+    sample_diff = (
+        "--- a/src/app/(main)/editor/Footer.tsx\n"
+        "+++ b/src/app/(main)/editor/Footer.tsx\n"
+        "@@ -10,6 +10,7 @@\n"
+        "+  console.log('debug');\n"
+    )
+
+    # 1. Existing PR review: user tags @PR or asks to review PR
+    pr_state = _base_state(
+        repository_id=repo_id,
+        current_phase="reviewing",
+        diff_text=sample_diff,
+        tagged_entities=[{"type": "pr", "id": "pr-7", "label": "PR #7: Enhance forms"}],
+        messages=[HumanMessage(content="coudl you reivew this PR @PR #7: Enhance forms and UI")],
+    )
+    pr_out = await pre_review_node(pr_state)
+
+    assert pr_out["current_phase"] == "pr_reviewed"
+    assert pr_out["next_step"] == "completed"
+    assert pr_out["pending_approval"] is None
+    assert "Pull Request" in str(pr_out["messages"][0].content)
+    assert "Click 'Generate PR Draft'" not in str(pr_out["messages"][0].content)
+    assert "tool_invocations" in pr_out
+
+    # 2. Authoring / feature drafting flow (not an existing PR)
+    draft_state = _base_state(
+        repository_id=repo_id,
+        current_phase="reviewing",
+        diff_text=sample_diff,
+        tagged_entities=[],
+        messages=[HumanMessage(content="Audit changes before opening PR")],
+    )
+    draft_out = await pre_review_node(draft_state)
+
+    assert draft_out["current_phase"] == "awaiting_pr_approval"
+    assert draft_out["next_step"] == "hitl_pre_review"
+    assert draft_out["pending_approval"] is not None
+    assert draft_out["pending_approval"]["action_type"] == "confirm_review_standards"
+    assert "Click **'Generate PR Draft'**" in str(draft_out["messages"][0].content)
+
+
 

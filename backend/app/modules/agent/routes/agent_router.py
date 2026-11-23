@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -9,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -29,11 +30,27 @@ from app.modules.agent.schemas.agent_schemas import (
     AgentSessionResponse,
     AgentSessionUpdate,
 )
+from app.modules.agent.services.pr_fetch import (
+    extract_pr_numbers,
+    fetch_pr_diff_from_github,
+    parse_repo_full_name,
+)
+from app.modules.agent.services.repo_resolve import (
+    extract_fenced_diff,
+    extract_jira_keys,
+    extract_mention_tokens,
+    resolve_repository_from_text,
+    resolve_requirement_from_text,
+)
 from app.modules.agent.services.streamer import (
     publish_agent_event,
     subscribe_agent_events,
 )
 from app.modules.auth.models.user import User
+from app.modules.repository.models.repo import Repository
+from app.modules.requirement.models.req import Requirement
+from app.modules.review.models.rev_models import PRFileDiff, PRReview
+from app.modules.workspace.models.workspace import WorkspaceMember
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +80,6 @@ async def create_agent_session(
     """Create a new conversational agent session bound to an active workspace or personal context."""
     target_ws = payload.workspace_id
     if target_ws is None:
-        from app.modules.workspace.models.workspace import WorkspaceMember
-
         ws_res = await db.execute(
             select(WorkspaceMember.workspace_id)
             .where(WorkspaceMember.user_id == current_user.id)
@@ -184,8 +199,6 @@ async def delete_agent_session(
     # Delete children explicitly first: some long-lived databases were created
     # before ON DELETE CASCADE constraints existed (migrations use
     # CREATE TABLE IF NOT EXISTS), so DB-level cascades cannot be relied upon.
-    from sqlalchemy import delete as sa_delete
-
     await db.execute(
         sa_delete(AgentActionApproval).where(AgentActionApproval.session_id == session_id)
     )
@@ -216,8 +229,6 @@ async def post_agent_message(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent session not found")
 
     # Resolve tagged entities and extract inline mentions
-    import re
-
     raw_entities = [e.model_dump() for e in payload.tagged_entities] if payload.tagged_entities else []
     inline_mentions = re.findall(r"@(?P<type>repo|req|pr):\[(?P<id>[^\]]+)\]", payload.content)
     for m_type, m_id in inline_mentions:
@@ -237,8 +248,6 @@ async def post_agent_message(
 
         try:
             if e_type in ("req", "requirement"):
-                from app.modules.requirement.models.req import Requirement
-
                 is_valid_uuid = False
                 try:
                     req_uuid = uuid.UUID(e_id)
@@ -261,8 +270,6 @@ async def post_agent_message(
                         f"Specification:\n{req_row.text[:1200]}"
                     )
             elif e_type in ("repo", "repository"):
-                from app.modules.repository.models.repo import Repository
-
                 is_valid_uuid = False
                 try:
                     repo_uuid = uuid.UUID(e_id)
@@ -282,8 +289,6 @@ async def post_agent_message(
                         f"ID: {repo_row.id} | URL: {repo_row.repo_url} | Branch: {repo_row.default_branch}"
                     )
             elif e_type in ("pr", "pr_review"):
-                from app.modules.review.models.rev_models import PRFileDiff, PRReview
-
                 is_valid_uuid = False
                 try:
                     pr_uuid = uuid.UUID(e_id)
@@ -342,12 +347,6 @@ async def post_agent_message(
     # using the mention menu. Resolve those so context binds correctly.
     unresolved_repo_tokens: list[str] = []
     if not effective_repo_id:
-        from app.modules.agent.services.repo_resolve import (
-            extract_fenced_diff,
-            extract_mention_tokens,
-            resolve_repository_from_text,
-        )
-
         match, candidates = await resolve_repository_from_text(
             db,
             payload.content,
@@ -366,9 +365,7 @@ async def post_agent_message(
         elif extract_mention_tokens(payload.content):
             unresolved_repo_tokens = extract_mention_tokens(payload.content)[:3]
     if not effective_req_id:
-        from app.modules.agent.services.repo_resolve import resolve_requirement_from_text as _rr
-
-        req_match = await _rr(
+        req_match = await resolve_requirement_from_text(
             db,
             payload.content,
             str(session.workspace_id) if session.workspace_id else None,
@@ -388,12 +385,6 @@ async def post_agent_message(
     # --- Live GitHub PR diff: fetched in background, never pasted by hand ---
     # A referenced PR (tag, "PR #7", "#7", or "this PR" after an earlier one)
     # resolves to real patches via the installed GitHub App.
-    from app.modules.agent.services.pr_fetch import (
-        extract_pr_numbers,
-        fetch_pr_diff_from_github,
-        parse_repo_full_name,
-    )
-
     pr_numbers = extract_pr_numbers(payload.content)
     for ent in raw_entities:
         if ent.get("type") in ("pr", "pr_review"):
@@ -416,9 +407,7 @@ async def post_agent_message(
 
     if pr_numbers and effective_repo_id and not diff_text:
         try:
-            from app.modules.repository.models.repo import Repository as _Repo
-
-            _repo_row = await db.get(_Repo, effective_repo_id)
+            _repo_row = await db.get(Repository, effective_repo_id)
             _full = parse_repo_full_name(
                 _repo_row.repo_url if _repo_row else None, None
             )
@@ -499,7 +488,9 @@ async def post_agent_message(
         artifacts={"tagged_entities": raw_entities} if raw_entities else {},
     )
     db.add(user_msg)
-    await db.flush()
+    await db.commit()
+    await db.refresh(user_msg)
+    user_msg_response = AgentMessageResponse.model_validate(user_msg)
 
     # 2. Build LangChain message history
     stmt_history = (
@@ -547,6 +538,7 @@ async def post_agent_message(
     # 3. Stream LangGraph execution
     new_agent_messages = []
     created_approval: AgentActionApproval | None = None
+    current_phase = session.current_phase or "idle"
 
     try:
         await publish_agent_event(
@@ -570,7 +562,8 @@ async def post_agent_message(
                     )
                     db.add(approval)
                     created_approval = approval
-                    session.current_phase = f"awaiting_{action_type}"
+                    current_phase = f"awaiting_{action_type}"
+                    session.current_phase = current_phase
                     await db.flush()
 
                     await publish_agent_event(
@@ -586,7 +579,8 @@ async def post_agent_message(
                 elif isinstance(node_output, dict):
                     # Check if node updated phase or context
                     if "current_phase" in node_output:
-                        session.current_phase = node_output["current_phase"]
+                        current_phase = node_output["current_phase"]
+                        session.current_phase = current_phase
                     for k in ("starting_points", "impact_summary", "review_findings", "test_gaps", "pr_draft"):
                         if k in node_output:
                             current_context[k] = node_output[k]
@@ -594,22 +588,33 @@ async def post_agent_message(
 
                     # Extract new AIMessages
                     node_msgs = node_output.get("messages", [])
+                    tool_invocations = node_output.get("tool_invocations", [])
                     for msg in node_msgs:
                         if isinstance(msg, AIMessage):
+                            msg_artifacts: dict[str, Any] = {}
+                            if tool_invocations:
+                                msg_artifacts["tool_invocations"] = tool_invocations
+                            if raw_entities:
+                                msg_artifacts["tagged_entities"] = raw_entities
+
                             agent_msg = AgentMessage(
                                 session_id=session.id,
                                 sender="agent",
                                 agent_role=node_name,
                                 content=str(msg.content),
                                 message_type="text",
-                                artifacts={},
+                                artifacts=msg_artifacts,
                             )
                             db.add(agent_msg)
                             new_agent_messages.append(agent_msg)
                             await publish_agent_event(
                                 session_id=str(session.id),
                                 event_type="token",
-                                data={"content": str(msg.content), "role": node_name},
+                                data={
+                                    "content": str(msg.content),
+                                    "role": node_name,
+                                    "artifacts": msg_artifacts,
+                                },
                             )
 
         session.updated_at = datetime.now(UTC)
@@ -624,6 +629,7 @@ async def post_agent_message(
     except Exception as e:
         logger.exception(f"Error during agent graph streaming for session {session_id}: {e}")
         await db.rollback()
+        created_approval = None
         err_msg = AgentMessage(
             session_id=session.id,
             sender="agent",
@@ -633,13 +639,14 @@ async def post_agent_message(
         )
         db.add(err_msg)
         await db.commit()
+        await db.refresh(err_msg)
         new_agent_messages.append(err_msg)
 
     return {
-        "user_message": AgentMessageResponse.model_validate(user_msg),
+        "user_message": user_msg_response,
         "agent_messages": [AgentMessageResponse.model_validate(m) for m in new_agent_messages],
         "pending_approval": AgentApprovalResponse.model_validate(created_approval) if created_approval else None,
-        "current_phase": session.current_phase,
+        "current_phase": current_phase,
     }
 
 
@@ -733,21 +740,29 @@ async def submit_agent_approval(
                     session.context_metadata = current_context
 
                     node_msgs = node_output.get("messages", [])
+                    tool_invocations = node_output.get("tool_invocations", [])
                     for msg in node_msgs:
                         if isinstance(msg, AIMessage):
+                            msg_artifacts: dict[str, Any] = {}
+                            if tool_invocations:
+                                msg_artifacts["tool_invocations"] = tool_invocations
                             agent_msg = AgentMessage(
                                 session_id=session.id,
                                 sender="agent",
                                 agent_role=node_name,
                                 content=str(msg.content),
                                 message_type="text",
-                                artifacts={},
+                                artifacts=msg_artifacts,
                             )
                             db.add(agent_msg)
                             await publish_agent_event(
                                 session_id=str(session.id),
                                 event_type="token",
-                                data={"content": str(msg.content), "role": node_name},
+                                data={
+                                    "content": str(msg.content),
+                                    "role": node_name,
+                                    "artifacts": msg_artifacts,
+                                },
                             )
 
         session.updated_at = datetime.now(UTC)

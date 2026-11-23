@@ -31,7 +31,19 @@ export function useApiClient() {
       });
       return response;
     } catch (err) {
-      // Fallback between localhost and 127.0.0.1 if IPv6/IPv4 loopback fails
+      // Fallback 1: Try same-origin relative path (proxied by Next.js rewrites)
+      if (typeof window !== "undefined" && endpoint.startsWith("/")) {
+        try {
+          return await fetch(endpoint, {
+            ...options,
+            headers,
+          });
+        } catch {
+          // Proceed to loopback IP fallback
+        }
+      }
+
+      // Fallback 2: Fallback between localhost and 127.0.0.1 if IPv6/IPv4 loopback fails
       if (primaryUrl.includes("localhost:8000")) {
         const fallbackUrl = primaryUrl.replace("localhost:8000", "127.0.0.1:8000");
         return await fetch(fallbackUrl, {

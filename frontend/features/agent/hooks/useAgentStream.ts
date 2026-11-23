@@ -58,18 +58,26 @@ export function useAgentStream({
         });
       } catch (streamFetchErr: any) {
         if (streamFetchErr.name === "AbortError") throw streamFetchErr;
-        if (streamUrl.includes("localhost:8000")) {
-          res = await fetch(streamUrl.replace("localhost:8000", "127.0.0.1:8000"), {
+        const relativeStreamUrl = `/api/v1/agent/sessions/${sessionId}/stream`;
+        try {
+          res = await fetch(relativeStreamUrl, {
             headers,
             signal: controller.signal,
           });
-        } else if (streamUrl.includes("127.0.0.1:8000")) {
-          res = await fetch(streamUrl.replace("127.0.0.1:8000", "localhost:8000"), {
-            headers,
-            signal: controller.signal,
-          });
-        } else {
-          throw streamFetchErr;
+        } catch {
+          if (streamUrl.includes("localhost:8000")) {
+            res = await fetch(streamUrl.replace("localhost:8000", "127.0.0.1:8000"), {
+              headers,
+              signal: controller.signal,
+            });
+          } else if (streamUrl.includes("127.0.0.1:8000")) {
+            res = await fetch(streamUrl.replace("127.0.0.1:8000", "localhost:8000"), {
+              headers,
+              signal: controller.signal,
+            });
+          } else {
+            throw streamFetchErr;
+          }
         }
       }
 

@@ -5,11 +5,11 @@ import tempfile
 import time
 import uuid
 
-from celery import shared_task
 from sqlalchemy import delete, select, update
 
 from app.core.config import settings
 from app.db.session import get_worker_session
+from app.workers.celery_app import celery_app
 from app.workers.runner import run_async
 from app.modules.indexing.models.index_models import (
     CodeChunk,
@@ -85,7 +85,7 @@ IGNORED_DIRS = {
 BULK_BATCH_SIZE = 500
 
 
-@shared_task(name="app.workers.repo_index.index_repository")
+@celery_app.task(name="app.workers.repo_index.index_repository")
 def index_repository(repository_id: str, snapshot_id: str):
     """Celery background worker entrypoint"""
     run_async(_async_index_repository, repository_id, snapshot_id)
@@ -152,8 +152,14 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                 return
 
             # 3. Discover & Parse all code files in memory
+            # If the tarball has a single top-level directory wrapper, walk inside it so rel_path is clean
+            walk_root = tmpdir
+            subitems = [os.path.join(tmpdir, x) for x in os.listdir(tmpdir)]
+            if len(subitems) == 1 and os.path.isdir(subitems[0]):
+                walk_root = subitems[0]
+
             discovered_files: list[tuple[str, str, str]] = []  # (rel_path, ext, source)
-            for root, dirs, files in os.walk(tmpdir):
+            for root, dirs, files in os.walk(walk_root):
                 dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
                 for file in files:
                     file_lower = file.lower()
@@ -164,7 +170,7 @@ async def _async_index_repository(repository_id: str, snapshot_id: str):
                     if ext not in INDEXABLE_EXTENSIONS:
                         continue
                     full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, tmpdir)
+                    rel_path = os.path.relpath(full_path, walk_root)
                     try:
                         with open(
                             full_path, "r", encoding="utf-8", errors="replace"

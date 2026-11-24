@@ -224,7 +224,7 @@ export function RepositoryList() {
                               }}
                             >
                               <RefreshCw className="w-3 h-3" />
-                              Resync
+                              Sync & Index
                             </Button>
                           )}
 

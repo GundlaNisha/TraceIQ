@@ -269,3 +269,23 @@ export function useCancelRepositorySync() {
     },
   });
 }
+
+// TRIGGER REPOSITORY INDEX
+export function useIndexRepository() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetchApi(`/api/v1/repositories/${id}/index`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to trigger repository indexing");
+      return res.json();
+    },
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["repositories"] });
+      qc.invalidateQueries({ queryKey: ["repositories", id] });
+    },
+  });
+}

@@ -266,19 +266,48 @@ async def code_explorer_node(state: AgentState) -> dict[str, Any]:
         logger.warning(f"Could not check index status for repo {repository_id}: {e}")
 
     if not indexed_files:
+        from app.modules.repository.models.repo import RepositorySnapshot
+        from app.workers.repo_index import index_repository
+
+        auto_indexed = False
+        try:
+            async with AsyncSessionLocal() as _s:
+                snap_res = await _s.execute(
+                    select(RepositorySnapshot)
+                    .where(RepositorySnapshot.repository_id == repository_id)
+                    .order_by(RepositorySnapshot.created_at.desc())
+                    .limit(1)
+                )
+                latest_snap = snap_res.scalar_one_or_none()
+                if latest_snap:
+                    index_repository.delay(str(repository_id), str(latest_snap.id))
+                    auto_indexed = True
+        except Exception as auto_err:
+            logger.warning(f"Failed to auto-trigger index for {repository_id}: {auto_err}")
+
+        if auto_indexed:
+            msg_content = (
+                f"### 📂 Repository `{repo_name}` isn't indexed yet\n\n"
+                "I found the repository snapshot, but its code index was not populated. "
+                "I have **automatically started indexing** its files, AST symbols, and vector chunks in the background.\n\n"
+                "Please wait a few moments for indexing to finish, then resend your request!"
+            )
+        else:
+            msg_content = (
+                f"### 📂 Repository `{repo_name}` isn't indexed yet\n\n"
+                "I found the repository, but its code index is empty — so I have nothing to search. "
+                "There is no point in me guessing files.\n\n"
+                "**Next step:** open **Repositories →** your repo **→ Sync & Index**, wait for indexing "
+                "to finish, then ask me again."
+            )
+
         return {
             "starting_points": [],
             "impact_summary": {},
             "pending_approval": None,
             "current_phase": "needs_indexing",
             "next_step": "completed",
-            "messages": [AIMessage(content=(
-                f"### 📂 Repository `{repo_name}` isn't indexed yet\n\n"
-                "I found the repository, but its code index is empty — so I have nothing to search. "
-                "There is no point in me guessing files.\n\n"
-                "**Next step:** open **Repositories →** your repo **→ Sync / Re-index**, wait for indexing "
-                "to finish, then ask me again."
-            ))],
+            "messages": [AIMessage(content=msg_content)],
         }
 
     # 3. Extract search query from requirement or user message
@@ -914,6 +943,33 @@ async def conversational_chat_node(state: AgentState) -> dict[str, Any]:
                     for c in chunks
                 ]
                 code_context_parts.append("### Relevant Code Chunks:\n" + "\n".join(chunk_texts))
+
+            if not symbols and not chunks:
+                from app.modules.indexing.models.index_models import RepositoryFile
+                from app.modules.repository.models.repo import RepositorySnapshot
+                from app.workers.repo_index import index_repository
+
+                async with AsyncSessionLocal() as _s:
+                    file_cnt = (
+                        await _s.execute(
+                            select(func.count())
+                            .select_from(RepositoryFile)
+                            .where(RepositoryFile.repository_id == repository_id)
+                        )
+                    ).scalar_one()
+                    if file_cnt == 0:
+                        snap_res = await _s.execute(
+                            select(RepositorySnapshot)
+                            .where(RepositorySnapshot.repository_id == repository_id)
+                            .order_by(RepositorySnapshot.created_at.desc())
+                            .limit(1)
+                        )
+                        latest_snap = snap_res.scalar_one_or_none()
+                        if latest_snap:
+                            index_repository.delay(str(repository_id), str(latest_snap.id))
+                            code_context_parts.append(
+                                "### Notice:\nRepository index is currently being generated in the background."
+                            )
         except Exception as e:
             logger.warning(f"Error gathering codebase context for chat node: {e}")
 

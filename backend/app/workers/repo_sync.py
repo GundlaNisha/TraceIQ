@@ -94,7 +94,7 @@ async def _update_status(repo_id: str, status: SyncStatus):
             pass
 
 
-async def _create_snapshot(repo_id: str, storage_key: str, commit_sha: str):
+async def _create_snapshot(repo_id: str, storage_key: str, commit_sha: str) -> uuid.UUID:
     async with get_worker_session() as session:
         snap = RepositorySnapshot(
             repository_id=uuid.UUID(repo_id),
@@ -103,6 +103,8 @@ async def _create_snapshot(repo_id: str, storage_key: str, commit_sha: str):
         )
         session.add(snap)
         await session.commit()
+        await session.refresh(snap)
+        return snap.id
 
 
 async def _process_sync(repository_id: str):
@@ -167,8 +169,10 @@ async def _process_sync(repository_id: str):
         try:
             storage_key = f"repositories/{repository_id}/{commit_sha}.tar.gz"
             await upload_tarball(tar_path, storage_key)
-            await _create_snapshot(repository_id, storage_key, commit_sha)
-            await _update_status(repository_id, SyncStatus.completed)
+            snap_id = await _create_snapshot(repository_id, storage_key, commit_sha)
+            # Chain repository indexing so code symbols, AST chunks, and embeddings are populated
+            from app.workers.repo_index import index_repository
+            index_repository.delay(repository_id, str(snap_id))
         finally:
             if os.path.exists(tar_path):
                 os.remove(tar_path)

@@ -20,16 +20,21 @@ import {
   ShieldCheck,
   Loader2,
   Search,
+  AlertCircle,
+  RefreshCw,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useWorkspaces } from "@/features/workspace/api/queries";
-import { useRepositories } from "@/features/repositories/api/queries";
+import { useRepositories, useResyncRepository } from "@/features/repositories/api/queries";
 import { useRequirements } from "@/features/requirements/api/queries";
 import { usePRReviews } from "@/features/pr-reviews/api/queries";
 import {
   useAgentSessions,
   useAgentSession,
   useCreateAgentSession,
+  useUpdateAgentSession,
   useDeleteAgentSession,
   useSendAgentMessage,
   useSubmitAgentApproval,
@@ -94,6 +99,7 @@ export default function AgentPage() {
   const { data: pullRequests = [] } = usePRReviews();
   const { data: sessions = [], isLoading: isLoadingSessions } = useAgentSessions(activeWorkspaceId);
   const { data: sessionDetail, refetch: refetchSessionDetail } = useAgentSession(selectedSessionId);
+  const { mutate: resyncRepo, isPending: isResyncPending } = useResyncRepository();
 
   // Mention & Tagging State
   const [isMentionOpen, setIsMentionOpen] = useState(false);
@@ -103,9 +109,14 @@ export default function AgentPage() {
 
   // Mutations
   const createSessionMutation = useCreateAgentSession();
+  const updateSessionMutation = useUpdateAgentSession();
   const deleteSessionMutation = useDeleteAgentSession();
   const sendMessageMutation = useSendAgentMessage();
   const submitApprovalMutation = useSubmitAgentApproval();
+
+  // Rename Session State
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
   // SSE Stream
   const {
@@ -132,16 +143,51 @@ export default function AgentPage() {
 
   const handleCreateSession = async () => {
     const wsId = activeWorkspaceId || (workspaces.length > 0 ? workspaces[0].id : null);
+    const activeRepo = repositories.find((r: any) => r.id === activeRepositoryId);
+    const activeReq = requirements.find((rq: any) => rq.id === selectedReqId);
+
+    let initialTitle = "New Chat";
+    if (activeRepo?.name) {
+      const shortRepo = activeRepo.name.split("/").pop() || activeRepo.name;
+      initialTitle = `New Chat • ${shortRepo}`;
+    } else if (activeReq?.title) {
+      const label = activeReq.jira_issue_key || activeReq.title.slice(0, 20);
+      initialTitle = `New Chat • ${label}`;
+    } else if (sessions.length > 0) {
+      initialTitle = `New Chat ${sessions.length + 1}`;
+    }
+
     try {
       const newSession = await createSessionMutation.mutateAsync({
         workspace_id: wsId || undefined,
         repository_id: activeRepositoryId,
         requirement_id: selectedReqId,
-        title: "New Codebase Assistant Chat",
+        title: initialTitle,
       });
       setSelectedSessionId(newSession.id);
     } catch (err) {
       console.error("Failed to create session:", err);
+    }
+  };
+
+  const handleStartRename = (sess: { id: string; title: string }, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingSessionId(sess.id);
+    setEditingTitle(sess.title);
+  };
+
+  const handleSaveRename = async (sessionId: string) => {
+    const trimmed = editingTitle.trim();
+    if (!trimmed) {
+      setEditingSessionId(null);
+      return;
+    }
+    try {
+      await updateSessionMutation.mutateAsync({ sessionId, title: trimmed });
+    } catch (err) {
+      console.error("Failed to rename session:", err);
+    } finally {
+      setEditingSessionId(null);
     }
   };
 
@@ -248,7 +294,7 @@ export default function AgentPage() {
           workspace_id: wsId || undefined,
           repository_id: activeRepositoryId,
           requirement_id: selectedReqId,
-          title: text.slice(0, 35) || "New Codebase Assistant Chat",
+          title: text.slice(0, 35).trim() || "New Chat",
         });
         currentSessionId = newSession.id;
         setSelectedSessionId(newSession.id);
@@ -410,29 +456,76 @@ export default function AgentPage() {
             ) : (
               filteredSessions.map((sess) => {
                 const isSelected = sess.id === selectedSessionId;
+                const isEditing = sess.id === editingSessionId;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={sess.id}
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1 bg-accent/5 border border-accent/40 shadow-2xs"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MessageSquare className="h-3 w-3 shrink-0 text-accent" />
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveRename(sess.id);
+                          if (e.key === "Escape") setEditingSessionId(null);
+                        }}
+                        onBlur={() => handleSaveRename(sess.id)}
+                        className="w-full rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-foreground border border-accent/30 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRename(sess.id)}
+                        className="rounded p-0.5 text-accent hover:bg-accent/10 transition cursor-pointer"
+                        title="Save"
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={sess.id}
                     onClick={() => setSelectedSessionId(sess.id)}
+                    onDoubleClick={(e) => handleStartRename(sess, e)}
                     className={`group relative flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[11.5px] transition cursor-pointer ${
                       isSelected
                         ? "bg-accent/5 text-accent font-semibold border border-accent/20 shadow-2xs"
                         : "text-muted-foreground hover:bg-black/[0.03] hover:text-foreground border border-transparent"
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       <MessageSquare className={`h-3 w-3 shrink-0 ${isSelected ? "text-accent" : "text-muted-foreground"}`} />
-                      <span className="truncate">{sess.title}</span>
+                      <span className="truncate" title={sess.title}>
+                        {sess.title}
+                      </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteSession(sess.id, e)}
-                      className="opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition"
-                      title="Delete Session"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0 ml-1">
+                      <button
+                        type="button"
+                        onClick={(e) => handleStartRename(sess, e)}
+                        className="rounded p-0.5 text-muted-foreground hover:bg-slate-200 hover:text-foreground transition cursor-pointer"
+                        title="Rename Chat"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteSession(sess.id, e)}
+                        className="rounded p-0.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
+                        title="Delete Session"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
                 );
               })
@@ -553,6 +646,36 @@ export default function AgentPage() {
           activeRepoName={activeRepo?.name}
           activeReqTitle={activeReq?.jira_issue_key ? `[${activeReq.jira_issue_key}] ${activeReq.title}` : activeReq?.title}
         />
+
+        {/* Indexing Required Banner */}
+        {sessionDetail?.session?.current_phase === "needs_indexing" && activeRepositoryId && (
+          <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 shrink-0 flex items-center justify-between gap-3 text-xs text-amber-900 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>
+                Repository <strong>{activeRepo?.name || "selected"}</strong> is not indexed yet.
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={isResyncPending}
+              onClick={() => resyncRepo(activeRepositoryId)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 shadow-2xs transition disabled:opacity-50 cursor-pointer"
+            >
+              {isResyncPending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />
+                  <span>Syncing...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 text-amber-700" />
+                  <span>Sync & Index Now</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Minimal Quick Action Suggestion Chips */}
         <div className="border-t border-border/60 bg-white/70 px-3 py-1.5 shrink-0">

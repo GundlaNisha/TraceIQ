@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
-from sqlalchemy import delete as sa_delete, select
+from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -37,7 +37,6 @@ from app.modules.agent.services.pr_fetch import (
 )
 from app.modules.agent.services.repo_resolve import (
     extract_fenced_diff,
-    extract_jira_keys,
     extract_mention_tokens,
     resolve_repository_from_text,
     resolve_requirement_from_text,
@@ -46,6 +45,7 @@ from app.modules.agent.services.streamer import (
     publish_agent_event,
     subscribe_agent_events,
 )
+from app.modules.agent.services.title_generator import generate_dynamic_chat_title
 from app.modules.auth.models.user import User
 from app.modules.repository.models.repo import Repository
 from app.modules.requirement.models.req import Requirement
@@ -87,12 +87,45 @@ async def create_agent_session(
         )
         target_ws = ws_res.scalar_one_or_none()
 
+    session_title = (payload.title or "").strip()
+    generic_placeholders = (
+        "new agent session",
+        "new codebase assistant chat",
+        "new chat",
+        "new conversation",
+    )
+    if not session_title or session_title.lower() in generic_placeholders:
+        if payload.repository_id:
+            repo_res = await db.execute(
+                select(Repository.name).where(Repository.id == payload.repository_id)
+            )
+            r_name = repo_res.scalar_one_or_none()
+            if r_name:
+                session_title = f"New Chat • {r_name.split('/')[-1]}"
+        elif payload.requirement_id:
+            req_res = await db.execute(
+                select(Requirement.jira_issue_key, Requirement.title).where(
+                    Requirement.id == payload.requirement_id
+                )
+            )
+            r_row = req_res.first()
+            if r_row:
+                label = r_row[0] or r_row[1][:20]
+                session_title = f"New Chat • {label}"
+
+        if not session_title or session_title.lower() in generic_placeholders:
+            cnt_stmt = select(func.count(AgentSession.id)).where(
+                AgentSession.user_id == str(current_user.id)
+            )
+            cnt = (await db.execute(cnt_stmt)).scalar_one()
+            session_title = f"New Chat {cnt + 1}" if cnt > 0 else "New Chat"
+
     session = AgentSession(
         workspace_id=target_ws,
         user_id=str(current_user.id),
         repository_id=payload.repository_id,
         requirement_id=payload.requirement_id,
-        title=payload.title,
+        title=session_title,
         status="active",
         current_phase="idle",
         context_metadata={},
@@ -206,6 +239,44 @@ async def delete_agent_session(
     await db.delete(session)
     await db.commit()
     return {"deleted": True, "id": str(session_id)}
+
+
+@router.patch("/sessions/{session_id}", response_model=AgentSessionResponse)
+async def update_agent_session(
+    session_id: uuid.UUID,
+    payload: AgentSessionUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AgentSession:
+    """Update agent session title, status, or associated repo/req."""
+    stmt = select(AgentSession).where(
+        AgentSession.id == session_id,
+        AgentSession.user_id == str(current_user.id),
+    )
+    result = await db.execute(stmt)
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Agent session not found"
+        )
+
+    if payload.title is not None:
+        cleaned = payload.title.strip()
+        if cleaned:
+            session.title = cleaned[:255]
+    if payload.status is not None:
+        session.status = payload.status
+    if payload.repository_id is not None:
+        session.repository_id = payload.repository_id
+    if payload.requirement_id is not None:
+        session.requirement_id = payload.requirement_id
+    if payload.current_phase is not None:
+        session.current_phase = payload.current_phase
+
+    session.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(session)
+    return session
 
 
 @router.post("/sessions/{session_id}/messages")
@@ -376,6 +447,45 @@ async def post_agent_message(
             session.requirement_id = effective_req_id
             entity_context_parts.append(
                 f"📌 [Requirement: {req_match['title']}]\nID: {req_match['id']} | Jira Key: {req_match['jira_key']}"
+            )
+
+    # Dynamic Auto-Titling: If session has a generic placeholder title, dynamically title it from prompt & context
+    default_title_patterns = (
+        "new codebase assistant chat",
+        "new agent session",
+        "new chat",
+        "new conversation",
+    )
+    is_default_title = (
+        not session.title
+        or session.title.lower().strip() in default_title_patterns
+        or session.title.lower().startswith("new chat")
+        or session.title.lower().startswith("new codebase assistant")
+    )
+    if is_default_title:
+        repo_name_str = None
+        if effective_repo_id:
+            r_obj = await db.get(Repository, effective_repo_id)
+            if r_obj:
+                repo_name_str = r_obj.name
+        req_title_str = None
+        if effective_req_id:
+            rq_obj = await db.get(Requirement, effective_req_id)
+            if rq_obj:
+                req_title_str = rq_obj.title
+
+        new_title = generate_dynamic_chat_title(
+            message=payload.content,
+            repo_name=repo_name_str,
+            req_title=req_title_str,
+        )
+        if new_title and new_title != session.title:
+            session.title = new_title
+            await db.flush()
+            await publish_agent_event(
+                session_id=str(session.id),
+                event_type="session_title_updated",
+                data={"session_id": str(session.id), "title": session.title},
             )
 
     # Fenced pasted diffs and stored PR patches, resolved before live fetch
@@ -647,6 +757,7 @@ async def post_agent_message(
         "agent_messages": [AgentMessageResponse.model_validate(m) for m in new_agent_messages],
         "pending_approval": AgentApprovalResponse.model_validate(created_approval) if created_approval else None,
         "current_phase": current_phase,
+        "session_title": session.title,
     }
 
 

@@ -136,7 +136,35 @@ export function useSendAgentMessage() {
       return res.json();
     },
     onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["agent-sessions"] });
       qc.invalidateQueries({ queryKey: ["agent-sessions", "detail", variables.sessionId] });
+    },
+  });
+}
+
+export function useUpdateAgentSession() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation<
+    AgentSession,
+    Error,
+    { sessionId: string; title?: string; status?: string; repository_id?: string; requirement_id?: string }
+  >({
+    mutationFn: async ({ sessionId, ...payload }) => {
+      const res = await fetchApi(`/api/v1/agent/sessions/${sessionId}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        throw new Error(`Failed to update agent session (${res.status}): ${errorText}`);
+      }
+      return res.json();
+    },
+    onSuccess: (updatedSession) => {
+      qc.invalidateQueries({ queryKey: ["agent-sessions"] });
+      qc.invalidateQueries({ queryKey: ["agent-sessions", "detail", updatedSession.id] });
     },
   });
 }
@@ -159,7 +187,9 @@ export function useSubmitAgentApproval() {
       return res.json();
     },
     onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["agent-sessions"] });
       qc.invalidateQueries({ queryKey: ["agent-sessions", "detail", variables.sessionId] });
     },
   });
 }
+

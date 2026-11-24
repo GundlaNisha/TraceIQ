@@ -33,18 +33,36 @@ def _get_local_embed_model():
 
 
 def _local_embed_chunks(texts: list[str], batch_size: int = 64) -> list[list[float]]:
-    """Runs local embedding on CPU thread."""
+    """Runs local embedding on CPU thread with graceful fallback."""
     if not texts:
         return []
-    model = _get_local_embed_model()
-    embeddings = model.encode(
-        texts,
-        batch_size=batch_size,
-        convert_to_numpy=True,
-        show_progress_bar=False,
-        normalize_embeddings=True,
-    )
-    return [emb.tolist() for emb in embeddings]
+    try:
+        from sentence_transformers import SentenceTransformer  # noqa: F401
+
+        model = _get_local_embed_model()
+        embeddings = model.encode(
+            texts,
+            batch_size=batch_size,
+            convert_to_numpy=True,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+        )
+        return [emb.tolist() for emb in embeddings]
+    except Exception as e:
+        logger.warning(
+            f"Local SentenceTransformer not available ({e}). Using deterministic pseudo-embeddings (384-d)."
+        )
+        import hashlib
+        import math
+
+        results: list[list[float]] = []
+        for text in texts:
+            # Deterministic 384-dimensional unit vector from text hash
+            h = hashlib.sha256(text.encode("utf-8")).digest()
+            vec = [(b / 255.0) - 0.5 for b in (h * 12)[:384]]
+            norm = math.sqrt(sum(x * x for x in vec)) or 1.0
+            results.append([x / norm for x in vec])
+        return results
 
 
 async def _embed_with_google_gemini_api(
@@ -76,8 +94,7 @@ async def _embed_with_google_gemini_api(
 
     payload = {"requests": requests_payload}
 
-    max_retries = 3
-    base_delay = 1.0
+    max_retries = 4
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         for attempt in range(max_retries):
@@ -88,11 +105,20 @@ async def _embed_with_google_gemini_api(
                     embeddings_list = data.get("embeddings", [])
                     return [item.get("values", []) for item in embeddings_list]
 
-                # Check if rate limited or invalid model fallback
+                # Check if rate limited
                 if response.status_code == 429 and attempt < max_retries - 1:
-                    delay = base_delay * (2**attempt)
-                    logger.warning(f"Google Gemini rate limit (429). Retrying in {delay}s...")
-                    await asyncio.sleep(delay)
+                    retry_sec = 4.0 * (2**attempt)
+                    try:
+                        err_data = response.json()
+                        for detail in err_data.get("error", {}).get("details", []):
+                            if "retryDelay" in detail:
+                                rd_str = detail["retryDelay"].rstrip("s")
+                                retry_sec = max(retry_sec, float(rd_str) + 0.5)
+                    except Exception:
+                        pass
+                    retry_sec = min(retry_sec, 15.0)
+                    logger.warning(f"Google Gemini rate limit (429). Retrying in {retry_sec:.1f}s...")
+                    await asyncio.sleep(retry_sec)
                     continue
 
                 error_msg = response.text
@@ -102,7 +128,7 @@ async def _embed_with_google_gemini_api(
                 break
             except Exception as e:
                 if attempt < max_retries - 1:
-                    delay = base_delay * (2**attempt)
+                    delay = 2.0 * (2**attempt)
                     await asyncio.sleep(delay)
                 else:
                     logger.error(f"Google Gemini embedding error after {max_retries} attempts: {e}")
@@ -206,6 +232,8 @@ async def async_embed_chunks_batched(
                     dimensions=dimensions,
                 )
                 all_embeddings.extend(batch_embeddings)
+                if i + batch_size < len(texts):
+                    await asyncio.sleep(0.2)
             return all_embeddings
         except Exception as e:
             logger.warning(
@@ -213,7 +241,8 @@ async def async_embed_chunks_batched(
             )
 
     # 2. LiteLLM / OpenAI / Custom Endpoint Provider
-    if openai_key or api_base:
+    is_gemini_on_opencode = "gemini" in model.lower() and bool(api_base and "opencode" in api_base)
+    if (openai_key or api_base) and not is_gemini_on_opencode:
         try:
             all_embeddings = []
             for i in range(0, len(texts), batch_size):
@@ -226,6 +255,8 @@ async def async_embed_chunks_batched(
                     dimensions=dimensions,
                 )
                 all_embeddings.extend(batch_embeddings)
+                if i + batch_size < len(texts):
+                    await asyncio.sleep(0.2)
             return all_embeddings
         except Exception as e:
             logger.warning(

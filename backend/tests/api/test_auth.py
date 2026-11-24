@@ -26,6 +26,14 @@ async def commit_session():
     in a rollback-only transaction). Used for tests that explicitly verify
     a function commits to the DB.
     """
+    from sqlalchemy import text
+    from tests.conftest import test_engine, TEST_DATABASE_URL
+    try:
+        async with test_engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except (OSError, Exception) as exc:
+        pytest.skip(f"Test database not available on {TEST_DATABASE_URL}: {exc}")
+
     async with TestingSessionLocal() as session:
         yield session
 

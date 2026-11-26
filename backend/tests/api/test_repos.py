@@ -31,7 +31,7 @@ async def test_repo_tenant_isolation(
     # 2. Try to fetch as User B
     app.dependency_overrides[get_current_user] = lambda: mock_user_b
     fetch_b_response = await test_client.get(f"/api/v1/repositories/{repo_id}")
-    assert fetch_b_response.status_code == 404
+    assert fetch_b_response.status_code == 403
 
     # 3. Try to fetch as User A again
     app.dependency_overrides[get_current_user] = lambda: mock_user_a

@@ -56,6 +56,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
+
+def _utcnow_naive() -> datetime:
+    """Return a naive UTC datetime compatible with TIMESTAMP WITHOUT TIME ZONE columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
 _EXPLORE_KEYWORDS = (
     "start", "starting point", "where should i", "find code", "explore",
     "implement", "jira", "requirement", "story", "blast radius", "impact",
@@ -273,7 +278,7 @@ async def update_agent_session(
     if payload.current_phase is not None:
         session.current_phase = payload.current_phase
 
-    session.updated_at = datetime.now(UTC)
+    session.updated_at = _utcnow_naive()
     await db.commit()
     await db.refresh(session)
     return session
@@ -574,7 +579,7 @@ async def post_agent_message(
         )
         db.add(agent_msg)
         session.current_phase = "needs_repository"
-        session.updated_at = datetime.now(UTC)
+        session.updated_at = _utcnow_naive()
         await db.commit()
         return {
             "user_message": AgentMessageResponse.model_validate(user_msg),
@@ -649,10 +654,12 @@ async def post_agent_message(
     new_agent_messages = []
     created_approval: AgentActionApproval | None = None
     current_phase = session.current_phase or "idle"
+    session_uuid = session.id
+    session_title = session.title
 
     try:
         await publish_agent_event(
-            session_id=str(session.id),
+            session_id=str(session_uuid),
             event_type="status",
             data={"message": "Analyzing prompt...", "phase": "thinking"},
         )
@@ -727,7 +734,7 @@ async def post_agent_message(
                                 },
                             )
 
-        session.updated_at = datetime.now(UTC)
+        session.updated_at = _utcnow_naive()
         await db.commit()
 
         await publish_agent_event(
@@ -741,7 +748,7 @@ async def post_agent_message(
         await db.rollback()
         created_approval = None
         err_msg = AgentMessage(
-            session_id=session.id,
+            session_id=session_uuid,
             sender="agent",
             agent_role="system",
             content=f"An error occurred while processing your request: {e!s}",
@@ -757,7 +764,7 @@ async def post_agent_message(
         "agent_messages": [AgentMessageResponse.model_validate(m) for m in new_agent_messages],
         "pending_approval": AgentApprovalResponse.model_validate(created_approval) if created_approval else None,
         "current_phase": current_phase,
-        "session_title": session.title,
+        "session_title": session_title,
     }
 
 
@@ -792,7 +799,7 @@ async def submit_agent_approval(
     approval.status = decision.action
     approval.user_feedback = decision.user_feedback
     approval.decided_by = str(current_user.id)
-    approval.decided_at = datetime.now(UTC)
+    approval.decided_at = _utcnow_naive()
     await db.flush()
 
     # Fetch session
@@ -876,7 +883,7 @@ async def submit_agent_approval(
                                 },
                             )
 
-        session.updated_at = datetime.now(UTC)
+        session.updated_at = _utcnow_naive()
         await db.commit()
         await db.refresh(approval)
 

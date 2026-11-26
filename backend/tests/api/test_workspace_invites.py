@@ -65,7 +65,7 @@ async def _setup_workspace_and_invite(db_session, owner: User, invitee_email: st
         role=WorkspaceRole.member,
         token=invite_token,
         invited_by=owner.id,
-        expires_at=datetime.now(UTC) + timedelta(days=7),
+        expires_at=(datetime.now(UTC) + timedelta(days=7)).replace(tzinfo=None),
     )
     db_session.add(invite)
     await db_session.flush()

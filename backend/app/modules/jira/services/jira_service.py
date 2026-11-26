@@ -521,7 +521,7 @@ async def import_jira_issue(
         jira_status=issue["status"],
         jira_priority=issue["priority"],
         jira_issue_type=issue["issue_type"],
-        jira_synced_at=datetime.now(UTC),
+        jira_synced_at=datetime.now(UTC).replace(tzinfo=None),
     )
 
     audit = AuditLog(
@@ -585,7 +585,7 @@ async def batch_import_jira_issues(
                 jira_status=issue["status"],
                 jira_priority=issue["priority"],
                 jira_issue_type=issue["issue_type"],
-                jira_synced_at=datetime.now(UTC),
+                jira_synced_at=datetime.now(UTC).replace(tzinfo=None),
             )
             imported.append(
                 JiraImportResult(
@@ -643,7 +643,7 @@ async def sync_jira_requirement(
     req.jira_status = jira_status
     req.jira_priority = jira_priority
     req.jira_issue_type = jira_type
-    req.jira_synced_at = datetime.now(UTC)
+    req.jira_synced_at = datetime.now(UTC).replace(tzinfo=None)
 
     was_updated = False
     if has_text_or_title_changed:
@@ -775,7 +775,7 @@ async def transition_jira_issue(
     # Persist updated Jira status on the requirement
     if new_status:
         req.jira_status = new_status
-        req.jira_synced_at = datetime.now(UTC)
+        req.jira_synced_at = datetime.now(UTC).replace(tzinfo=None).replace(tzinfo=None)
 
     # Optionally post a confirmation comment on Jira
     if post_comment_flag:

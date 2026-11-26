@@ -488,7 +488,7 @@ async def invite_member(
         role=WorkspaceRole(body.role),
         token=token,
         invited_by=current_user.id,
-        expires_at=datetime.now(UTC) + timedelta(days=INVITE_EXPIRE_DAYS),
+        expires_at=(datetime.now(UTC) + timedelta(days=INVITE_EXPIRE_DAYS)).replace(tzinfo=None),
     )
     db.add(invitation)
     await db.commit()
@@ -507,7 +507,7 @@ async def list_my_invitations(
     if not current_user.email:
         return []
 
-    now = datetime.now(UTC)
+    now = datetime.now(UTC).replace(tzinfo=None)
     result = await db.execute(
         select(WorkspaceInvitation, Workspace, User)
         .join(Workspace, WorkspaceInvitation.workspace_id == Workspace.id)
@@ -629,7 +629,7 @@ async def accept_invite(
     )
     db.add(member)
 
-    invitation.accepted_at = datetime.now(UTC)
+    invitation.accepted_at = datetime.now(UTC).replace(tzinfo=None)
     await db.commit()
     await cache.invalidate_workspace(invitation.workspace_id)
     await cache.invalidate_user(current_user.id)

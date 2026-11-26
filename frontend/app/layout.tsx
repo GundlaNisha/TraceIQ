@@ -16,24 +16,39 @@ const dmSans = DM_Sans({
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://traceiqoffi.vercel.app";
+const googleSiteVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     template: "%s | TraceIQ",
-    default: "TraceIQ — Autonomous Code Impact & PR Review Intelligence",
+    default: "TraceIQ — Autonomous Code Impact, AI Coding Agent & PR Review Intelligence",
   },
   description:
-    "Enterprise AI platform for code impact blast radius analysis, AST code graph indexing, and automated GitHub pull request reviews.",
+    "Enterprise AI platform for 2-hop AST code impact blast radius analysis, LangGraph AI coding agent, zero-click Jira OAuth 2.0 sync, and CI-correlated GitHub pull request reviews.",
   keywords: [
     "code impact analysis",
     "AST code graph",
+    "LangGraph coding agent",
+    "Jira OAuth 2.0 sync",
     "pull request code review",
+    "CI blast radius correlation",
     "traceability matrix",
-    "automated code reviews",
     "Tree-sitter indexing",
-    "developer productivity",
   ],
+  alternates: {
+    canonical: "/",
+    types: {
+      "application/rss+xml": `${siteUrl}/rss.xml`,
+    },
+  },
+  ...(googleSiteVerification
+    ? {
+        verification: {
+          google: googleSiteVerification,
+        },
+      }
+    : {}),
   authors: [{ name: "TraceIQ Engineering" }],
   creator: "TraceIQ",
   publisher: "TraceIQ",
@@ -46,9 +61,9 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    title: "TraceIQ — Autonomous Code Impact & PR Review Intelligence",
+    title: "TraceIQ — Autonomous Code Impact, AI Coding Agent & PR Review Intelligence",
     description:
-      "Enterprise AI platform for code impact blast radius analysis, AST code graph indexing, and automated GitHub pull request reviews.",
+      "Enterprise AI platform for 2-hop AST code impact blast radius analysis, LangGraph AI coding agent, zero-click Jira OAuth 2.0 sync, and CI-correlated GitHub pull request reviews.",
     siteName: "TraceIQ",
     images: [
       {
@@ -61,9 +76,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "TraceIQ — Autonomous Code Impact & PR Review Intelligence",
+    title: "TraceIQ — Autonomous Code Impact, AI Coding Agent & PR Review Intelligence",
     description:
-      "Enterprise AI platform for code impact blast radius analysis, AST code graph indexing, and automated GitHub pull request reviews.",
+      "Enterprise AI platform for 2-hop AST code impact blast radius analysis, LangGraph AI coding agent, zero-click Jira OAuth 2.0 sync, and CI-correlated GitHub pull request reviews.",
     images: ["/logo.png"],
   },
   robots: {

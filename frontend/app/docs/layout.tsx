@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Documentation — TraceIQ",
+  title: "Documentation",
   description:
-    "Comprehensive developer documentation, architecture guides, API reference, and setup instructions for TraceIQ.",
+    "Developer documentation for TraceIQ: AST code graph indexing, hybrid RRF search, LangGraph AI coding agent, Jira OAuth 2.0 auto-webhooks, CI correlation, and REST API reference.",
+  alternates: {
+    canonical: "/docs",
+  },
 };
 
 export default function DocsLayoutWrapper({

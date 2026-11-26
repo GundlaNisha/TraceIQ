@@ -568,3 +568,48 @@ export function useTestJiraWebhook() {
   });
 }
 
+export function useStartJiraOAuth() {
+  const { fetchApi } = useApiClient();
+
+  return useMutation({
+    mutationFn: async (workspaceId?: string | null) => {
+      const url = workspaceId
+        ? `/api/v1/jira/oauth/authorize?workspace_id=${encodeURIComponent(workspaceId)}`
+        : `/api/v1/jira/oauth/authorize`;
+      const res = await fetchApi(url, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to start Jira OAuth connection");
+      }
+      return res.json() as Promise<{ authorization_url: string }>;
+    },
+  });
+}
+
+export function useSyncJiraOAuthWebhook() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (workspaceId?: string | null) => {
+      const url = workspaceId
+        ? `/api/v1/jira/oauth/webhook/sync?workspace_id=${encodeURIComponent(workspaceId)}`
+        : `/api/v1/jira/oauth/webhook/sync`;
+      const res = await fetchApi(url, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to register Jira Cloud auto-webhook");
+      }
+      return res.json() as Promise<{
+        success: boolean;
+        webhook_status: string;
+        webhook_expires_at?: string | null;
+        message: string;
+      }>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jira_config"] });
+    },
+  });
+}
+

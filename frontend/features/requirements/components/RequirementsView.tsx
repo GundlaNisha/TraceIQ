@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -15,13 +16,39 @@ import { JiraImportDialog } from "@/features/jira/components/JiraImportDialog";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useWorkspaceSummary } from "@/features/workspace/api/queries";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, Plus, Zap } from "lucide-react";
+import { ShieldAlert, Plus, Zap, CheckCircle2, AlertCircle, X } from "lucide-react";
 
 export function RequirementsView() {
   const [open, setOpen] = useState(false);
   const [jiraOpen, setJiraOpen] = useState(false);
+  const [oauthBanner, setOauthBanner] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const qc = useQueryClient();
   const repoId = searchParams.get("repo_id");
+  const jiraConnected = searchParams.get("jira_connected");
+  const jiraError = searchParams.get("jira_error");
+
+  useEffect(() => {
+    if (jiraConnected === "1" || jiraConnected === "true") {
+      setOauthBanner({
+        type: "success",
+        message: "Atlassian Jira connected via OAuth 2.0! You can now import issues and sync automatically.",
+      });
+      qc.invalidateQueries({ queryKey: ["jira_config"] });
+      qc.invalidateQueries({ queryKey: ["jira_projects"] });
+      qc.invalidateQueries({ queryKey: ["jira_issues"] });
+      const cleanUrl = repoId ? `/requirements?repo_id=${encodeURIComponent(repoId)}` : "/requirements";
+      router.replace(cleanUrl);
+    } else if (jiraError) {
+      setOauthBanner({
+        type: "error",
+        message: `Jira authorization failed: ${jiraError}`,
+      });
+      const cleanUrl = repoId ? `/requirements?repo_id=${encodeURIComponent(repoId)}` : "/requirements";
+      router.replace(cleanUrl);
+    }
+  }, [jiraConnected, jiraError, repoId, qc, router]);
 
   const { activeWorkspaceId, activeWorkspaceName } = useWorkspaceStore();
   const { data: summary } = useWorkspaceSummary(activeWorkspaceId || "");
@@ -29,6 +56,32 @@ export function RequirementsView() {
 
   return (
     <div className="flex flex-col gap-8 pb-12 w-full">
+      {oauthBanner && (
+        <div
+          className={`flex items-center justify-between gap-3 p-3.5 rounded-xl text-xs font-medium border ${
+            oauthBanner.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+              : "bg-rose-50 border-rose-200 text-rose-900"
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            {oauthBanner.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{oauthBanner.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOauthBanner(null)}
+            className="p-1 rounded hover:bg-black/5 transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {isViewer && (
         <div className="flex items-center gap-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-700 font-medium">
           <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />

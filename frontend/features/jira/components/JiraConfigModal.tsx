@@ -21,6 +21,8 @@ import {
   useTestJiraConnection,
   useRotateWebhookSecret,
   useTestJiraWebhook,
+  useStartJiraOAuth,
+  useSyncJiraOAuthWebhook,
 } from "../api/queries";
 import {
   CheckCircle2,
@@ -71,7 +73,12 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
   const { mutateAsync: testConnection, isPending: isTesting } = useTestJiraConnection();
   const { mutateAsync: rotateSecret, isPending: isRotating } = useRotateWebhookSecret();
   const { mutateAsync: testWebhook, isPending: isTestingWebhook } = useTestJiraWebhook();
+  const { mutateAsync: startOAuth, isPending: isStartingOAuth } = useStartJiraOAuth();
+  const { mutateAsync: syncOAuthWebhook, isPending: isSyncingWebhook } = useSyncJiraOAuthWebhook();
 
+  const [authTab, setAuthTab] = useState<"oauth2" | "api_token">("oauth2");
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const [syncWebhookMsg, setSyncWebhookMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [webhookResult, setWebhookResult] = useState<{ webhook_url: string; webhook_secret: string } | null>(null);
@@ -108,6 +115,7 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
 
   useEffect(() => {
     if (config?.is_configured) {
+      setAuthTab(config.auth_type === "oauth2" ? "oauth2" : "api_token");
       reset({
         jira_domain: config.jira_domain || "",
         jira_email: config.jira_email || "",
@@ -119,8 +127,11 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
           webhook_url: config.webhook_url,
           webhook_secret: config.webhook_secret,
         });
+      } else {
+        setWebhookResult(null);
       }
     } else {
+      setAuthTab(config?.oauth_enabled === false ? "api_token" : "oauth2");
       reset({
         jira_domain: "",
         jira_email: "",
@@ -131,9 +142,33 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
     }
     setTestResult(null);
     setSaveError(null);
+    setOauthError(null);
+    setSyncWebhookMsg(null);
     setIsEditingSecret(false);
     setIsConfirmingRotate(false);
   }, [config, reset, open]);
+
+  async function handleStartOAuth() {
+    setOauthError(null);
+    try {
+      const res = await startOAuth(workspaceId);
+      if (res.authorization_url) {
+        window.location.href = res.authorization_url;
+      }
+    } catch (err: any) {
+      setOauthError(err?.message || "Failed to initialize Atlassian OAuth login.");
+    }
+  }
+
+  async function handleSyncOAuthWebhook() {
+    setSyncWebhookMsg(null);
+    try {
+      const res = await syncOAuthWebhook(workspaceId);
+      setSyncWebhookMsg({ ok: res.success, text: res.message });
+    } catch (err: any) {
+      setSyncWebhookMsg({ ok: false, text: err?.message || "Failed to register webhook" });
+    }
+  }
 
   async function handleTest() {
     setTestResult(null);
@@ -263,28 +298,283 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
           </div>
         ) : (
           <>
-            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 mt-2">
-              {config?.is_configured && (
-                <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl text-xs text-emerald-800">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <div>
-                      <div className="font-semibold">Connected to {config.jira_domain}</div>
-                      <div className="text-[11px] text-emerald-700">Account: {config.jira_email} ({config.token_preview})</div>
+            {/* Connection Mode Switcher */}
+            <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-slate-100/90 p-1 text-xs mt-1">
+              <button
+                type="button"
+                onClick={() => setAuthTab("oauth2")}
+                className={`rounded-lg py-1.5 px-3 font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                  authTab === "oauth2"
+                    ? "bg-white text-blue-700 shadow-2xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>OAuth 2.0 (Zero-Click)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthTab("api_token")}
+                className={`rounded-lg py-1.5 px-3 font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                  authTab === "api_token"
+                    ? "bg-white text-foreground shadow-2xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>Manual API Token</span>
+              </button>
+            </div>
+
+            {config?.is_configured && (
+              <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl text-xs text-emerald-800 mt-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">Connected to {config.jira_domain}</div>
+                    <div className="text-[11px] text-emerald-700 truncate">
+                      Account: {config.jira_email} ({config.token_preview})
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-100/60 p-1.5 rounded-lg transition-colors inline-flex items-center gap-1 font-medium"
-                    title="Disconnect Jira"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Disconnect
-                  </button>
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-100/60 p-1.5 rounded-lg transition-colors inline-flex items-center gap-1 font-medium shrink-0 cursor-pointer"
+                  title="Disconnect Jira"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Disconnect
+                </button>
+              </div>
+            )}
+
+            {/* Primary Zero-Click OAuth 2.0 Panel */}
+            {authTab === "oauth2" && (
+              <div className="flex flex-col gap-4 mt-2">
+                <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-4 space-y-3">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-semibold text-blue-950 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                      Atlassian OAuth 2.0 (3LO) + Auto-Webhooks
+                    </h4>
+                    <p className="text-[11px] text-blue-900/80 leading-relaxed">
+                      Authorize TraceIQ directly with Atlassian in one click. Tokens are encrypted at rest, refreshed automatically, and live Jira Cloud webhooks are registered without copying secrets.
+                    </p>
+                  </div>
+
+                  {config?.oauth_enabled === false ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
+                      <Info className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                      <span>
+                        OAuth credentials (<code className="font-mono font-semibold">JIRA_OAUTH_CLIENT_ID</code> / <code className="font-mono font-semibold">SECRET</code>) are not configured on the backend yet. Switch to <strong>Manual API Token</strong> or configure them in <code className="font-mono">.env</code>.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        onClick={handleStartOAuth}
+                        disabled={isStartingOAuth}
+                        className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+                      >
+                        {isStartingOAuth ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                            Redirecting to Atlassian...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-3.5 h-3.5 mr-1.5" />
+                            {config?.is_configured && config.auth_type === "oauth2"
+                              ? "Reconnect Jira Site"
+                              : "Connect with Jira Cloud"}
+                          </>
+                        )}
+                      </Button>
+
+                      {config?.is_configured && config.auth_type === "oauth2" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleTest}
+                          disabled={isTesting}
+                          className="text-xs font-semibold"
+                        >
+                          {isTesting ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                              Testing...
+                            </>
+                          ) : (
+                            "Verify Token"
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {oauthError && (
+                    <div className="p-2.5 bg-rose-50 text-rose-800 border border-rose-200 rounded-lg text-[11px] flex items-center gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span>{oauthError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {testResult && (
+                  <div
+                    className={`p-3 rounded-xl text-xs flex items-start gap-2.5 ${
+                      testResult.success
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        : "bg-rose-50 text-rose-800 border border-rose-200"
+                    }`}
+                  >
+                    {testResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-semibold">{testResult.success ? "Connection Verified" : "Verification Failed"}</div>
+                      <div className="text-[11px] opacity-90">{testResult.message}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Auto-Managed OAuth Webhook Panel (Zero secrets exposed to browser) */}
+                {config?.is_configured && config.auth_type === "oauth2" && (
+                  <div className="border-t border-border/40 pt-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Webhook className="w-4 h-4 text-violet-600" />
+                        <h3 className="font-semibold text-sm text-foreground">Auto-Registered Webhook</h3>
+                      </div>
+                      {config.webhook_status === "active" ? (
+                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5 border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Active (Auto-Managed)
+                        </span>
+                      ) : config.webhook_status === "skipped_localhost" ? (
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-200">
+                          HTTPS URL Required
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full uppercase tracking-wider border border-rose-200">
+                          Needs Sync
+                        </span>
+                      )}
+                    </div>
+
+                    {config.webhook_status === "active" ? (
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Jira Cloud is sending real-time <code className="font-mono">issue_updated</code> and <code className="font-mono">issue_deleted</code> events automatically. TraceIQ renews the 30-day registration automatically
+                        {config.webhook_expires_at
+                          ? ` (current TTL until ${new Date(config.webhook_expires_at).toLocaleDateString()}).`
+                          : "."}
+                      </p>
+                    ) : (
+                      <div className="rounded-xl bg-amber-50/80 border border-amber-200/80 p-3 text-[11px] text-amber-900 space-y-1">
+                        <p className="font-semibold flex items-center gap-1.5 text-amber-950">
+                          <Info className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          {config.webhook_status === "skipped_localhost"
+                            ? "Localhost detected — Auto-Webhook skipped"
+                            : "Auto-Webhook needs registration"}
+                        </p>
+                        <p className="text-amber-800 leading-relaxed">
+                          Jira Cloud only accepts public <code className="font-mono font-semibold">https://</code> webhook URLs. Set <code className="font-mono font-semibold">PUBLIC_BACKEND_URL</code> (e.g. an <code className="font-mono">ngrok</code> HTTPS tunnel or production URL) and click <strong>Register Webhook</strong> below.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isSyncingWebhook}
+                        onClick={handleSyncOAuthWebhook}
+                        className="text-xs gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
+                      >
+                        {isSyncingWebhook ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        )}
+                        {config.webhook_status === "active" ? "Refresh Auto-Webhook" : "Register Auto-Webhook"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        disabled={isTestingWebhook}
+                        onClick={async () => {
+                          setTestWebhookResult(null);
+                          setTestWebhookError(null);
+                          try {
+                            const res = await testWebhook(workspaceId);
+                            setTestWebhookResult(res);
+                          } catch (err: any) {
+                            setTestWebhookError(err.message || "Failed to test webhook simulation");
+                          }
+                        }}
+                        className="text-xs gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+                      >
+                        {isTestingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        {isTestingWebhook ? "Testing Delivery..." : "Send Test Ping"}
+                      </Button>
+                    </div>
+
+                    {syncWebhookMsg && (
+                      <div
+                        className={`rounded-lg p-2.5 text-[11px] flex items-center gap-2 border ${
+                          syncWebhookMsg.ok
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                            : "bg-amber-50 border-amber-200 text-amber-900"
+                        }`}
+                      >
+                        {syncWebhookMsg.ok ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <Info className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                        )}
+                        <span>{syncWebhookMsg.text}</span>
+                      </div>
+                    )}
+
+                    {testWebhookResult && (
+                      <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900 space-y-1">
+                        <div className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          Webhook Verified &amp; Operational!
+                        </div>
+                        <p className="text-[11px] text-emerald-700 leading-relaxed">
+                          Simulated webhook event for issue <strong>{testWebhookResult.issue_key}</strong>: status transitioned from &apos;{testWebhookResult.old_status || "To Do"}&apos; to &apos;{testWebhookResult.new_status}&apos;.
+                        </p>
+                      </div>
+                    )}
+
+                    {testWebhookError && (
+                      <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <p className="font-semibold text-rose-900">Webhook Test Error</p>
+                          <p className="text-[11px]">{testWebhookError}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Manual API Token Tab */}
+            {authTab === "api_token" && (
+              <>
+                <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 mt-2">
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="jira_domain" className="text-xs font-semibold">Jira Domain / URL</Label>
@@ -772,6 +1062,8 @@ export function JiraConfigModal({ open, onOpenChange, workspaceId, onSaved }: Pr
                   </div>
                 )}
               </div>
+            )}
+              </>
             )}
           </>
         )}

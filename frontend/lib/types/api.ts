@@ -153,6 +153,9 @@ export interface TraceabilityMatrixResponse {
 export interface JiraConfig {
   id?: string | null;
   workspace_id?: string | null;
+  auth_type?: "api_token" | "oauth2" | string;
+  cloud_id?: string | null;
+  oauth_enabled?: boolean;
   jira_domain: string;
   jira_email: string;
   default_project_key?: string | null;
@@ -161,6 +164,8 @@ export interface JiraConfig {
   token_preview: string;
   webhook_url?: string | null;
   webhook_secret?: string | null;
+  webhook_status?: "manual" | "active" | "skipped_localhost" | "error" | string;
+  webhook_expires_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }

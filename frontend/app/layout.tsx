@@ -16,7 +16,9 @@ const dmSans = DM_Sans({
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://traceiqoffi.vercel.app";
-const googleSiteVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
+const googleSiteVerification =
+  process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim() ||
+  "IxhpEchCtN13IET3Rco_2tzGFES6y4ta28iAQgLYIxU";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -42,13 +44,9 @@ export const metadata: Metadata = {
       "application/rss+xml": `${siteUrl}/rss.xml`,
     },
   },
-  ...(googleSiteVerification
-    ? {
-        verification: {
-          google: googleSiteVerification,
-        },
-      }
-    : {}),
+  verification: {
+    google: googleSiteVerification,
+  },
   authors: [{ name: "TraceIQ Engineering" }],
   creator: "TraceIQ",
   publisher: "TraceIQ",

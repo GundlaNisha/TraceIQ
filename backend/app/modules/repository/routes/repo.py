@@ -373,25 +373,30 @@ async def delete_repository(
     from app.modules.repository.models.repo import RepositorySnapshot
     from app.modules.requirement.models.req import Requirement, RequirementVersion
     from app.modules.review.models.rev_models import (
+        CommitDiff,
         CommitEvent,
+        PRFileDiff,
         PRReview,
         PRReviewFinding,
-        Review,
         ReviewFinding,
     )
 
-    # 1. PR Reviews & findings
+    # 1. PR Reviews, file diffs & findings
     subq_pr_rev = select(PRReview.id).where(PRReview.repository_id == repo_uuid)
     await db.execute(
         delete(PRReviewFinding).where(PRReviewFinding.pr_review_id.in_(subq_pr_rev))
     )
+    await db.execute(
+        delete(PRFileDiff).where(PRFileDiff.pr_review_id.in_(subq_pr_rev))
+    )
     await db.execute(delete(PRReview).where(PRReview.repository_id == repo_uuid))
 
-    # 2. Commit Events, reviews & findings
+    # 2. Commit Events, diffs & findings
     subq_ce = select(CommitEvent.id).where(CommitEvent.repository_id == repo_uuid)
-    subq_rev = select(Review.id).where(Review.commit_event_id.in_(subq_ce))
-    await db.execute(delete(ReviewFinding).where(ReviewFinding.review_id.in_(subq_rev)))
-    await db.execute(delete(Review).where(Review.commit_event_id.in_(subq_ce)))
+    await db.execute(
+        delete(ReviewFinding).where(ReviewFinding.commit_event_id.in_(subq_ce))
+    )
+    await db.execute(delete(CommitDiff).where(CommitDiff.commit_event_id.in_(subq_ce)))
     await db.execute(delete(CommitEvent).where(CommitEvent.repository_id == repo_uuid))
 
     # 3. Requirements, analysis jobs, impact results, versions, PR drafts

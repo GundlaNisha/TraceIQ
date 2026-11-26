@@ -5,7 +5,7 @@
 <h1 align="center">TraceIQ</h1>
 
 <p align="center">
-  <strong>Autonomous Code Impact Blast Radius Analysis, AST Code Graph Traversal, Bidirectional Jira Cloud Sync, and Automated Pull Request Review Intelligence.</strong>
+  <strong>Autonomous Code Impact Blast Radius Analysis, LangGraph AI Coding Agent, Zero-Click Jira OAuth 2.0 (3LO) Sync, and Automated Pull Request Review Intelligence.</strong>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
   <a href="https://nextjs.org"><img src="https://img.shields.io/badge/Frontend-Next.js_16_App_Router-black?style=for-the-badge&logo=next.js" alt="Next.js 16" /></a>
   <a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/Backend-FastAPI_Python_3.11+-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" /></a>
   <a href="https://github.com/pgvector/pgvector"><img src="https://img.shields.io/badge/Vector_DB-Postgres_+_pgvector-336791?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL pgvector" /></a>
-  <a href="https://ai.google.dev"><img src="https://img.shields.io/badge/AI_Engine-Google_Gemini-4285F4?style=for-the-badge&logo=google" alt="Google Gemini" /></a>
+  <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/Agent-LangGraph_+_MultiProvider-4285F4?style=for-the-badge&logo=google" alt="LangGraph & Gemini" /></a>
 </p>
 
 ---
@@ -23,9 +23,9 @@
 
 Engineering teams frequently suffer from **"Merge Anxiety"**—the justified fear that altering a shared utility, database model, or API contract will trigger silent, breaking downstream regressions in distant modules. Product requirements written in Jira frequently drift out of sync with actual code implementations, and manual code reviews fail to detect missing acceptance criteria across complex architectures.
 
-**TraceIQ** solves this problem by establishing an autonomous, closed-loop intelligence pipeline connecting **Product Requirements &rarr; AST Code Dependency Graphs &rarr; Pull Request Diffs &rarr; Jira Workflow States**.
+**TraceIQ** solves this problem by establishing an autonomous, closed-loop intelligence pipeline connecting **Product Requirements &rarr; AST Code Dependency Graphs &rarr; LangGraph AI Coding Agent &rarr; Pull Request Diffs &amp; CI Checks &rarr; Jira OAuth 2.0 Workflow States**.
 
-TraceIQ ingests your Git repositories, generates Abstract Syntax Tree (AST) code graphs across multiple languages, calculates hybrid vector/symbol relevance via **Reciprocal Rank Fusion ($k=60$)**, traverses 2-hop caller chains to calculate the blast radius in **under 15 milliseconds**, and automatically reviews pull requests against the original specifications to prevent regression gaps before merge.
+TraceIQ ingests your Git repositories, generates Abstract Syntax Tree (AST) code graphs across multiple languages, calculates hybrid vector/symbol relevance via **Reciprocal Rank Fusion ($k=60$)**, traverses 2-hop caller chains in **under 15 milliseconds**, lets engineers converse with their codebase through a stateful `@mention`-aware **LangGraph AI Agent**, and automatically reviews pull requests against specs and live GitHub CI check runs.
 
 ---
 
@@ -73,13 +73,13 @@ $$RRF(d) = \sum_{m \in M} \frac{1}{k + r_m(d)} \quad (k = 60)$$
   - **Depth 2 (Transitive Impact)**: Second-degree caller chains, background worker triggers, and shared data contracts.
 - **Risk Assessment Matrix**: Generates structural context prompts for LLMs (Google Gemini 3.6 Flash / LiteLLM) to determine risk classifications (**High**, **Medium**, **Low**), impacted file summaries, and confidence percentages.
 
-### 4. Deep Bidirectional Jira Cloud Synchronization
-- **Kanban & Sprint Issue Browser**: Filter Jira issues by project, board, sprint, status category, or custom JQL, and batch import them directly as linked TraceIQ requirements.
+### 4. Zero-Click Jira OAuth 2.0 (3LO), Auto-Webhooks & Bidirectional Sync
+- **1-Click Atlassian OAuth 2.0 (3LO)**: Authorize Jira Cloud with single-use Redis CSRF `state`, automatic `cloud_id` discovery, and Fernet (`enc:v1:`) AES encryption at rest (`CREDENTIAL_ENCRYPTION_KEY`)—never exposing OAuth tokens or webhook secrets to client responses.
+- **Rotating Refresh Token Safety**: Serializes Atlassian OAuth token rotation behind a Redis single-flight distributed lock (`acquire_lock` / `release_lock`) with double-checked expiry so concurrent requests never invalidate active grants.
+- **Auto-Registered Dynamic Webhooks**: Registers scoped HTTPS Jira Cloud dynamic webhooks automatically on OAuth callback (`PUBLIC_BACKEND_URL`) with 30-day lease renewal (`POST /api/v1/jira/oauth/webhook/sync`) and per-tenant routing, plus optional Manual API Token fallback.
+- **Kanban & Sprint Issue Browser**: Filter Jira issues by project, board, sprint, status category, or sanitized JQL, and batch import them directly as linked TraceIQ requirements.
 - **Atlassian Document Format (ADF) Parser**: Recursive parser (`app/modules/jira/services/adf_converter.py`) converting complex nested Atlassian JSON trees (headings, tables, callout panels, code blocks) into clean GitHub-Flavored Markdown.
-- **HMAC-SHA256 Webhook Security**: Verifies Jira Cloud webhook payloads using `X-Hub-Signature` digests, shared query secrets, and Authorization headers.
-- **In-App Webhook Simulator & Test Ping**: 1-click **"Send Test Ping"** verification with pre-configured terminal cURL commands for ngrok and staging tunnels.
-- **Dynamic Workflow Status Transitions**: Fetch available Jira workflow transitions on-the-fly and move issue states (e.g., *To Do* &rarr; *In Progress* &rarr; *Done*) directly from TraceIQ with automated audit comments.
-- **Requirement Drift Protection (`jira.drift_detected`)**: When product managers alter descriptions in Jira during an active sprint, TraceIQ logs a non-destructive audit event rather than overwriting working engineering specs.
+- **In-App Webhook Simulator & Status Transitions**: Simulate delivery pings (`POST /api/v1/jira/webhook/test`), transition Jira issue workflow statuses dynamically with Markdown-to-ADF audit comments, and protect active specs via `jira.drift_detected` non-destructive alerts.
 
 ### 5. Autonomous Pull Request Review Engine
 - **GitHub App Webhook Ingestion**: Automatically triggered when PRs are opened or new commits are pushed (`pull_request.opened`, `pull_request.synchronize`).
@@ -113,6 +113,20 @@ $$RRF(d) = \sum_{m \in M} \frac{1}{k + r_m(d)} \quad (k = 60)$$
 - **Mean Time to Resolution (MTTR)**: Measures average duration from initial failure to recovery across closed episodes.
 - **Consecutive Streak Tracking**: Computes passing and failing run streaks per workflow with trailing 10-run success rates.
 
+### 10. Autonomous LangGraph AI Coding Agent (Chatbot)
+- **Stateful Multi-Agent Orchestration**: LangGraph workflow (`app/modules/agent/graphs/workflow.py`) routing across `supervisor`, `conversational_chat`, `code_explorer`, `verify_implementation`, `pre_review`, and `pr_drafter`.
+- **Natural `@Mention` Context Binding**: Type `@` in the agent composer (`AgentMentionMenu`) to bind exact `@repo`, `@req`, and `@pr` workspace entities; fetches live GitHub PR diffs (`pr_fetch.py`) and auto-indexes bound repositories lacking AST indexes.
+- **Human-in-the-Loop (HITL) Approval Gates**: Pauses cleanly before starting-point audits or PR draft generation until an engineer approves or rejects via `AgentActionApproval` and `Command(resume=...)`.
+- **Real-Time SSE Streaming & Dynamic Titling**: Streams tokens, structured GFM tables, syntax-highlighted code blocks, and tool execution logs over Server-Sent Events (`/api/v1/agent/sessions/{id}/stream`) with automated session titles (`title_generator.py`) and inline renaming.
+
+### 11. Multi-Provider AI Router & Health Telemetry
+- **Round-Robin Load Balancing & Instant Failover**: `MultiProviderRouter` (`app/ai/providers/multi_provider.py`) balances requests across **Google Gemini**, **Groq**, and **OpenCode Zen** with automatic cooldown recovery on 429/transient errors.
+- **Embedding Fallback & Observability**: Combines Google Gemini `gemini-embedding-2` 384-dimensional embeddings with OpenCode embedding fallback and exposes real-time provider telemetry at `GET /api/v1/health/ai`.
+
+### 12. Multi-Tenant Redis Caching & Public Compliance Pages
+- **Distributed Pattern Cache (`app/core/cache.py`)**: Caches workspace dashboards, repositories, traceability matrices, Jira configs, and invites with scoped pattern invalidation (`invalidate_workspace`, `invalidate_user`) paired with frontend TanStack Query persistence.
+- **Public Portal & Atlassian Compliance Routes**: Includes `/docs`, `/contact` (customer support), `/privacy` (Clerk, Atlassian OAuth 3LO & encryption disclosures), `/terms`, `sitemap.xml`, and `robots.txt`.
+
 ---
 
 ## 🏛️ System Architecture
@@ -145,22 +159,25 @@ graph TD
 
     subgraph Compute Layer ["Async Compute & Code Intelligence"]
         Celery[Celery Distributed Workers]
+        LG[LangGraph AI Coding Agent]
         TS[Tree-sitter AST Multi-Language Parser]
-        GeminiEmb[Google Gemini Embedding 2 Engine]
-        LLM[LiteLLM / Gemini 3.6 Flash Orchestrator]
+        GeminiEmb[Google Gemini Embedding 2 + OpenCode]
+        LLM[MultiProviderRouter: Gemini / Groq / OpenCode]
     end
 
     subgraph External Ecosystem ["External Ecosystem"]
-        Jira[Atlassian Jira Cloud REST v3 & Webhooks]
-        GitHub[GitHub App API & PR Webhooks]
+        Jira[Atlassian Jira OAuth 2.0 3LO & Auto-Webhooks]
+        GitHub[GitHub App API, Checks & PR Webhooks]
     end
 
     %% Client to Gateway
     UI -->|Bearer JWT + X-Workspace-Id| API
 
-    %% Gateway to Storage
+    %% Gateway to Storage & Agent
     API -->|SQLAlchemy AsyncSession| PG
-    API -->|Enqueue Task / Health| Redis
+    API -->|Enqueue Task / Cache / Locks| Redis
+    API -->|SSE Stream / HITL Checkpoints| LG
+    LG --> LLM
 
     %% Worker Execution Modes
     Runner -.->|Production: Safe In-Process Execution| TS
@@ -246,24 +263,26 @@ graph TD
 TraceIQ/
 ├── backend/
 │   ├── app/
-│   │   ├── ai/                      # AI Prompts, context builders, and LiteLLM adapters
+│   │   ├── ai/                      # AI Prompts, context builders, and MultiProviderRouter
 │   │   │   ├── context/             # Code chunk context formatters
 │   │   │   ├── parsers/             # Pydantic structured output models
 │   │   │   ├── prompts/             # Domain prompts (impact, review, pr_draft)
-│   │   │   └── providers/           # LiteLLM and Google Gemini adapters
-│   │   ├── core/                    # Settings, config, dependencies, exceptions
+│   │   │   └── providers/           # MultiProviderRouter (Gemini, Groq, OpenCode Zen)
+│   │   ├── core/                    # Settings, Fernet crypto, Redis CacheService, deps, exceptions
 │   │   ├── db/                      # SQLAlchemy async engine, base models, mixins
 │   │   ├── integrations/            # External API clients
 │   │   │   ├── github/              # GitHub REST client & webhook parsers
-│   │   │   └── jira/                # Jira Cloud client & ADF Markdown converter
+│   │   │   └── jira/                # Jira OAuth 2.0 / REST client & ADF Markdown converter
 │   │   ├── modules/                 # Domain-driven feature modules
+│   │   │   ├── agent/               # LangGraph chatbot, HITL approvals, SSE streaming, @mentions
 │   │   │   ├── audit/               # Audit log models and drift tracking
 │   │   │   ├── auth/                # Clerk JWT verification and user sync
 │   │   │   ├── dashboard/           # Aggregated workspace summary metrics
 │   │   │   ├── github/              # GitHub live CI checks, correlation, Actions health, webhooks
+│   │   │   ├── health/              # Service liveness & /api/v1/health/ai provider telemetry
 │   │   │   ├── impact/              # Blast radius jobs, results, and schemas
 │   │   │   ├── indexing/            # Tree-sitter parsers, chunkers, and embedders
-│   │   │   ├── jira/                # Jira sync, transitions, comments, webhooks
+│   │   │   ├── jira/                # Jira OAuth 2.0 3LO, auto-webhooks, transitions, comments
 │   │   │   ├── pr/                  # PR draft generation and patch schemas
 │   │   │   ├── repository/          # Repository CRUD, settings, and tarball sync
 │   │   │   ├── requirement/         # Requirements versioning and inspector schemas
@@ -280,6 +299,7 @@ TraceIQ/
 ├── frontend/
 │   ├── app/                         # Next.js 16 App Router
 │   │   ├── (protected)/             # Authenticated workspace pages
+│   │   │   ├── agent/               # Autonomous LangGraph AI Coding Agent UI
 │   │   │   ├── analysis/            # Impact blast radius jobs & graph viewer
 │   │   │   ├── dashboard/           # Executive intelligence dashboard
 │   │   │   ├── pr-drafts/           # AI PR draft generator & Markdown editor
@@ -288,11 +308,15 @@ TraceIQ/
 │   │   │   ├── requirements/        # Requirements list & Inspector drawer
 │   │   │   ├── traceability/        # Traceability matrix & compliance score
 │   │   │   └── workspaces/          # Workspace management & team invites
+│   │   ├── contact/                 # Public customer support & contact page
 │   │   ├── docs/                    # Production documentation portal (/docs)
+│   │   ├── privacy/                 # Privacy Policy (Atlassian OAuth & Clerk disclosures)
+│   │   ├── terms/                   # Terms of Service
 │   │   └── layout.tsx               # Root layout with ClerkProvider & QueryClient
-│   ├── components/                  # Reusable UI primitives (shadcn, Base UI)
+│   ├── components/                  # Reusable UI primitives (landing, docs, ui)
 │   │   └── docs/                    # Interactive documentation components & visuals
 │   ├── features/                    # Domain-driven frontend feature modules
+│   │   ├── agent/                   # AI coding agent chat, @mentions, SSE stream hooks
 │   │   ├── analysis/                # Blast radius UI and polling hooks
 │   │   ├── github/                  # Live CI badges, check popovers, and Repo Actions dashboard
 │   │   ├── jira/                    # Jira configuration, transition, and comment modals
@@ -311,7 +335,7 @@ TraceIQ/
 ## 🚀 Getting Started & Local Development
 
 ### Prerequisites
-- **Node.js**: `v18.17+` (v20+ recommended) and `npm`
+- **Node.js**: `v20+` (`v22 LTS` recommended for Next.js 16 & Vitest 4) and `npm`
 - **Python**: `3.11+` and **uv** package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - **PostgreSQL**: `15+` with the `pgvector` extension enabled
 - **Redis**: `v6.0+` (optional if running in default eager mode)
@@ -345,12 +369,20 @@ TraceIQ/
    CELERY_ALWAYS_EAGER=true
    ENVIRONMENT=development
 
-   # AI & Embeddings (100% Free via Google AI Studio)
-   # Get your free key at: https://aistudio.google.com/
+   # AI & Multi-Provider Failover (Google Gemini + Groq + OpenCode Zen)
    GEMINI_API_KEY=your-gemini-api-key
+   GROQ_API_KEY=
+   OPENCODE_API_KEY=
    LLM_MODEL=gemini/gemini-3.6-flash
    EMBEDDING_MODEL=gemini/gemini-embedding-2
    EMBEDDING_DIMENSIONS=384
+
+   # Jira OAuth 2.0 (3LO) & Security
+   JIRA_OAUTH_CLIENT_ID=
+   JIRA_OAUTH_CLIENT_SECRET=
+   JIRA_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/jira/oauth/callback
+   CREDENTIAL_ENCRYPTION_KEY=       # Fernet 32-byte urlsafe key (required in production)
+   PUBLIC_BACKEND_URL=              # Set public HTTPS URL (e.g. ngrok) for auto-webhooks
 
    # Optional Custom OpenAI / LiteLLM Provider
    OPENAI_API_KEY=
@@ -414,21 +446,23 @@ TraceIQ/
 
 ---
 
-### 3. Jira Cloud Webhook Setup (Local Testing)
+### 3. Jira Cloud OAuth 2.0 & Webhook Setup (Local Testing)
 
-Because Jira Cloud sends webhooks from Atlassian's public servers, it requires an HTTPS endpoint to reach your local environment:
+Because Jira Cloud sends webhooks from Atlassian's public servers, it requires a public HTTPS endpoint (`PUBLIC_BACKEND_URL`) to enable zero-click auto-webhook registration:
 
 1. **Expose port 8000 via ngrok**:
    ```bash
    ngrok http 8000
    ```
-2. **Configure in Jira**:
+2. **Option A — Zero-Click OAuth 2.0 (Recommended)**:
+   - Set `PUBLIC_BACKEND_URL=https://<your-ngrok-id>.ngrok-free.app` in `backend/.env` and restart FastAPI.
+   - Click **Connect with Jira (OAuth 2.0)** in TraceIQ; TraceIQ exchanges tokens securely and auto-registers the Jira webhook with 30-day renewal.
+3. **Option B — Manual Webhook Configuration**:
    - In Jira: **Settings ⚙️ &rarr; System &rarr; WebHooks &rarr; Create a WebHook**.
    - URL: `https://<your-ngrok-id>.ngrok-free.app/api/v1/jira/webhook`
-   - Secret: Paste the secret generated from the TraceIQ Jira Configuration modal.
-   - Events: Check **Issue: updated** and **Issue: deleted**.
-3. **Verify Connection**:
-   - Click **"Send Test Ping"** inside TraceIQ's Jira modal to simulate an inbound webhook and confirm verification!
+   - Paste the secret from the TraceIQ Jira modal and select **Issue: updated** and **Issue: deleted**.
+4. **Verify Connection**:
+   - Click **"Send Test Ping"** inside TraceIQ's Jira modal to simulate an inbound webhook and verify live status sync + Redis cache invalidation.
 
 ---
 
@@ -488,12 +522,20 @@ Interactive OpenAPI Swagger UI is available at **`http://localhost:8000/docs`**.
 | `GET` | `/api/v1/pr-drafts` | `X-Workspace-Id` | List generated PR drafts |
 | `POST` | `/api/v1/pr-drafts` | `X-Workspace-Id` | Trigger AI PR draft generation from requirement |
 | `GET` | `/api/v1/search/code` | `X-Workspace-Id` | Execute sub-15ms hybrid RRF search (`q=query`) |
-| `GET` | `/api/v1/jira/config` | `X-Workspace-Id` | Fetch Jira integration status (masked token preview) |
-| `POST` | `/api/v1/jira/config` | `X-Workspace-Id` | Save Jira domain, email, and API token |
+| `POST` | `/api/v1/jira/oauth/authorize` | `X-Workspace-Id` | Generate Atlassian 3LO OAuth URL with Redis CSRF state |
+| `GET` | `/api/v1/jira/oauth/callback` | — | Exchange code for Fernet-encrypted tokens & auto-register webhook |
+| `POST` | `/api/v1/jira/oauth/webhook/sync` | `X-Workspace-Id` | Register or renew 30-day Jira Cloud dynamic webhook |
+| `GET` | `/api/v1/jira/config` | `X-Workspace-Id` | Fetch Jira integration status (never leaks OAuth tokens/secrets) |
+| `POST` | `/api/v1/jira/config` | `X-Workspace-Id` | Save Jira domain, email, and Fernet-encrypted manual API token |
 | `POST` | `/api/v1/jira/import` | `X-Workspace-Id` | Import Jira issue as a requirement with ADF conversion |
 | `POST` | `/api/v1/jira/requirements/{id}/transition` | `X-Workspace-Id` | Transition Jira issue workflow status with audit comment |
-| `POST` | `/api/v1/jira/webhook` | — | Inbound Jira webhook endpoint (HMAC-SHA256 verified) |
-| `POST` | `/api/v1/jira/webhook/test` | `X-Workspace-Id` | Simulate inbound Jira webhook delivery for testing |
+| `POST` | `/api/v1/jira/webhook` | — | Inbound Jira webhook endpoint (HMAC-SHA256 / per-tenant secret) |
+| `POST` | `/api/v1/jira/webhook/test` | `X-Workspace-Id` | Simulate inbound Jira webhook delivery & invalidate caches |
+| `POST` | `/api/v1/agent/sessions` | `X-Workspace-Id` | Create stateful LangGraph AI coding agent session |
+| `POST` | `/api/v1/agent/sessions/{id}/messages` | `X-Workspace-Id` | Run agent with `@repo` / `@req` / `@pr` mentions |
+| `GET` | `/api/v1/agent/sessions/{id}/stream` | — | Subscribe to real-time SSE agent tokens & HITL events |
+| `POST` | `/api/v1/agent/sessions/{id}/approvals/{aid}` | — | Approve or reject a paused HITL checkpoint |
+| `GET` | `/api/v1/health/ai` | — | Multi-provider AI router status & cooldown telemetry |
 | `GET` | `/api/v1/pr-reviews` | `X-Workspace-Id` | List automated AI PR reviews and severity verdicts |
 | `POST` | `/api/v1/pr-reviews/{id}/rerun` | `X-Workspace-Id` | Re-evaluate PR review against updated requirement rules |
 | `GET` | `/api/v1/traceability` | `X-Workspace-Id` | Retrieve end-to-end traceability compliance matrix |
@@ -502,10 +544,11 @@ Interactive OpenAPI Swagger UI is available at **`http://localhost:8000/docs`**.
 
 ## 🔒 Security & Data Privacy
 
-- **Zero Plaintext Secrets**: Atlassian API tokens and GitHub App private keys are encrypted and masked in all client responses.
-- **HMAC-SHA256 Signature Verification**: Inbound Jira and GitHub webhooks validate cryptographic payload signatures (`X-Hub-Signature`) to block spoofing attacks.
+- **Fernet (`enc:v1:`) Secret Encryption**: Atlassian OAuth tokens (`oauth_access_token`, `oauth_refresh_token`), Jira API tokens, and GitHub App private keys are encrypted at rest and never exposed in client API payloads.
+- **CSRF Protection & Distributed Token Locks**: Jira OAuth 2.0 (3LO) enforces single-use Redis CSRF states (`cache.pop`) and Redis single-flight locks (`acquire_lock` / `release_lock`) for safe rotating refresh token exchanges.
+- **HMAC-SHA256 Signature Verification**: Inbound Jira and GitHub webhooks validate cryptographic signatures and isolate processing per matched tenant.
 - **Isolated Multi-Tenant Access**: Every database query verifies workspace ownership via foreign key scoping (`user_id`, `workspace_id`), strictly preventing cross-tenant data leaks.
-- **Non-Destructive Synchronization**: Requirement drift protection prevents external webhook events from destructively overwriting in-flight specifications.
+- **Non-Destructive Synchronization**: Requirement drift protection (`jira.drift_detected`) prevents external webhook events from destructively overwriting in-flight specifications.
 
 ---
 

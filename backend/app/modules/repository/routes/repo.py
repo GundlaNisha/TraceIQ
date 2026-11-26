@@ -365,6 +365,7 @@ async def delete_repository(
     from app.modules.impact.models.impact import AnalysisJob, ImpactResult
     from app.modules.indexing.models.index_models import (
         CodeChunk,
+        CodeDependency,
         CodeEmbedding,
         CodeSymbol,
         RepositoryFile,
@@ -391,23 +392,27 @@ async def delete_repository(
     )
     await db.execute(delete(PRReview).where(PRReview.repository_id == repo_uuid))
 
-    # 2. Commit Events, diffs & findings
+    # 2. PR Drafts (referencing either commit_events or requirements) & Commit Events
     subq_ce = select(CommitEvent.id).where(CommitEvent.repository_id == repo_uuid)
+    subq_req = select(Requirement.id).where(Requirement.repository_id == repo_uuid)
+    await db.execute(
+        delete(PRDraft).where(
+            PRDraft.requirement_id.in_(subq_req) | PRDraft.commit_event_id.in_(subq_ce)
+        )
+    )
     await db.execute(
         delete(ReviewFinding).where(ReviewFinding.commit_event_id.in_(subq_ce))
     )
     await db.execute(delete(CommitDiff).where(CommitDiff.commit_event_id.in_(subq_ce)))
     await db.execute(delete(CommitEvent).where(CommitEvent.repository_id == repo_uuid))
 
-    # 3. Requirements, analysis jobs, impact results, versions, PR drafts
-    subq_req = select(Requirement.id).where(Requirement.repository_id == repo_uuid)
+    # 3. Requirements, analysis jobs, impact results, versions
     subq_jobs = select(AnalysisJob.id).where(
         AnalysisJob.requirement_id.in_(subq_req)
         | (AnalysisJob.repository_id == repo_uuid)
     )
     await db.execute(delete(ImpactResult).where(ImpactResult.job_id.in_(subq_jobs)))
     await db.execute(delete(AnalysisJob).where(AnalysisJob.id.in_(subq_jobs)))
-    await db.execute(delete(PRDraft).where(PRDraft.requirement_id.in_(subq_req)))
     await db.execute(
         delete(RequirementVersion).where(
             RequirementVersion.requirement_id.in_(subq_req)
@@ -415,12 +420,17 @@ async def delete_repository(
     )
     await db.execute(delete(Requirement).where(Requirement.repository_id == repo_uuid))
 
-    # 4. Code index, snapshots
-    await db.execute(
-        delete(CodeEmbedding).where(CodeEmbedding.repository_id == repo_uuid)
+    # 4. Code index & snapshots (delete child embeddings/symbols before chunks/files)
+    subq_chunks = select(CodeChunk.id).where(CodeChunk.repository_id == repo_uuid)
+    subq_files = select(RepositoryFile.id).where(
+        RepositoryFile.repository_id == repo_uuid
     )
+    await db.execute(delete(CodeEmbedding).where(CodeEmbedding.chunk_id.in_(subq_chunks)))
+    await db.execute(delete(CodeSymbol).where(CodeSymbol.file_id.in_(subq_files)))
     await db.execute(delete(CodeChunk).where(CodeChunk.repository_id == repo_uuid))
-    await db.execute(delete(CodeSymbol).where(CodeSymbol.repository_id == repo_uuid))
+    await db.execute(
+        delete(CodeDependency).where(CodeDependency.repository_id == repo_uuid)
+    )
     await db.execute(
         delete(RepositoryFile).where(RepositoryFile.repository_id == repo_uuid)
     )

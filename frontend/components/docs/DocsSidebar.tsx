@@ -59,10 +59,16 @@ export const DOCS_NAV_GROUPS: NavGroup[] = [
         badge: "RRF 15ms",
       },
       {
+        id: "ai-agent",
+        label: "Autonomous AI Agent",
+        icon: <Sparkles className="w-4 h-4" />,
+        badge: "LangGraph",
+      },
+      {
         id: "jira-integration",
-        label: "Jira & Kanban Sync",
+        label: "Jira OAuth & Sync",
         icon: <Kanban className="w-4 h-4" />,
-        badge: "REST API",
+        badge: "OAuth 3LO",
       },
     ],
   },

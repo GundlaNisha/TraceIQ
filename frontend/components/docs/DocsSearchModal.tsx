@@ -90,11 +90,25 @@ const SEARCH_INDEX: SearchDocResult[] = [
     keywords: ["actions", "mttr", "flaky", "reliability", "streaks", "workflow", "health"],
   },
   {
+    sectionId: "ai-agent",
+    category: "Core Engines",
+    title: "Autonomous LangGraph AI Coding Agent",
+    snippet: "Codebase-aware chatbot with @repo/@req/@pr mentions, live GitHub PR diffs, HITL approval checkpoints, and SSE streaming.",
+    keywords: ["ai", "agent", "chatbot", "langgraph", "mention", "hitl", "approval", "sse", "pr draft"],
+  },
+  {
+    sectionId: "ai-agent",
+    category: "Core Engines",
+    title: "Multi-Provider AI Router & Automatic Failover",
+    snippet: "Round-robin load balancing and cooldown failover across Google Gemini, Groq, and OpenCode Zen (/api/v1/health/ai).",
+    keywords: ["multi provider", "gemini", "groq", "opencode", "failover", "round robin", "health ai"],
+  },
+  {
     sectionId: "jira-integration",
     category: "Integrations",
-    title: "Atlassian Jira REST API & Kanban Sync",
-    snippet: "Import requirements directly from Jira Kanban boards, Scrum sprints, and issue keys with ADF to Markdown parsing.",
-    keywords: ["jira", "kanban", "sprint", "adf", "atlassian", "import", "issues", "rest api"],
+    title: "Atlassian Jira OAuth 2.0 (3LO), Auto-Webhooks & Kanban Sync",
+    snippet: "Zero-click Jira Cloud OAuth 2.0 with Fernet encryption, Redis distributed token locks, auto-registered HTTPS webhooks, and ADF to Markdown.",
+    keywords: ["jira", "oauth", "3lo", "auto webhook", "fernet", "kanban", "sprint", "adf", "atlassian", "import"],
   },
   {
     sectionId: "user-guides",

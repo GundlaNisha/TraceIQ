@@ -62,7 +62,7 @@ export function ArchitectureDoc() {
             </div>
             <h3 className="font-serif font-bold text-lg text-[#111111]">Client &amp; Interface Layer</h3>
             <p className="text-xs sm:text-sm text-[#555E6D] leading-relaxed">
-              Next.js 16 App Router with React 19 Server &amp; Client Components, TanStack Query v5 state caching, and Zustand workspace isolation. Ingests native GitHub App webhooks and Atlassian Jira Cloud webhooks verified with HMAC-SHA256 signatures.
+              Next.js 16 App Router with React 19, persistent TanStack Query v5 hydration, Zustand workspace scoping, and an SSE-streaming AI Coding Agent UI. Ingests GitHub App webhooks and Jira OAuth 2.0 (3LO) dynamic webhooks.
             </p>
             <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-[11px] font-mono text-emerald-700">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -80,13 +80,13 @@ export function ArchitectureDoc() {
                 FastAPI + Redis
               </span>
             </div>
-            <h3 className="font-serif font-bold text-lg text-[#111111]">API &amp; Gateway Layer</h3>
+            <h3 className="font-serif font-bold text-lg text-[#111111]">API, Cache &amp; Security Layer</h3>
             <p className="text-xs sm:text-sm text-[#555E6D] leading-relaxed">
-              High-throughput async Python 3.11 REST API with Pydantic v2 validation and non-blocking background task dispatching. Employs dedicated database session lifecycles (<code className="font-mono bg-slate-100 px-1 text-xs">AsyncSessionLocal</code>) for background sync jobs to eliminate detached instance errors.
+              High-throughput async Python 3.11 REST API with Pydantic v2, Fernet (<code className="font-mono bg-slate-100 px-1 text-xs">enc:v1:</code>) credential encryption, multi-tenant Redis pattern caching, and single-flight Redis locks for rotating OAuth refresh tokens.
             </p>
             <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-[11px] font-mono text-sky-700">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-              <span>1,200 req/sec Concurrency • Redis Task Broker</span>
+              <span>1,200 req/sec • Redis CacheService &amp; Locks</span>
             </div>
           </div>
 
@@ -97,12 +97,12 @@ export function ArchitectureDoc() {
                 Tier 03 // Compute Core
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-700 font-semibold">
-                Celery + Tree-sitter
+                LangGraph + Tree-sitter
               </span>
             </div>
-            <h3 className="font-serif font-bold text-lg text-[#111111]">AST &amp; AI Compute Layer</h3>
+            <h3 className="font-serif font-bold text-lg text-[#111111]">AST, Agent &amp; Multi-Provider AI</h3>
             <p className="text-xs sm:text-sm text-[#555E6D] leading-relaxed">
-              Distributed background workers executing Tree-sitter multi-language grammar parsing (Python, TypeScript, Go, Rust, Java, C/C++), constructing directed dependency graphs (<code className="font-mono bg-slate-100 px-1 text-xs">code_dependencies</code>), and generating dense 384d Gemini embeddings with 0 MB server RAM overhead.
+              Executes Tree-sitter multi-language parsing, constructs 2-hop dependency graphs, runs stateful LangGraph agents with HITL gates, and routes LLM calls round-robin across Gemini, Groq, and OpenCode Zen with instant failover.
             </p>
             <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-[11px] font-mono text-purple-700">
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
@@ -122,7 +122,7 @@ export function ArchitectureDoc() {
             </div>
             <h3 className="font-serif font-bold text-lg text-[#111111]">Storage &amp; Delivery Layer</h3>
             <p className="text-xs sm:text-sm text-[#555E6D] leading-relaxed">
-              PostgreSQL 15+ with pgvector HNSW cosine indexing. Posts automated inline pull request reviews on GitHub with severity classifications, triggers live Jira status transitions directly from the UI, and creates structured ADF comment summaries.
+              PostgreSQL 16 with pgvector HNSW indexing. Posts CI-aware inline PR reviews, correlates GitHub Actions failures against blast radius files, and triggers bidirectional Jira OAuth transitions and ADF comments.
             </p>
             <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-[11px] font-mono text-amber-700">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />

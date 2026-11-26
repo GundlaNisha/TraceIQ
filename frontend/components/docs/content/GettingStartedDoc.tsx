@@ -159,8 +159,8 @@ npm run dev`}
               </tr>
               <tr className="hover:bg-slate-50/70 transition-colors">
                 <td className="px-5 py-3.5 font-bold text-[#111111]">Node.js</td>
-                <td className="px-5 py-3.5 text-accent font-bold">18.17+ / 20+</td>
-                <td className="px-5 py-3.5 font-sans text-[#555E6D]">Next.js 16 App Router &amp; React 19</td>
+                <td className="px-5 py-3.5 text-accent font-bold">20+ / 22 LTS</td>
+                <td className="px-5 py-3.5 font-sans text-[#555E6D]">Next.js 16 App Router, React 19 &amp; Vitest 4</td>
               </tr>
               <tr className="hover:bg-slate-50/70 transition-colors">
                 <td className="px-5 py-3.5 font-bold text-[#111111]">PostgreSQL</td>
@@ -195,18 +195,25 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/traceiq
 REDIS_URL=redis://localhost:6379/0
 CELERY_ALWAYS_EAGER=true  # Set true for in-process local dev without running celery worker
 
-# Google Gemini Free Embeddings & LLM
-GEMINI_API_KEY=AIzaSy...  # Free https://aistudio.google.com/
-EMBEDDING_MODEL=models/gemini-embedding-2
-EMBEDDING_DIMENSION=384
-LLM_MODEL=gemini/gemini-1.5-flash
+# Multi-Provider AI & Embeddings
+GEMINI_API_KEY=AIzaSy...          # Free https://aistudio.google.com/
+GROQ_API_KEY=gsk_...              # Optional round-robin failover
+OPENCODE_API_KEY=...              # Optional failover + embedding fallback
+EMBEDDING_MODEL=gemini/gemini-embedding-2
+EMBEDDING_DIMENSIONS=384
+LLM_MODEL=gemini/gemini-3.6-flash
 
 # Clerk Authentication
 CLERK_SECRET_KEY=sk_test_...
 CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_WEBHOOK_SECRET=whsec_...
 
-# Jira Webhook HMAC Secret
+# Jira OAuth 2.0 (3LO) & Security
+JIRA_OAUTH_CLIENT_ID=...
+JIRA_OAUTH_CLIENT_SECRET=...
+JIRA_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/jira/oauth/callback
+CREDENTIAL_ENCRYPTION_KEY=...     # Fernet 32-byte urlsafe key (required in production)
+PUBLIC_BACKEND_URL=               # Set https://... (or ngrok URL) for Jira auto-webhooks
 JIRA_WEBHOOK_SECRET=your-secure-shared-secret`}
             language="bash"
             filename="backend/.env"

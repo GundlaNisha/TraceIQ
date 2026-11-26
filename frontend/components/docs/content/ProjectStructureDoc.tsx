@@ -33,19 +33,21 @@ export function ProjectStructureDoc() {
           code={`TraceIQ/
 ├── backend/
 │   ├── app/
-│   │   ├── ai/                      # LLM prompts, context builders, and LiteLLM adapters
-│   │   ├── core/                    # Settings (Pydantic), deps, exceptions, and security
+│   │   ├── ai/                      # LLM prompts, context builders, MultiProviderRouter
+│   │   ├── core/                    # Settings, Fernet crypto, Redis CacheService, deps
 │   │   ├── db/                      # SQLAlchemy async engine, sessionmaker, and Alembic migrations
 │   │   ├── integrations/            # External clients (JiraClient, ADF Converter, GitHub App)
-│   │   │   └── jira/                # Jira REST API client & Atlassian Document Format parser
+│   │   │   └── jira/                # Jira OAuth 2.0 / REST client & Atlassian Document Format parser
 │   │   ├── modules/                 # Domain-driven modular service layers
+│   │   │   ├── agent/               # LangGraph chatbot, HITL approvals, SSE streaming
 │   │   │   ├── audit/               # AuditLog ORM models and activity tracking
 │   │   │   ├── auth/                # Clerk JWT auth & user synchronization
 │   │   │   ├── dashboard/           # Summary KPI metrics and activity streams
 │   │   │   ├── github/              # GitHub App webhooks, live CI checks, correlation, & Actions health
+│   │   │   ├── health/              # Service liveness & /api/v1/health/ai provider telemetry
 │   │   │   ├── impact/              # Blast radius jobs, graph traversal, and risk scoring
 │   │   │   ├── indexing/            # Tree-sitter AST parsers, semantic chunkers, and embedders
-│   │   │   ├── jira/                # Jira integration CRUD, Kanban board & issue search routes
+│   │   │   ├── jira/                # Jira OAuth 2.0 3LO, auto-webhooks, Kanban & issue sync routes
 │   │   │   ├── pr/                  # Pull request metadata models and synchronizer
 │   │   │   ├── repository/          # Repository CRUD, settings, and workspace transfer
 │   │   │   ├── requirement/         # Requirement specifications and version history
@@ -62,19 +64,25 @@ export function ProjectStructureDoc() {
 ├── frontend/
 │   ├── app/                         # Next.js 16 App Router
 │   │   ├── (protected)/             # Authenticated workspace application routes
+│   │   │   ├── agent/               # Autonomous LangGraph AI Coding Agent UI
 │   │   │   ├── analysis/            # Blast radius analysis UI
 │   │   │   ├── dashboard/           # Executive KPI dashboard & activity feeds
 │   │   │   ├── pr-reviews/          # AI PR review feed & diff chunk viewer
 │   │   │   ├── pull-requests/       # Pull requests table view
 │   │   │   ├── repositories/        # Repository management & automation settings
-│   │   │   ├── requirements/        # Requirements & Jira import triggers
+│   │   │   ├── requirements/        # Requirements & Jira OAuth / import triggers
 │   │   │   ├── traceability/        # Traceability matrix & compliance scoring
 │   │   │   └── workspaces/          # Workspace management & invite generation
+│   │   ├── contact/                 # Public customer support & contact page
 │   │   ├── docs/                    # Public Documentation Portal
+│   │   ├── privacy/                 # Public Privacy Policy (Atlassian OAuth & Clerk disclosures)
+│   │   ├── terms/                   # Public Terms of Service
+│   │   ├── sitemap.ts               # Dynamic XML sitemap generation
+│   │   ├── robots.ts                # Crawler directives
 │   │   ├── page.tsx                 # Public landing page
 │   │   └── layout.tsx               # Root HTML layout with ClerkProvider
 │   ├── components/                  # Reusable UI components (landing, docs, ui)
-│   ├── features/                    # Domain-driven features (analysis, github, jira, pr-reviews, requirements)
+│   ├── features/                    # Domain-driven features (agent, analysis, github, jira, pr-reviews, requirements)
 │   ├── lib/                         # API client, TypeScript types, and utilities
 │   ├── stores/                      # Zustand state stores (workspace selection)
 │   └── package.json                 # Frontend dependencies & scripts`}
@@ -130,8 +138,13 @@ export function ProjectStructureDoc() {
               </tr>
               <tr>
                 <td className="px-4 py-2.5 font-bold text-[#111111]">jira_integrations</td>
-                <td className="px-4 py-2.5 text-[#6B7280]">workspace_id, jira_domain, jira_email</td>
-                <td className="px-4 py-2.5 font-sans">Encrypted Jira REST API connection credentials</td>
+                <td className="px-4 py-2.5 text-[#6B7280]">workspace_id, auth_type, cloud_id, oauth_expires_at, jira_webhook_id</td>
+                <td className="px-4 py-2.5 font-sans">Fernet-encrypted Jira OAuth 2.0 / API credentials &amp; auto-webhook lease metadata</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2.5 font-bold text-[#111111]">agent_sessions / agent_messages</td>
+                <td className="px-4 py-2.5 text-[#6B7280]">id, workspace_id, repository_id, current_phase, artifacts</td>
+                <td className="px-4 py-2.5 font-sans">Persistent LangGraph AI coding agent threads &amp; Human-in-the-Loop approvals</td>
               </tr>
               <tr>
                 <td className="px-4 py-2.5 font-bold text-[#111111]">pr_reviews</td>

@@ -3,23 +3,22 @@
 import React from "react";
 import { DocsCodeBlock } from "../DocsCodeBlock";
 import { DocsCallout } from "../DocsCallout";
-import { Kanban, Zap, RefreshCw, CheckCircle2, Lock, ExternalLink, Activity, Radio, ShieldCheck, Terminal } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { JiraSyncVisual } from "../architecture/JiraSyncVisual";
 
 export function JiraIntegrationDoc() {
   return (
     <article className="space-y-12 max-w-5xl text-[15px] leading-relaxed text-[#222222]">
-      
       {/* Title & Header */}
       <div>
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/10 text-accent font-mono text-[11px] font-bold uppercase tracking-wider mb-3">
           Documentation // Integrations
         </div>
         <h1 id="jira-integration-guide" className="text-3xl sm:text-5xl font-serif font-bold text-[#111111] tracking-tight">
-          Atlassian Jira REST API &amp; Bidirectional Sync
+          Atlassian Jira OAuth 2.0 (3LO) &amp; Bidirectional Sync
         </h1>
         <p className="mt-4 text-base sm:text-lg text-[#555E6D] leading-relaxed">
-          TraceIQ connects seamlessly with Atlassian Jira Cloud and Jira Server. Engineering teams can import requirements directly from Kanban boards and Scrum sprints, convert complex nested Atlassian Document Format (ADF) into clean Markdown, transition issue workflow statuses, and receive real-time updates via HMAC-verified webhooks.
+          TraceIQ connects seamlessly with Atlassian Jira Cloud via <strong>zero-click OAuth 2.0 (3LO) with Auto-Registered Webhooks</strong> or optional Manual API Tokens. Teams can import Kanban boards and Scrum sprints, convert Atlassian Document Format (ADF) into clean Markdown, transition issue statuses, and detect mid-sprint requirement drift.
         </p>
       </div>
 
@@ -31,10 +30,8 @@ export function JiraIntegrationDoc() {
           Bidirectional Synchronization Architecture
         </h2>
         <p className="text-sm text-[#555E6D] font-sans">
-          How inbound webhooks and outbound status transitions flow between Atlassian Jira and TraceIQ:
+          How Atlassian OAuth 2.0 (3LO), Fernet encryption, Redis single-flight token locks, auto-registered webhooks, and outbound workflow transitions flow between Jira Cloud and TraceIQ:
         </p>
-        
-        {/* Custom Visual Component */}
         <JiraSyncVisual />
       </section>
 
@@ -43,30 +40,45 @@ export function JiraIntegrationDoc() {
         <h2 id="jira-connection-setup" className="text-2xl sm:text-3xl font-serif font-bold text-[#111111] pb-2 border-b border-[#1B2A4A]/10">
           Connecting Jira to your Workspace
         </h2>
-        <p>
-          TraceIQ communicates with the standard Jira REST API using Basic Authentication (<code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">email:api_token</code>). Credentials are encrypted and scoped to the active workspace.
-        </p>
 
-        <ol className="list-decimal pl-5 space-y-2 text-sm text-[#333333]">
-          <li>
-            Navigate to <strong>Requirements</strong> in TraceIQ and click <strong>&quot;Import from Jira&quot;</strong>.
-          </li>
-          <li>
-            In the Jira Configuration modal, enter your <strong>Jira Domain</strong> (e.g. <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">https://mycompany.atlassian.net</code>).
-          </li>
-          <li>
-            Enter your Atlassian account email address.
-          </li>
-          <li>
-            Generate an Atlassian API Token from your <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="underline font-semibold text-accent inline-flex items-center gap-0.5">Atlassian Security Settings <ExternalLink className="w-3 h-3" /></a> and paste it into the token field.
-          </li>
-          <li>
-            Click <strong>&quot;Test Connection&quot;</strong> to verify connectivity and API scopes before saving.
-          </li>
-        </ol>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Option A */}
+          <div className="p-5 rounded-2xl bg-white border border-emerald-600/25 shadow-sm space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[11px] font-bold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                Recommended // Zero-Click
+              </span>
+            </div>
+            <h3 className="font-serif font-bold text-lg text-[#111111]">
+              Option A: OAuth 2.0 (3LO) + Auto-Webhook
+            </h3>
+            <ol className="list-decimal pl-5 space-y-1.5 text-xs text-[#333333]">
+              <li>Open <strong>Requirements</strong> &rarr; <strong>Connect Jira</strong> and click <strong>Connect with Jira (OAuth 2.0)</strong>.</li>
+              <li>Authorize access to your Jira Cloud site on Atlassian&apos;s consent screen.</li>
+              <li>TraceIQ verifies the single-use Redis CSRF <code className="font-mono">state</code>, encrypts your tokens at rest, and automatically registers an HTTPS webhook (when <code className="font-mono">PUBLIC_BACKEND_URL</code> is HTTPS).</li>
+            </ol>
+          </div>
 
-        <DocsCallout type="tip" title="API Token Security & Masking">
-          Your Atlassian API token is never exposed to the client in plain text. Responses from <code className="font-mono">GET /api/v1/jira/config</code> return a masked preview (e.g. <code className="font-mono">ATAT...xxxx</code>).
+          {/* Option B */}
+          <div className="p-5 rounded-2xl bg-white border border-[#1B2A4A]/15 shadow-sm space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[11px] font-bold uppercase text-[#1B2A4A] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                Fallback // Basic Auth
+              </span>
+            </div>
+            <h3 className="font-serif font-bold text-lg text-[#111111]">
+              Option B: Manual API Token
+            </h3>
+            <ol className="list-decimal pl-5 space-y-1.5 text-xs text-[#333333]">
+              <li>Switch to the <strong>Manual API Token</strong> tab inside the Jira modal.</li>
+              <li>Enter your Jira domain (e.g. <code className="font-mono">https://mycompany.atlassian.net</code>) and Atlassian email.</li>
+              <li>Generate an API token in <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="underline font-semibold text-accent inline-flex items-center gap-0.5">Atlassian Security Settings <ExternalLink className="w-3 h-3" /></a>, click <strong>Test Connection</strong>, and save.</li>
+            </ol>
+          </div>
+        </div>
+
+        <DocsCallout type="tip" title="Zero Plaintext Secrets & Rotating Token Safety">
+          OAuth access tokens, rotating refresh tokens, and manual API tokens are encrypted at rest with <code className="font-mono">Fernet (enc:v1:)</code> via <code className="font-mono">CREDENTIAL_ENCRYPTION_KEY</code>. <code className="font-mono">GET /api/v1/jira/config</code> never exposes OAuth tokens or OAuth-managed webhook secrets to clients, and concurrent refresh attempts serialize behind a Redis distributed lock.
         </DocsCallout>
       </section>
 
@@ -76,7 +88,7 @@ export function JiraIntegrationDoc() {
           Atlassian Document Format (ADF) Parser
         </h2>
         <p>
-          Jira Cloud v3 formats issue descriptions as complex nested JSON (Atlassian Document Format). TraceIQ includes a built-in recursive parser (<code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">app/modules/jira/services/adf_converter.py</code>) that automatically converts ADF nodes into clean GitHub-flavored Markdown:
+          Jira Cloud v3 formats issue descriptions as complex nested JSON (Atlassian Document Format). TraceIQ includes a recursive parser (<code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">app/modules/jira/services/adf_converter.py</code>) converting ADF nodes cleanly into GitHub-Flavored Markdown:
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
@@ -110,50 +122,40 @@ export function JiraIntegrationDoc() {
           Dynamic Jira Workflow Transitions
         </h2>
         <p>
-          Transition Jira issue statuses directly from the TraceIQ dashboard (e.g. move a ticket from <em>In Progress</em> to <em>In Review</em> or <em>Done</em> once code impact analysis confirms complete test coverage).
+          Transition Jira issue statuses directly from TraceIQ (e.g. moving an issue from <em>In Progress</em> to <em>In Review</em> or <em>Done</em> after impact verification). Every transition records an audit log entry and can post a formatted ADF comment to Jira.
         </p>
-        <ul className="space-y-2 text-sm text-[#333333]">
-          <li>• <strong>Dynamic Transitions:</strong> TraceIQ queries Jira for valid workflow transitions for the specific issue.</li>
-          <li>• <strong>Audit Trail:</strong> Each transition is recorded in TraceIQ&apos;s append-only audit trail and can optionally post a confirmation comment to Jira.</li>
-        </ul>
         <DocsCodeBlock
           code={`POST /api/v1/jira/requirements/{requirement_id}/transition
 Content-Type: application/json
+X-Workspace-Id: <workspace_uuid>
 
 {
   "transition_id": "31",
   "post_comment": true,
-  "comment": "Transitioned to In Review after automated TraceIQ verification."
+  "comment": "Transitioned to In Review after TraceIQ blast radius verification."
 }`}
           language="json"
           filename="Transition Jira Issue"
         />
       </section>
 
-      {/* Webhooks, HMAC Security, and Test Ping */}
+      {/* Webhooks, Auto-Registration, and Test Simulation */}
       <section className="space-y-4 pt-2">
         <h2 id="jira-webhooks" className="text-2xl sm:text-3xl font-serif font-bold text-[#111111] pb-2 border-b border-[#1B2A4A]/10">
-          Webhooks, HMAC Security &amp; Test Simulation
+          Auto-Registered Webhooks, Localhost Tunnels &amp; Test Simulation
         </h2>
         <p>
-          Register an incoming webhook in Jira to enable autonomous bidirectional sync. When a Jira issue status changes or description is edited, Jira notifies TraceIQ in real time.
+          In OAuth 2.0 mode, TraceIQ automatically registers a dynamic webhook with Jira Cloud whenever <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">PUBLIC_BACKEND_URL</code> is a public <code className="font-mono text-xs bg-slate-100 px-1">https://</code> URL and refreshes its 30-day lease on demand via <code className="font-mono text-xs bg-slate-100 px-1">POST /api/v1/jira/oauth/webhook/sync</code>.
         </p>
 
-        <div className="space-y-3">
-          <h3 className="font-serif font-bold text-base text-[#111111]">1. Configure Webhook in Jira</h3>
-          <ol className="list-decimal pl-5 space-y-2 text-sm text-[#333333]">
-            <li>Open the Jira Connection Modal in TraceIQ and copy your <strong>Webhook URL</strong> and <strong>Shared Secret</strong>.</li>
-            <li>In Jira: <strong>Jira Settings &rarr; System &rarr; WebHooks &rarr; Create a WebHook</strong>.</li>
-            <li>Set URL to <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">https://your-domain.com/api/v1/jira/webhook</code>.</li>
-            <li>Paste the secret into the <strong>Secret</strong> field.</li>
-            <li>Under Issue-related events, select <code className="font-mono text-xs">Issue: updated</code> and <code className="font-mono text-xs">Issue: deleted</code>.</li>
-          </ol>
-        </div>
+        <DocsCallout type="note" title="Testing Webhooks on Localhost (ngrok)">
+          Jira Cloud refuses private <code className="font-mono">http://localhost</code> webhook callbacks. For local end-to-end live sync, expose port 8000 with <code className="font-mono">ngrok http 8000</code>, set <code className="font-mono">PUBLIC_BACKEND_URL=https://&lt;your-id&gt;.ngrok-free.app</code>, and click <strong>Register Webhook</strong> inside the Jira modal.
+        </DocsCallout>
 
         <div className="space-y-3 pt-2">
-          <h3 className="font-serif font-bold text-base text-[#111111]">2. Test Webhook Ping Endpoint</h3>
+          <h3 className="font-serif font-bold text-base text-[#111111]">In-App Test Simulation Endpoint</h3>
           <p className="text-sm text-[#555E6D]">
-            Verify webhook handling without triggering live changes in Jira using the built-in test simulation endpoint:
+            Even without an external tunnel, verify webhook handling and Redis cache invalidation directly via the simulation endpoint:
           </p>
           <DocsCodeBlock
             code={`POST /api/v1/jira/webhook/test
@@ -161,27 +163,14 @@ Content-Type: application/json
 X-Workspace-Id: ws_123456
 
 {
-  "jira_issue_key": "PROJ-101",
-  "simulated_status": "In Review"
-}
-
-Response (200 OK):
-{
-  "status": "success",
-  "matched": true,
-  "action_taken": "updated",
-  "message": "Simulated webhook delivery processed successfully for PROJ-101 (status: In Review)"
+  "issue_key": "SAM1-7",
+  "new_status": "Done"
 }`}
             language="json"
-            filename="Test Webhook Ping Simulation"
+            filename="Webhook Delivery Simulation"
           />
         </div>
-
-        <DocsCallout type="note" title="Requirement Drift Protection">
-          If a product manager modifies the Jira issue description or summary while development is ongoing, TraceIQ flags the requirement with a <strong>Drift Detected</strong> audit event rather than silently overwriting your active requirement document.
-        </DocsCallout>
       </section>
-
     </article>
   );
 }

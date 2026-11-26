@@ -79,10 +79,21 @@ export function TroubleshootingDoc() {
         <div className="p-4 rounded-xl bg-white border border-[#1B2A4A]/15 space-y-2">
           <h3 className="font-serif font-bold text-sm text-[#111111] flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600" />
-            <span>3. Jira Connection returns 401 Unauthorized</span>
+            <span>3. Jira OAuth shows &quot;Localhost detected — Auto-Webhook skipped&quot;</span>
           </h3>
           <p className="text-xs text-[#6B7280]">
-            Ensure you are using your Atlassian account <strong>email address</strong> (not your username or display name) and that your API token was created under <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="underline font-semibold text-accent">Atlassian Security Settings</a>.
+            Atlassian Jira Cloud refuses private <code className="font-mono bg-slate-100 px-1">http://localhost</code> webhook URLs. Run <code className="font-mono bg-slate-100 px-1">ngrok http 8000</code>, set <code className="font-mono bg-slate-100 px-1">PUBLIC_BACKEND_URL=https://&lt;your-id&gt;.ngrok-free.app</code> in <code className="font-mono">backend/.env.local</code>, restart the backend, and click <strong>Register Webhook</strong> in the Jira modal.
+          </p>
+        </div>
+
+        {/* Issue 4 */}
+        <div className="p-4 rounded-xl bg-white border border-[#1B2A4A]/15 space-y-2">
+          <h3 className="font-serif font-bold text-sm text-[#111111] flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <span>4. Jira Manual Token Connection returns 401 Unauthorized</span>
+          </h3>
+          <p className="text-xs text-[#6B7280]">
+            Ensure you are using your Atlassian account <strong>email address</strong> (not display name) or switch to <strong>Connect with Jira (OAuth 2.0)</strong>. In production deployments, verify <code className="font-mono bg-slate-100 px-1">CREDENTIAL_ENCRYPTION_KEY</code> is configured so Fernet secrets decrypt consistently across restarts.
           </p>
         </div>
       </section>

@@ -3,7 +3,7 @@
 import React from "react";
 import { DocsCodeBlock } from "../DocsCodeBlock";
 import { DocsCallout } from "../DocsCallout";
-import { Users, FolderGit2, FileText, Zap, GitPullRequest, ShieldCheck, Activity } from "lucide-react";
+import { Users, FolderGit2, FileText, Zap, GitPullRequest, ShieldCheck, Activity, Bot } from "lucide-react";
 
 export function UserGuidesDoc() {
   return (
@@ -123,6 +123,23 @@ export function UserGuidesDoc() {
             </ul>
           </li>
           <li>In <strong>Repositories</strong> &rarr; select a repository &rarr; click the <strong>Actions</strong> tab to inspect overall workflow success rates, Mean Time to Resolution (MTTR), active streaks, and flaky test detection.</li>
+        </ol>
+      </section>
+
+      {/* Guide 7: Autonomous AI Coding Agent */}
+      <section className="space-y-4 pt-4">
+        <h2 id="using-ai-agent" className="text-xl sm:text-2xl font-serif font-bold text-[#111111] flex items-center gap-2">
+          <Bot className="w-5 h-5 text-accent" />
+          <span>7. Using the Autonomous AI Coding Agent</span>
+        </h2>
+        <p>
+          Open the <strong>AI Agent</strong> view in the navigation sidebar to converse directly with your indexed repositories, requirements, and open PRs:
+        </p>
+        <ol className="list-decimal pl-5 space-y-1.5 text-xs text-[#111111]">
+          <li>Type <code className="font-mono">@</code> in the prompt composer to attach <code className="font-mono">@repo:owner/name</code>, <code className="font-mono">@req:ISSUE-KEY</code>, or <code className="font-mono">@pr:#number</code> entities.</li>
+          <li>Ask TraceIQ to trace callers, audit missing unit tests, or verify acceptance criteria against a live GitHub PR diff.</li>
+          <li>When the agent proposes a starting-point audit or PR draft, review the inline <strong>HITL Approval Card</strong> and click <strong>Approve</strong> to resume execution.</li>
+          <li>Follow real-time tool logs, GFM tables, and syntax-highlighted diffs streamed over SSE as sessions auto-title and index.</li>
         </ol>
       </section>
 

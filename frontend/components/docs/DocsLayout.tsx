@@ -11,6 +11,7 @@ import { GettingStartedDoc } from "./content/GettingStartedDoc";
 import { ArchitectureDoc } from "./content/ArchitectureDoc";
 import { WorkingDoc } from "./content/WorkingDoc";
 import { CoreConceptsDoc } from "./content/CoreConceptsDoc";
+import { AiAgentDoc } from "./content/AiAgentDoc";
 import { JiraIntegrationDoc } from "./content/JiraIntegrationDoc";
 import { UserGuidesDoc } from "./content/UserGuidesDoc";
 import { ProjectStructureDoc } from "./content/ProjectStructureDoc";
@@ -53,13 +54,20 @@ const TOC_MAP: Record<string, TOCItem[]> = {
     { id: "actions-health-analytics", label: "6. Actions Health & MTTR", level: 2 },
     { id: "workspaces-and-rbac", label: "7. Multi-Tenant RBAC Matrix", level: 2 },
   ],
+  "ai-agent": [
+    { id: "agent-overview", label: "AI Agent Overview", level: 2 },
+    { id: "interactive-agent-visual", label: "Interactive Workspace", level: 2 },
+    { id: "langgraph-workflow", label: "LangGraph & HITL Gates", level: 2 },
+    { id: "mentions-and-streaming", label: "@Mentions & SSE Stream", level: 2 },
+    { id: "multi-provider-router", label: "Multi-Provider Failover", level: 2 },
+  ],
   "jira-integration": [
     { id: "jira-integration-guide", label: "Overview", level: 2 },
     { id: "jira-sync-pipeline", label: "Sync Architecture", level: 2 },
-    { id: "jira-connection-setup", label: "Connecting Jira to Workspace", level: 2 },
+    { id: "jira-connection-setup", label: "OAuth 2.0 & API Tokens", level: 2 },
     { id: "adf-to-markdown", label: "ADF Document Parser", level: 2 },
     { id: "status-transitions", label: "Workflow Transitions", level: 2 },
-    { id: "jira-webhooks", label: "Webhooks & Drift Protection", level: 2 },
+    { id: "jira-webhooks", label: "Auto-Webhooks & Testing", level: 2 },
   ],
   "user-guides": [
     { id: "managing-workspaces", label: "1. Team Workspaces & Invites", level: 2 },
@@ -68,6 +76,7 @@ const TOC_MAP: Record<string, TOCItem[]> = {
     { id: "pull-request-reviews", label: "4. Reviewing Pull Requests", level: 2 },
     { id: "traceability-matrix", label: "5. Compliance & Audit Matrix", level: 2 },
     { id: "monitoring-ci-actions", label: "6. Monitoring CI & Actions", level: 2 },
+    { id: "using-ai-agent", label: "7. Using the AI Coding Agent", level: 2 },
   ],
   "project-structure": [
     { id: "repository-tree", label: "Repository Directory Tree", level: 2 },
@@ -154,6 +163,7 @@ export function DocsLayout() {
           {activeSection === "architecture" && <ArchitectureDoc />}
           {activeSection === "working" && <WorkingDoc />}
           {activeSection === "core-concepts" && <CoreConceptsDoc />}
+          {activeSection === "ai-agent" && <AiAgentDoc />}
           {activeSection === "jira-integration" && <JiraIntegrationDoc />}
           {activeSection === "user-guides" && <UserGuidesDoc />}
           {activeSection === "project-structure" && <ProjectStructureDoc />}

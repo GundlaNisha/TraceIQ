@@ -11,9 +11,17 @@ from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.crypto import decrypt_secret, encrypt_secret
 from app.integrations.jira.client import JiraApiError, JiraClient, normalize_jira_url
 from app.modules.audit.models.audit import AuditLog
 from app.modules.jira.models.jira_integration import JiraIntegration
+from app.modules.jira.services.jira_oauth_service import (
+    ensure_active_dynamic_webhook,
+    ensure_valid_oauth_token,
+    is_jira_oauth_enabled,
+    resolve_public_backend_url,
+)
 from app.modules.jira.schemas.jira_schemas import (
     JiraBatchImportResponse,
     JiraBoardItem,
@@ -41,7 +49,9 @@ logger = logging.getLogger(__name__)
 
 
 def get_request_base_url(request: Request) -> str:
-    """Extract public base URL respecting reverse proxies (Render, Vercel, Cloudflare)."""
+    """Extract public base URL respecting reverse proxies and PUBLIC_BACKEND_URL override."""
+    if settings.public_backend_url and settings.public_backend_url.strip():
+        return settings.public_backend_url.strip().rstrip("/")
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme
     host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
     if host:
@@ -49,7 +59,7 @@ def get_request_base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-def mask_token(token: str) -> str:
+def mask_token(token: str | None) -> str:
     """Mask Atlassian API token for safe display in UI/responses."""
     if not token:
         return ""
@@ -62,8 +72,9 @@ async def get_active_jira_client(
     db: AsyncSession,
     user_id: str,
     workspace_id: uuid.UUID | None = None,
+    public_base_url: str | None = None,
 ) -> tuple[JiraClient, JiraIntegration]:
-    """Retrieve active JiraIntegration and instantiate a configured JiraClient."""
+    """Retrieve active JiraIntegration and instantiate a configured JiraClient (OAuth2 or API Token)."""
     integration = await get_jira_integration(db, user_id, workspace_id)
     if not integration or not integration.is_active:
         raise HTTPException(
@@ -71,10 +82,37 @@ async def get_active_jira_client(
             detail="Jira is not configured for this workspace. Please configure your Jira connection in workspace settings.",
         )
 
+    if integration.auth_type == "oauth2" and integration.cloud_id:
+        access_token = await ensure_valid_oauth_token(db, integration)
+
+        async def _refresh_cb() -> str:
+            return await ensure_valid_oauth_token(db, integration, force_refresh=True)
+
+        client = JiraClient(
+            domain=integration.jira_domain,
+            email=integration.jira_email,
+            auth_type="oauth2",
+            access_token=access_token,
+            cloud_id=integration.cloud_id,
+            on_token_refresh=_refresh_cb,
+        )
+        # Lazy keepalive for 30-day Jira dynamic webhook TTL
+        try:
+            await ensure_active_dynamic_webhook(
+                db=db,
+                client=client,
+                integration=integration,
+                public_base_url=public_base_url,
+            )
+        except Exception as wh_err:
+            logger.debug(f"Webhook keepalive check skipped: {wh_err}")
+        return client, integration
+
+    raw_api_token = decrypt_secret(integration.jira_api_token)
     client = JiraClient(
         domain=integration.jira_domain,
         email=integration.jira_email,
-        api_token=integration.jira_api_token,
+        api_token=raw_api_token,
     )
     return client, integration
 
@@ -118,12 +156,16 @@ async def get_jira_config_response(
     workspace_id: uuid.UUID | None = None,
     base_url: str | None = None,
 ) -> JiraConfigResponse:
-    """Get current Jira configuration details without exposing the raw API token."""
+    """Get current Jira configuration details without exposing OAuth tokens or raw API tokens."""
+    oauth_enabled = is_jira_oauth_enabled()
     integration = await get_jira_integration(db, user_id, workspace_id)
     if not integration:
         return JiraConfigResponse(
             id=None,
             workspace_id=workspace_id,
+            auth_type="api_token",
+            cloud_id=None,
+            oauth_enabled=oauth_enabled,
             jira_domain="",
             jira_email="",
             default_project_key=None,
@@ -132,29 +174,47 @@ async def get_jira_config_response(
             token_preview="",
             webhook_url=None,
             webhook_secret=None,
+            webhook_status="manual",
+            webhook_expires_at=None,
             created_at=None,
             updated_at=None,
         )
 
-    # Ensure integration has a stable webhook secret initialized
+    # Ensure integration has a stable encrypted webhook secret initialized
     if not integration.webhook_secret:
-        integration.webhook_secret = _secrets.token_urlsafe(32)
+        integration.webhook_secret = encrypt_secret(_secrets.token_urlsafe(32))
         await db.commit()
         await db.refresh(integration)
 
-    webhook_url = f"{base_url.rstrip('/')}/api/v1/jira/webhook" if base_url else None
+    effective_base = resolve_public_backend_url(base_url)
+    webhook_url = f"{effective_base}/api/v1/jira/webhook" if effective_base else None
+    is_oauth = integration.auth_type == "oauth2"
+
+    # Never expose webhook_secret in OAuth2 mode (auto-managed server-side);
+    # only decrypt and return for manual API-token setup instructions.
+    exposed_webhook_secret = None if is_oauth else decrypt_secret(integration.webhook_secret)
+    token_preview = (
+        "OAuth 2.0 (Auto-Refreshed)"
+        if is_oauth
+        else mask_token(decrypt_secret(integration.jira_api_token))
+    )
 
     return JiraConfigResponse(
         id=integration.id,
         workspace_id=integration.workspace_id,
+        auth_type=integration.auth_type,
+        cloud_id=integration.cloud_id,
+        oauth_enabled=oauth_enabled,
         jira_domain=integration.jira_domain,
         jira_email=integration.jira_email,
         default_project_key=integration.default_project_key,
         is_active=integration.is_active,
         is_configured=True,
-        token_preview=mask_token(integration.jira_api_token),
+        token_preview=token_preview,
         webhook_url=webhook_url,
-        webhook_secret=integration.webhook_secret,
+        webhook_secret=exposed_webhook_secret,
+        webhook_status=integration.webhook_status,
+        webhook_expires_at=integration.webhook_expires_at,
         created_at=integration.created_at,
         updated_at=integration.updated_at,
     )
@@ -212,25 +272,42 @@ async def save_jira_config(
 
     # Check if integration already exists for this workspace / user
     integration = await get_jira_integration(db, user_id, workspace_id)
+    enc_api_token = encrypt_secret(api_token.strip())
     if integration:
+        integration.auth_type = "api_token"
+        integration.cloud_id = None
+        integration.oauth_access_token = None
+        integration.oauth_refresh_token = None
+        integration.oauth_expires_at = None
+        integration.oauth_scopes = None
+        integration.jira_webhook_id = None
+        integration.webhook_expires_at = None
+        integration.webhook_status = "manual"
         integration.jira_domain = norm_domain
         integration.jira_email = email.strip()
-        integration.jira_api_token = api_token.strip()
+        integration.jira_api_token = enc_api_token
         integration.default_project_key = default_project_key.strip() if default_project_key else None
         if webhook_secret and webhook_secret.strip():
-            integration.webhook_secret = webhook_secret.strip()
+            integration.webhook_secret = encrypt_secret(webhook_secret.strip())
         elif not integration.webhook_secret:
-            integration.webhook_secret = _secrets.token_urlsafe(32)
+            integration.webhook_secret = encrypt_secret(_secrets.token_urlsafe(32))
         integration.is_active = True
     else:
+        raw_secret = (
+            webhook_secret.strip()
+            if (webhook_secret and webhook_secret.strip())
+            else _secrets.token_urlsafe(32)
+        )
         integration = JiraIntegration(
             workspace_id=workspace_id,
             user_id=user_id,
+            auth_type="api_token",
             jira_domain=norm_domain,
             jira_email=email.strip(),
-            jira_api_token=api_token.strip(),
+            jira_api_token=enc_api_token,
             default_project_key=default_project_key.strip() if default_project_key else None,
-            webhook_secret=webhook_secret.strip() if (webhook_secret and webhook_secret.strip()) else _secrets.token_urlsafe(32),
+            webhook_secret=encrypt_secret(raw_secret),
+            webhook_status="manual",
             is_active=True,
         )
         db.add(integration)
@@ -253,9 +330,23 @@ async def delete_jira_config(
     user_id: str,
     workspace_id: uuid.UUID | None,
 ) -> None:
-    """Remove active Jira integration for workspace or user."""
+    """Remove active Jira integration for workspace or user, cleaning up OAuth webhooks."""
     integration = await get_jira_integration(db, user_id, workspace_id)
     if integration:
+        if integration.auth_type == "oauth2" and integration.cloud_id and integration.jira_webhook_id:
+            try:
+                access_token = await ensure_valid_oauth_token(db, integration)
+                client = JiraClient(
+                    domain=integration.jira_domain,
+                    email=integration.jira_email,
+                    auth_type="oauth2",
+                    access_token=access_token,
+                    cloud_id=integration.cloud_id,
+                )
+                await client.delete_dynamic_webhooks([integration.jira_webhook_id])
+            except Exception as wh_err:
+                logger.warning(f"Best-effort cleanup of Jira webhook failed during disconnect: {wh_err}")
+
         await db.delete(integration)
         audit = AuditLog(
             user_id=str(user_id),
@@ -793,23 +884,26 @@ async def get_or_create_webhook_secret(
         )
 
     if custom_secret and custom_secret.strip():
-        integration.webhook_secret = custom_secret.strip()
+        plain_secret = custom_secret.strip()
+        integration.webhook_secret = encrypt_secret(plain_secret)
         await db.commit()
         await db.refresh(integration)
         message = "Custom webhook secret saved successfully."
     elif rotate or not integration.webhook_secret:
-        new_secret = _secrets.token_urlsafe(32)
-        integration.webhook_secret = new_secret
+        plain_secret = _secrets.token_urlsafe(32)
+        integration.webhook_secret = encrypt_secret(plain_secret)
         await db.commit()
         await db.refresh(integration)
         message = "Webhook secret regenerated successfully. Please update the Secret in your Jira webhook configuration."
     else:
+        plain_secret = decrypt_secret(integration.webhook_secret)
         message = "Active webhook secret retrieved successfully."
 
-    webhook_url = f"{base_url.rstrip('/')}/api/v1/jira/webhook"
+    effective_base = resolve_public_backend_url(base_url)
+    webhook_url = f"{effective_base}/api/v1/jira/webhook"
     return JiraWebhookSecretResponse(
         webhook_url=webhook_url,
-        webhook_secret=integration.webhook_secret or "",
+        webhook_secret=plain_secret,
         message=message,
     )
 
@@ -823,8 +917,10 @@ async def handle_jira_webhook(
     event_type: str,
     issue_data: dict,
     changelog: dict | None,
+    actor_user_id: str | None = None,
+    integration: JiraIntegration | None = None,
 ) -> dict:
-    """Process an inbound Jira webhook event.
+    """Process an inbound Jira webhook event scoped to the matched integration tenant.
 
     Supported events:
     - jira:issue_updated / issue_updated — re-sync requirement if relevant fields changed.
@@ -835,8 +931,13 @@ async def handle_jira_webhook(
         logger.warning("Jira webhook: no issue key in payload; skipping.")
         return {"success": False, "reason": "no_issue_key"}
 
-    # Find all requirements linked to this Jira issue
+    # Find requirements linked to this Jira issue, scoped to matched tenant if provided
     stmt = select(Requirement).where(Requirement.jira_issue_key == issue_key)
+    if integration is not None:
+        if integration.workspace_id:
+            stmt = stmt.where(Requirement.workspace_id == integration.workspace_id)
+        elif integration.user_id:
+            stmt = stmt.where(Requirement.user_id == integration.user_id)
     res = await db.execute(stmt)
     requirements: list[Requirement] = list(res.scalars().all())
 
@@ -913,21 +1014,25 @@ async def handle_jira_webhook(
             req.jira_synced_at = now_utc
             was_updated = True
 
+        # Resolve a valid users.id FK for AuditLog entries (never use a dummy string like "system").
+        audit_user_id = str(req.user_id) if req.user_id else actor_user_id
+
         # If description or summary changed, log as drift (do NOT auto-overwrite requirement text)
         if "description" in changed_fields or "summary" in changed_fields:
-            audit = AuditLog(
-                user_id="system",
-                action="jira.drift_detected",
-                resource_type="requirement",
-                resource_id=str(req.id),
-            )
-            db.add(audit)
+            if audit_user_id:
+                audit = AuditLog(
+                    user_id=audit_user_id,
+                    action="jira.drift_detected",
+                    resource_type="requirement",
+                    resource_id=str(req.id),
+                )
+                db.add(audit)
             drift_detected = True
             was_updated = True
 
-        if was_updated:
+        if was_updated and audit_user_id:
             audit_update = AuditLog(
-                user_id="system",
+                user_id=audit_user_id,
                 action="jira.webhook_sync",
                 resource_type="requirement",
                 resource_id=str(req.id),
@@ -1009,7 +1114,18 @@ async def simulate_jira_webhook_delivery(
         event_type="jira:issue_updated",
         issue_data=simulated_issue_data,
         changelog=simulated_changelog,
+        actor_user_id=user_id,
     )
+
+    try:
+        from app.core.cache import cache
+
+        await cache.delete_pattern("ws:*:jira*")
+        await cache.delete_pattern("ws:*:requirements*")
+        await cache.delete_pattern("user:*:jira*")
+        await cache.delete_pattern("user:*:requirements*")
+    except Exception:
+        pass
 
     return JiraWebhookTestResponse(
         success=True,

@@ -32,6 +32,9 @@ class JiraConfigUpdate(BaseModel):
 class JiraConfigResponse(BaseModel):
     id: uuid.UUID | None = None
     workspace_id: uuid.UUID | None = None
+    auth_type: str = "api_token"
+    cloud_id: str | None = None
+    oauth_enabled: bool = False
     jira_domain: str
     jira_email: str
     default_project_key: str | None = None
@@ -40,10 +43,12 @@ class JiraConfigResponse(BaseModel):
     token_preview: str = Field(..., description="Masked token preview, e.g. ATAT...4x9a")
     webhook_url: str | None = None
     webhook_secret: str | None = None
+    webhook_status: str = "manual"
+    webhook_expires_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    @field_serializer("created_at", "updated_at")
+    @field_serializer("created_at", "updated_at", "webhook_expires_at")
     def serialize_dates(self, dt: datetime | None, _info) -> str | None:
         if dt is None:
             return None
@@ -52,6 +57,25 @@ class JiraConfigResponse(BaseModel):
         return dt.isoformat()
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class JiraOAuthAuthorizeResponse(BaseModel):
+    authorization_url: str
+
+
+class JiraOAuthWebhookSyncResponse(BaseModel):
+    success: bool
+    webhook_status: str
+    webhook_expires_at: datetime | None = None
+    message: str
+
+    @field_serializer("webhook_expires_at")
+    def serialize_exp(self, dt: datetime | None, _info) -> str | None:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
 
 
 class JiraTestConnectionRequest(BaseModel):

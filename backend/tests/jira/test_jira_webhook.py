@@ -106,11 +106,15 @@ async def test_handle_jira_webhook_drift_detection():
     assert res["success"] is True
     assert res["drift_detected"] is True
 
-    # Verify db.add was called for AuditLog with drift action
+    # Verify db.add was called for AuditLog with drift action and valid owner user_id
     added_objects = [call.args[0] for call in mock_db.add.call_args_list]
     drift_logs = [obj for obj in added_objects if isinstance(obj, AuditLog) and obj.action == "jira.drift_detected"]
+    sync_logs = [obj for obj in added_objects if isinstance(obj, AuditLog) and obj.action == "jira.webhook_sync"]
     assert len(drift_logs) == 1
     assert drift_logs[0].resource_type == "requirement"
+    assert drift_logs[0].user_id == "user_test_a"
+    assert len(sync_logs) == 1
+    assert sync_logs[0].user_id == "user_test_a"
     mock_db.commit.assert_awaited_once()
 
 
@@ -227,6 +231,7 @@ async def test_get_or_create_webhook_secret_preserves_existing():
 
 @pytest.mark.asyncio
 async def test_get_or_create_webhook_secret_custom_and_rotate():
+    from app.core.crypto import decrypt_secret
     from app.modules.jira.services.jira_service import get_or_create_webhook_secret
 
     initial_secret = "initial_secret_111"
@@ -249,7 +254,8 @@ async def test_get_or_create_webhook_secret_custom_and_rotate():
             custom_secret="my_pasted_jira_secret_999",
         )
         assert res_custom.webhook_secret == "my_pasted_jira_secret_999"
-        assert integration.webhook_secret == "my_pasted_jira_secret_999"
+        assert integration.webhook_secret.startswith("enc:v1:")
+        assert decrypt_secret(integration.webhook_secret) == "my_pasted_jira_secret_999"
 
         # 2. Rotate secret
         res_rotated = await get_or_create_webhook_secret(

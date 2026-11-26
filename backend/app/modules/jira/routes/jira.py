@@ -7,14 +7,19 @@ import hmac
 import json
 import logging
 import uuid
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import build_cache_key, cache, cached
+from app.core.config import settings
+from app.core.crypto import decrypt_secret
 from app.core.deps import get_active_workspace_id, get_current_user
 from app.db.session import get_db
+from app.integrations.jira.client import JiraApiError
 from app.modules.auth.models.user import User
 from app.modules.jira.models.jira_integration import JiraIntegration
 from app.modules.jira.schemas.jira_schemas import (
@@ -27,6 +32,8 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraImportResult,
     JiraIssueDetailResponse,
     JiraIssueTypeItem,
+    JiraOAuthAuthorizeResponse,
+    JiraOAuthWebhookSyncResponse,
     JiraPostCommentRequest,
     JiraPostCommentResponse,
     JiraProjectItem,
@@ -43,10 +50,16 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraWebhookSecretResponse,
     JiraWebhookTestResponse,
 )
+from app.modules.jira.services.jira_oauth_service import (
+    create_oauth_authorization_url,
+    ensure_active_dynamic_webhook,
+    handle_oauth_callback,
+)
 from app.modules.jira.services.jira_service import (
     batch_import_jira_issues,
     delete_jira_config,
     generate_webhook_secret,
+    get_active_jira_client,
     get_or_create_webhook_secret,
     get_request_base_url,
     get_issue_transitions,
@@ -171,18 +184,26 @@ async def test_connection(
         )
 
     target_ws = workspace_id or get_active_workspace_id(request)
-    integration = await get_jira_integration(db, current_user.id, target_ws)
-    if not integration:
+    try:
+        client, integration = await get_active_jira_client(
+            db, current_user.id, target_ws, public_base_url=get_request_base_url(request)
+        )
+        profile = await client.test_connection()
+        return JiraTestConnectionResponse(
+            success=True,
+            account_id=profile.get("account_id"),
+            display_name=profile.get("display_name"),
+            email_address=profile.get("email_address"),
+            jira_url=profile.get("jira_url"),
+            message=f"Successfully connected to Jira ({integration.auth_type}) as {profile.get('display_name') or integration.jira_email}.",
+        )
+    except JiraApiError as exc:
+        return JiraTestConnectionResponse(success=False, message=exc.message)
+    except Exception:
         return JiraTestConnectionResponse(
             success=False,
-            message="No Jira integration configured. Please supply domain, email, and API token.",
+            message="No valid Jira integration configured. Please connect via OAuth 2.0 or supply credentials.",
         )
-
-    return await test_jira_credentials(
-        domain=integration.jira_domain,
-        email=integration.jira_email,
-        api_token=integration.jira_api_token,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -537,10 +558,125 @@ async def rotate_or_set_webhook_secret(
     )
 
 
+# ---------------------------------------------------------------------------
+# Phase 2B: Atlassian OAuth 2.0 (3LO) + Auto-Registered Webhooks
+# ---------------------------------------------------------------------------
+
+
+@router.post("/oauth/authorize", response_model=JiraOAuthAuthorizeResponse)
+async def start_jira_oauth(
+    request: Request,
+    workspace_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a single-use CSRF-protected Atlassian OAuth 2.0 authorization URL."""
+    target_ws = workspace_id or get_active_workspace_id(request)
+    base_url = get_request_base_url(request)
+    origin = request.headers.get("origin") or settings.frontend_url or "http://localhost:3000"
+    auth_url = await create_oauth_authorization_url(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+        request_base_url=base_url,
+        frontend_origin=origin,
+    )
+    return JiraOAuthAuthorizeResponse(authorization_url=auth_url)
+
+
+@router.get("/oauth/callback", include_in_schema=False)
+async def jira_oauth_callback(
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    error_description: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Atlassian OAuth 2.0 (3LO) callback handler. Never exposes secrets to browser."""
+    fallback_frontend = (settings.frontend_url or "http://localhost:3000").rstrip("/")
+
+    if error:
+        if state:
+            state_data = await cache.pop(f"jira:oauth:state:{state}")
+            if isinstance(state_data, dict) and state_data.get("frontend_origin"):
+                fallback_frontend = state_data["frontend_origin"].rstrip("/")
+        safe_msg = quote(error_description or error)
+        return RedirectResponse(url=f"{fallback_frontend}/requirements?jira_error={safe_msg}", status_code=302)
+
+    if not code or not state:
+        msg = quote("Missing OAuth authorization code or state.")
+        return RedirectResponse(url=f"{fallback_frontend}/requirements?jira_error={msg}", status_code=302)
+
+    try:
+        redirect_target, _ = await handle_oauth_callback(db=db, code=code, state=state)
+        return RedirectResponse(url=redirect_target, status_code=302)
+    except Exception as exc:
+        logger.warning(f"Jira OAuth callback failed cleanly: {getattr(exc, 'detail', exc)}")
+        detail = getattr(exc, "detail", None) or "Jira OAuth authorization failed. Please try again."
+        return RedirectResponse(
+            url=f"{fallback_frontend}/requirements?jira_error={quote(str(detail))}",
+            status_code=302,
+        )
+
+
+@router.post("/oauth/webhook/sync", response_model=JiraOAuthWebhookSyncResponse)
+async def sync_oauth_dynamic_webhook(
+    request: Request,
+    workspace_id: uuid.UUID | None = None,
+    force: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Register or refresh the auto-managed Jira Cloud webhook for an OAuth 2.0 connection."""
+    target_ws = workspace_id or get_active_workspace_id(request)
+    base_url = get_request_base_url(request)
+    client, integration = await get_active_jira_client(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+        public_base_url=base_url,
+    )
+    if integration.auth_type != "oauth2":
+        return JiraOAuthWebhookSyncResponse(
+            success=False,
+            webhook_status=integration.webhook_status,
+            webhook_expires_at=integration.webhook_expires_at,
+            message="Auto-webhook registration requires an OAuth 2.0 Jira connection.",
+        )
+
+    await ensure_active_dynamic_webhook(
+        db=db,
+        client=client,
+        integration=integration,
+        public_base_url=base_url,
+        force_reregister=force,
+    )
+    if target_ws:
+        await cache.invalidate_workspace(target_ws, "jira")
+    else:
+        await cache.invalidate_user(current_user.id, "jira")
+
+    if integration.webhook_status == "active":
+        msg = "Live Jira Cloud webhook registered and active."
+    elif integration.webhook_status == "skipped_localhost":
+        msg = "Skipped: Jira Cloud requires a public HTTPS URL (set PUBLIC_BACKEND_URL or use ngrok)."
+    else:
+        msg = "Could not register dynamic webhook with Jira Cloud. Check app manage:jira-webhook scope."
+
+    return JiraOAuthWebhookSyncResponse(
+        success=integration.webhook_status == "active",
+        webhook_status=integration.webhook_status,
+        webhook_expires_at=integration.webhook_expires_at,
+        message=msg,
+    )
+
+
 async def _dispatch_webhook_background(
     event_type: str,
     issue_data: dict,
     changelog: dict | None,
+    actor_user_id: str | None = None,
+    integration_id: uuid.UUID | None = None,
 ) -> None:
     """Run webhook event handler in background with an isolated database session."""
     from app.db.session import AsyncSessionLocal
@@ -548,11 +684,18 @@ async def _dispatch_webhook_background(
 
     async with AsyncSessionLocal() as session:
         try:
+            matched_integ = (
+                await session.get(JiraIntegration, integration_id)
+                if integration_id is not None
+                else None
+            )
             await handle_jira_webhook(
                 db=session,
                 event_type=event_type,
                 issue_data=issue_data,
                 changelog=changelog,
+                actor_user_id=actor_user_id,
+                integration=matched_integ,
             )
             try:
                 # Invalidate general Jira and requirement caches
@@ -625,7 +768,7 @@ async def jira_webhook_listener(
 
         matching_integration: JiraIntegration | None = None
         for integ in active_integrations:
-            secret = integ.webhook_secret
+            secret = decrypt_secret(integ.webhook_secret)
             if not secret:
                 continue
 
@@ -666,7 +809,7 @@ async def jira_webhook_listener(
             logger.warning("Jira webhook: failed to parse JSON body.")
             return {"ok": True, "status": "invalid_json"}
 
-        event_type: str = payload.get("webhookEvent", "")
+        event_type: str = payload.get("webhookEvent") or payload.get("issue_event_type_name") or ""
         issue_data: dict = payload.get("issue") or {}
         changelog: dict | None = payload.get("changelog")
 
@@ -679,12 +822,14 @@ async def jira_webhook_listener(
             f"(event={event_type}). Dispatching background task."
         )
 
-        # Dispatch processing in background using an isolated session
+        # Dispatch processing in background using an isolated session scoped to the matched integration
         background_tasks.add_task(
             _dispatch_webhook_background,
             event_type,
             issue_data,
             changelog,
+            matching_integration.user_id,
+            matching_integration.id,
         )
 
     except Exception as exc:

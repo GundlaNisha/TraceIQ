@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 import httpx
 
@@ -39,17 +40,35 @@ def normalize_jira_url(domain_or_url: str) -> str:
 
 
 class JiraClient:
-    """Asynchronous client interacting with Jira REST API."""
+    """Asynchronous client interacting with Jira REST API (API Token or OAuth 2.0 3LO)."""
 
-    def __init__(self, domain: str, email: str, api_token: str, timeout: float = 15.0):
-        self.base_url = normalize_jira_url(domain)
+    def __init__(
+        self,
+        domain: str,
+        email: str = "",
+        api_token: str = "",
+        timeout: float = 15.0,
+        *,
+        auth_type: str = "api_token",
+        access_token: str = "",
+        cloud_id: str | None = None,
+        on_token_refresh: Callable[[], Awaitable[str]] | None = None,
+    ):
+        self.site_url = normalize_jira_url(domain)
         self.email = email.strip()
         self.api_token = api_token.strip()
         self.timeout = timeout
+        self.auth_type = auth_type
+        self.cloud_id = cloud_id
+        self._on_token_refresh = on_token_refresh
 
-        # Basic Auth header: email:api_token
-        auth_bytes = f"{self.email}:{self.api_token}".encode("utf-8")
-        self._auth_header = f"Basic {base64.b64encode(auth_bytes).decode('utf-8')}"
+        if auth_type == "oauth2" and cloud_id:
+            self.base_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
+            self._auth_header = f"Bearer {access_token.strip()}"
+        else:
+            self.base_url = self.site_url
+            auth_bytes = f"{self.email}:{self.api_token}".encode()
+            self._auth_header = f"Basic {base64.b64encode(auth_bytes).decode('utf-8')}"
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -65,6 +84,7 @@ class JiraClient:
         path: str,
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
+        _retried_auth: bool = False,
     ) -> Any:
         url = f"{self.base_url}{path}"
         headers = self._headers()
@@ -81,12 +101,23 @@ class JiraClient:
             except (httpx.ConnectError, httpx.TimeoutException) as e:
                 logger.error(f"Jira network error connecting to {url}: {e}")
                 raise JiraApiError(
-                    f"Could not connect to Jira instance at {self.base_url}. Please check the domain name and network accessibility.",
+                    f"Could not connect to Jira instance at {self.site_url}. Please check the domain name and network accessibility.",
                     status_code=502,
                 ) from e
             except httpx.RequestError as e:
                 logger.error(f"Jira request error: {e}")
                 raise JiraApiError(f"Network error communicating with Jira: {e!s}", status_code=502) from e
+
+        if response.status_code == 401 and self.auth_type == "oauth2" and self._on_token_refresh and not _retried_auth:
+            new_access_token = await self._on_token_refresh()
+            self._auth_header = f"Bearer {new_access_token.strip()}"
+            return await self._request(
+                method=method,
+                path=path,
+                params=params,
+                json_data=json_data,
+                _retried_auth=True,
+            )
 
         if response.is_success:
             if response.status_code == 204:
@@ -157,7 +188,7 @@ class JiraClient:
             "display_name": data.get("displayName") or data.get("name", "Jira User"),
             "email_address": data.get("emailAddress") or self.email,
             "active": data.get("active", True),
-            "jira_url": self.base_url,
+            "jira_url": self.site_url,
         }
 
     async def get_projects(self) -> list[dict[str, Any]]:
@@ -453,7 +484,7 @@ class JiraClient:
             "id": str(raw.get("id", "")),
             "key": key,
             "summary": summary,
-            "url": f"{self.base_url}/browse/{key}",
+            "url": f"{self.site_url}/browse/{key}",
             "status": status_obj.get("name", "Unknown"),
             "status_category": (status_obj.get("statusCategory") or {}).get("key", "undefined"),
             "issue_type": issuetype_obj.get("name", "Story"),
@@ -504,13 +535,13 @@ class JiraClient:
 
         full_text = "\n\n".join(text_parts).strip()
         if not full_text:
-            full_text = f"Requirement imported from Jira issue [{key}]({self.base_url}/browse/{key}): {summary}"
+            full_text = f"Requirement imported from Jira issue [{key}]({self.site_url}/browse/{key}): {summary}"
 
         return {
             "id": str(raw.get("id", "")),
             "key": key,
             "summary": summary,
-            "url": f"{self.base_url}/browse/{key}",
+            "url": f"{self.site_url}/browse/{key}",
             "description_markdown": full_text,
             "raw_description": markdown_desc,
             "status": status_obj.get("name", "Unknown"),
@@ -732,3 +763,78 @@ class JiraClient:
                 await self._request("POST", f"/rest/api/2/issue/{key}/transitions", json_data=payload)
             else:
                 raise
+
+    # ------------------------------------------------------------------
+    # Dynamic Webhooks (OAuth 2.0 3LO — Jira Cloud REST API v3)
+    # ------------------------------------------------------------------
+
+    async def register_dynamic_webhook(
+        self,
+        webhook_url: str,
+        jql_filter: str = "issuetype IS NOT EMPTY",
+        events: list[str] | None = None,
+    ) -> str:
+        """Register a dynamic webhook in Jira Cloud (valid for 30 days)."""
+        target_events = events or ["jira:issue_updated", "jira:issue_deleted"]
+        payload = {
+            "url": webhook_url,
+            "webhooks": [
+                {
+                    "jqlFilter": jql_filter,
+                    "events": target_events,
+                }
+            ],
+        }
+        data = await self._request("POST", "/rest/api/3/webhook", json_data=payload)
+        results = data.get("webhookRegistrationResult", [])
+        if not results:
+            raise JiraApiError("Jira returned empty webhookRegistrationResult", status_code=502, details=data)
+
+        first = results[0]
+        if first.get("errors"):
+            err_str = "; ".join(str(e) for e in first["errors"])
+            raise JiraApiError(f"Failed to register Jira webhook: {err_str}", status_code=400, details=first)
+
+        created_id = first.get("createdWebhookId")
+        if created_id is None:
+            raise JiraApiError("Jira did not return createdWebhookId", status_code=502, details=first)
+        return str(created_id)
+
+    async def list_dynamic_webhooks(self) -> list[dict[str, Any]]:
+        """List dynamic webhooks registered by this OAuth 2.0 app on the Jira site."""
+        data = await self._request("GET", "/rest/api/3/webhook")
+        return list(data.get("values", [])) if isinstance(data, dict) else []
+
+    async def refresh_dynamic_webhooks(self, webhook_ids: list[int | str]) -> str | None:
+        """Extend the expiration of registered dynamic webhooks by 30 days."""
+        numeric_ids: list[int] = []
+        for wid in webhook_ids:
+            try:
+                numeric_ids.append(int(wid))
+            except (TypeError, ValueError):
+                continue
+        if not numeric_ids:
+            return None
+
+        data = await self._request(
+            "PUT",
+            "/rest/api/3/webhook/refresh",
+            json_data={"webhookIds": numeric_ids},
+        )
+        return data.get("expirationDate") if isinstance(data, dict) else None
+
+    async def delete_dynamic_webhooks(self, webhook_ids: list[int | str]) -> None:
+        """Delete dynamic webhooks registered by this OAuth 2.0 app."""
+        numeric_ids: list[int] = []
+        for wid in webhook_ids:
+            try:
+                numeric_ids.append(int(wid))
+            except (TypeError, ValueError):
+                continue
+        if not numeric_ids:
+            return
+        await self._request(
+            "DELETE",
+            "/rest/api/3/webhook",
+            json_data={"webhookIds": numeric_ids},
+        )

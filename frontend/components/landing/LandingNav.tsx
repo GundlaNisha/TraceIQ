@@ -22,11 +22,11 @@ export function LandingNav() {
   }, []);
 
   const navLinks: { name: string; href: string; external?: boolean }[] = [
-    { name: "Capabilities", href: "#capabilities" },
-    { name: "Architecture", href: "#architecture" },
-    { name: "Workflow", href: "#workflow" },
-    { name: "Tech Stack", href: "#stack" },
+    { name: "Capabilities", href: "/#capabilities" },
+    { name: "Architecture", href: "/#architecture" },
+    { name: "Workflow", href: "/#workflow" },
     { name: "Docs", href: "/docs" },
+    { name: "Support", href: "/contact" },
   ];
 
   return (

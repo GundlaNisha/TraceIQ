@@ -204,7 +204,7 @@ export default function ProtectedLayoutClient({
         </div>
 
         {/* Sidebar Footer User Card */}
-        <div className="pt-4 border-t border-border/50">
+        <div className="pt-4 border-t border-border/50 space-y-2.5">
           {isSidebarCollapsed ? (
             <div
               onClick={() => setEditProfileOpen(true)}
@@ -214,33 +214,52 @@ export default function ProtectedLayoutClient({
               {displayName.charAt(0).toUpperCase()}
             </div>
           ) : (
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/70 border border-border/50 shadow-xs hover:border-accent/40 transition-all">
-              <div
-                onClick={() => setEditProfileOpen(true)}
-                className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1 mr-2"
-                title="Click to edit username & profile"
-              >
-                <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent text-xs font-bold shrink-0">
-                  {displayName.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1">
-                    <span>{displayName}</span>
+            <>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/70 border border-border/50 shadow-xs hover:border-accent/40 transition-all">
+                <div
+                  onClick={() => setEditProfileOpen(true)}
+                  className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1 mr-2"
+                  title="Click to edit username & profile"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent text-xs font-bold shrink-0">
+                    {displayName.charAt(0).toUpperCase()}
                   </div>
-                  <div className="text-[10px] text-muted-foreground truncate">
-                    {displayEmail}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1">
+                      <span>{displayName}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {displayEmail}
+                    </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setEditProfileOpen(true)}
+                  className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded-lg transition-colors shrink-0"
+                  title="Edit username & profile"
+                >
+                  <UserCog className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setEditProfileOpen(true)}
-                className="p-1.5 text-muted-foreground hover:text-accent hover:bg-accent/10 rounded-lg transition-colors shrink-0"
-                title="Edit username & profile"
-              >
-                <UserCog className="w-3.5 h-3.5" />
-              </button>
-            </div>
+              <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
+                <Link href="/contact" className="hover:text-foreground transition-colors">
+                  Support
+                </Link>
+                <span>·</span>
+                <Link href="/privacy" className="hover:text-foreground transition-colors">
+                  Privacy
+                </Link>
+                <span>·</span>
+                <Link href="/terms" className="hover:text-foreground transition-colors">
+                  Terms
+                </Link>
+                <span>·</span>
+                <Link href="/docs" className="hover:text-foreground transition-colors">
+                  Docs
+                </Link>
+              </div>
+            </>
           )}
         </div>
       </aside>

@@ -49,29 +49,29 @@ export function LandingFooter() {
             </h4>
             <ul className="space-y-2 text-slate-300">
               <li>
-                <a href="#capabilities" className="hover:text-white transition-colors">
+                <Link href="/#capabilities" className="hover:text-white transition-colors">
                   AST Code Indexing
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#capabilities" className="hover:text-white transition-colors">
+                <Link href="/#capabilities" className="hover:text-white transition-colors">
                   2-Hop Blast Radius
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#capabilities" className="hover:text-white transition-colors">
+                <Link href="/#capabilities" className="hover:text-white transition-colors">
                   Hybrid RRF Code Search
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#capabilities" className="hover:text-white transition-colors">
+                <Link href="/#capabilities" className="hover:text-white transition-colors">
                   Automated PR Reviews
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#capabilities" className="hover:text-white transition-colors">
+                <Link href="/#capabilities" className="hover:text-white transition-colors">
                   Traceability Matrix
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -88,51 +88,51 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <a href="#architecture" className="hover:text-white transition-colors">
+                <Link href="/#architecture" className="hover:text-white transition-colors">
                   System Architecture
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="http://localhost:8000/docs"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-white transition-colors inline-flex items-center gap-1"
-                >
-                  <span>OpenAPI Swagger UI</span>
-                  <ExternalLink className="w-3 h-3 text-slate-400" />
-                </a>
-              </li>
-              <li>
-                <a href="#workflow" className="hover:text-white transition-colors">
+                <Link href="/#workflow" className="hover:text-white transition-colors">
                   Workflow Lifecycle
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#stack" className="hover:text-white transition-colors">
+                <Link href="/#stack" className="hover:text-white transition-colors">
                   Technology Stack
-                </a>
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="hover:text-white transition-colors">
+                  Customer Support
+                </Link>
               </li>
             </ul>
           </div>
 
-          {/* Col 4: Workspaces & Security */}
+          {/* Col 4: Legal & Security */}
           <div className="space-y-3">
             <h4 className="font-mono text-[11px] uppercase tracking-wider font-bold text-white">
-              Security &amp; RBAC
+              Legal &amp; Security
             </h4>
             <ul className="space-y-2 text-slate-300">
               <li>
-                <span className="text-slate-300">Personal &amp; Team Workspaces</span>
+                <Link href="/privacy" className="hover:text-white transition-colors font-semibold text-white">
+                  Privacy Policy
+                </Link>
               </li>
               <li>
-                <span className="text-slate-300">Owner, Admin, Member, Viewer</span>
+                <Link href="/terms" className="hover:text-white transition-colors font-semibold text-white">
+                  Terms of Service
+                </Link>
               </li>
               <li>
-                <span className="text-slate-300">Tokenized Invite URLs (<code>/join/[token]</code>)</span>
+                <Link href="/contact" className="hover:text-white transition-colors">
+                  Support &amp; Data Requests
+                </Link>
               </li>
               <li>
-                <span className="text-slate-300">Scoped Context (<code>X-Workspace-Id</code>)</span>
+                <span className="text-slate-300">Workspace RBAC &amp; Audit Logs</span>
               </li>
               <li>
                 <span className="text-slate-300">MIT Open Source License</span>
@@ -147,15 +147,21 @@ export function LandingFooter() {
           <div>
             &copy; {new Date().getFullYear()} TraceIQ. Autonomous Code Impact &amp; PR Review Intelligence.
           </div>
-          <div className="flex items-center gap-6 font-mono text-[11px]">
+          <div className="flex flex-wrap items-center gap-6 font-mono text-[11px]">
+            <Link href="/contact" className="hover:text-white transition-colors">
+              Support
+            </Link>
+            <Link href="/privacy" className="hover:text-white transition-colors">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="hover:text-white transition-colors">
+              Terms of Service
+            </Link>
             <Link href="/sign-in" className="hover:text-white transition-colors">
               Sign In
             </Link>
-            <Link href="/sign-up" className="hover:text-white transition-colors">
-              Public Beta Access
-            </Link>
             <a
-              href="https://github.com"
+              href="https://github.com/GundlaNisha/TraceIQ"
               target="_blank"
               rel="noreferrer"
               className="hover:text-white transition-colors inline-flex items-center gap-1"

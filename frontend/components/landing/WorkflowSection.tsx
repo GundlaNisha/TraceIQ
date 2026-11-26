@@ -15,17 +15,15 @@ export function WorkflowSection() {
     {
       id: "step-1",
       number: "01",
-      title: "Connect Repo or Jira Project",
-      badge: "1-Click Handshake",
+      title: "Zero-Click Jira OAuth 2.0 & Repo Link",
+      badge: "OAuth 2.0 (3LO)",
       description:
-        "Connect via GitHub App or import requirements directly from Jira Kanban boards with live ADF Markdown conversion.",
-      codeSnippet: `POST /api/v1/repositories
-{
-  "repo_name": "enterprise/core-auth",
-  "jira_project_key": "PROJ",
-  "auto_review_enabled": true
-}`,
-      outputPreview: "Connected: enterprise/core-auth (Jira & GitHub Sync Active)",
+        "Authorize Atlassian Jira in one click with Fernet-encrypted rotating tokens and auto-registered HTTPS webhooks, then connect GitHub repositories.",
+      codeSnippet: `POST /api/v1/jira/oauth/authorize
+-> Scoped CSRF Redis state issued
+-> Auto-Webhook registered on Jira Cloud (30-day renewal)
+-> Connected repo: enterprise/core-auth (RBAC Scoped)`,
+      outputPreview: "Connected: Jira OAuth 2.0 Active + GitHub Webhook Verified",
     },
     {
       id: "step-2",
@@ -33,7 +31,7 @@ export function WorkflowSection() {
       title: "High-Throughput AST Indexing",
       badge: "Tree-sitter Grammars",
       description:
-        "Extracts symbols, class hierarchies, and call graphs with dense 384d Gemini embeddings.",
+        "Extracts symbols, class hierarchies, and call graphs with dense 384d embeddings and Redis-cached retrieval indices.",
       codeSnippet: `// Tree-sitter AST Chunker
 [1/140] Parsed app/modules/auth/guard.py (3 symbols)
 [2/140] Parsed app/db/session.py (2 symbols)
@@ -43,53 +41,55 @@ export function WorkflowSection() {
     {
       id: "step-3",
       number: "03",
-      title: "Compute 2-Hop Blast Radius",
-      badge: "Graph Traversal",
+      title: "Chat with Agent & Compute Blast Radius",
+      badge: "LangGraph + 2-Hop AST",
       description:
-        "Traverses direct callers and 2-hop downstream consumers to predict impacted files and test gaps.",
-      codeSnippet: `POST /api/v1/requirements/84/analyze
-{
-  "risk_score": "HIGH",
-  "impacted_files": ["guard.py", "session.py", "meter.py"],
-  "confidence": 0.968
-}`,
-      outputPreview: "Blast Radius: 6 Downstream Callers Flagged",
+        "Tag @repo, @req, or @pr in the AI Agent to trace 2-hop callers, audit test gaps, and confirm HITL checkpoints before writing code.",
+      codeSnippet: `POST /api/v1/agent/sessions/{id}/messages
+"Verify @req:SAM1-4 against @repo:enterprise/core-auth"
+--> Supervisor -> verify_implementation -> HITL Gate
+--> Risk: HIGH (6 callers flagged, confidence 0.968)`,
+      outputPreview: "Blast Radius & Agent Audit Complete (6 Callers Flagged)",
     },
     {
       id: "step-4",
       number: "04",
-      title: "Push Code to GitHub",
-      badge: "Event Ingress",
+      title: "Push Code & Correlate Live CI Checks",
+      badge: "CI Blast-Radius Match",
       description:
-        "Engineers work normally in their IDE. GitHub emits a webhook to TraceIQ's Celery queue for async review dispatch.",
-      codeSnippet: `$ git commit -m "feat(auth): token rotation"
-$ git push origin feature/auth-v2
---> Webhook received: pull_request.opened (PR #142)`,
-      outputPreview: "Task Dispatched: review_pr_job_772",
+        "Engineers push normally to GitHub. TraceIQ fetches live check runs, matches failing tests against impacted files, and tracks Actions MTTR/flakiness.",
+      codeSnippet: `GET /api/v1/github/pull-requests/ci-correlation
+{
+  "verdict": "in_scope",
+  "failing_check": "pytest tests/auth/test_rotation.py",
+  "matched_blast_radius": ["app/modules/auth/guard.py"]
+}`,
+      outputPreview: "CI Correlation Verdict: IN_SCOPE (Overlaps Guard Module)",
     },
     {
       id: "step-5",
       number: "05",
-      title: "Automated Review Posted to PR",
-      badge: "Zero-Hallucination",
+      title: "Automated PR Review & Failover AI",
+      badge: "Multi-Provider AI",
       description:
-        "Compares patch chunks against the requirement blast radius, posting structured review comments inline.",
+        "Evaluates per-file patch diffs with round-robin Gemini/Groq/OpenCode failover and posts line-level gap reviews directly on GitHub.",
       codeSnippet: `traceiq-bot commented on PR #142:
-"⚠️ Requirement Gap: Missing session invalidation
+"Requirement Gap: Missing session invalidation
 for expired refresh tokens in tests/test_auth.py"`,
-      outputPreview: "GitHub Review Status: Commented (1 Gap Found)",
+      outputPreview: "GitHub Review Posted (1 Requirement Gap Flagged)",
     },
     {
       id: "step-6",
       number: "06",
-      title: "Traceability Matrix Auto-Updates",
-      badge: "Realtime Audit",
+      title: "Live Drift Sync & Traceability Matrix",
+      badge: "Realtime Compliance",
       description:
-        "Compliance health score updates continuously, linking requirements, blast radius, and PR verdicts.",
+        "Jira webhooks trigger drift alerts without overwriting active specs, while the traceability matrix records end-to-end verification.",
       codeSnippet: `GET /api/v1/traceability
 {
   "repository": "enterprise/core-auth",
   "compliance_health_score": 96.4,
+  "jira_webhook_status": "active",
   "verified_requirements": 18
 }`,
       outputPreview: "Compliance Health: 96.4% (Audit Ready)",

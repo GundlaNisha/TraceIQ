@@ -25,19 +25,19 @@ export function HeroSection() {
             </span>
             <span className="font-semibold text-[#1B2A4A]">TraceIQ 2.0</span>
             <span className="text-slate-300">•</span>
-            <span className="text-slate-600 font-medium">AST Code Graph &amp; Bidirectional Jira Sync</span>
+            <span className="text-slate-600 font-medium">AI Coding Agent, AST Graph &amp; Jira OAuth 2.0</span>
           </div>
         </div>
 
         {/* Hero Title & Concise Value Prop */}
         <div className="max-w-3xl mx-auto text-center mb-10">
-          <h1 className="text-4xl sm:text-6xl font-bold font-serif text-[#111111] tracking-tight leading-[1.1] mb-5">
+          <h1 className="text-4xl sm:text-6xl font-semibold font-serif text-[#111111] tracking-tight leading-[1.1] mb-5 text-balance">
             Know the exact blast radius{" "}
-            <span className="text-[#1B2A4A] italic font-serif">before you merge.</span>
+            <span className="text-[#1B2A4A] font-serif">before you merge.</span>
           </h1>
 
-          <p className="max-w-xl mx-auto text-base sm:text-lg text-[#555E6D] font-sans leading-relaxed">
-            Traverse whole-repo AST code graphs to predict downstream breaking changes, automate PR reviews, and sync Jira in real time.
+          <p className="max-w-xl mx-auto text-base sm:text-lg text-[#555E6D] font-sans leading-relaxed text-pretty">
+            Traverse whole-repo AST code graphs, chat with a LangGraph coding agent, correlate GitHub CI checks, and sync Jira Cloud with zero-click OAuth 2.0.
           </p>
         </div>
 

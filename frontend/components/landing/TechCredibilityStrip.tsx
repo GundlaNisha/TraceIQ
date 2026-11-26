@@ -7,12 +7,12 @@ export function TechCredibilityStrip() {
   const techStack = [
     { name: "Next.js 16", desc: "React 19 Server Components", category: "Frontend" },
     { name: "FastAPI", desc: "Async Python 3.11 REST Gateway", category: "Backend" },
-    { name: "PostgreSQL & pgvector", desc: "Dense 384d Cosine & tsvector", category: "Database" },
+    { name: "LangGraph", desc: "Stateful AI Agent & HITL Gates", category: "Orchestration" },
+    { name: "PostgreSQL & pgvector", desc: "384d Cosine & Hybrid RRF", category: "Database" },
     { name: "Tree-sitter", desc: "Multi-Language AST Grammars", category: "Parsing" },
-    { name: "Google Gemini 2.0", desc: "Zero Server RAM Embeddings", category: "Embeddings" },
-    { name: "Celery & Redis", desc: "Distributed Task Dispatching", category: "Queue" },
-    { name: "GitHub App", desc: "Webhook Events & Inline Comments", category: "Integration" },
-    { name: "Clerk Auth", desc: "Multi-Tenant Workspaces & RBAC", category: "Security" },
+    { name: "Multi-Provider AI", desc: "Gemini, Groq & OpenCode Failover", category: "LLMs" },
+    { name: "Redis Cache & SSE", desc: "Distributed Locks & Pub/Sub", category: "Infrastructure" },
+    { name: "GitHub & Jira OAuth", desc: "3LO Auto-Webhooks & CI Checks", category: "Integrations" },
   ];
 
   return (

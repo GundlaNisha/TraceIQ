@@ -29,11 +29,11 @@ export function CapabilitiesSection() {
             <span>Capabilities</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold font-serif tracking-tight text-[#111111] leading-tight">
-            Six architectural pillars. <br />
+            Eight architectural pillars. <br />
             <span className="text-[#1B2A4A]">Zero hallucinated reviews.</span>
           </h2>
           <p className="mt-3 text-sm sm:text-base text-[#6B7280] font-sans leading-relaxed">
-            Deterministic AST graph traversal, hybrid RRF retrieval, and native GitHub integrations — grounded in your actual code.
+            Deterministic AST graph traversal, LangGraph agent workflows, zero-click Jira OAuth 2.0 webhooks, and native GitHub CI correlation — grounded in your actual code.
           </p>
         </div>
 
@@ -212,29 +212,34 @@ export function CapabilitiesSection() {
               </div>
 
               <h3 className="text-lg sm:text-xl font-serif font-bold text-[#111111] mb-2">
-                Automated PR Reviews &amp; GitHub Bot Comments
+                Automated PR Reviews &amp; CI Correlation
               </h3>
               <p className="text-xs sm:text-sm text-[#6B7280] leading-relaxed mb-3">
-                Evaluates patch chunks against requirement criteria and posts line-level suggestions and severity summaries straight to GitHub.
+                Evaluates patch chunks against requirement criteria, correlates failing GitHub Actions checks against 2-hop blast radius files, and tracks flaky MTTR health.
               </p>
             </div>
 
-            {/* Bot Review Mockup */}
+            {/* Bot Review + CI Correlation Mockup */}
             <div className="p-3.5 rounded-xl bg-[#F8F6F2] border border-[#1B2A4A]/15 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2 font-semibold text-[#111111]">
                   <div className="w-5 h-5 rounded bg-[#1B2A4A] text-white flex items-center justify-center text-[9px] font-bold">
                     TIQ
                   </div>
                   <span>traceiq-bot</span>
-                  <span className="text-[10px] text-[#6B7280] font-normal">commented via GitHub Webhook</span>
+                  <span className="text-[10px] text-[#6B7280] font-normal">via GitHub Webhook</span>
                 </div>
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">
-                  ACTION REQUIRED
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">
+                    CI: IN_SCOPE
+                  </span>
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                    ACTION REQUIRED
+                  </span>
+                </div>
               </div>
               <p className="text-xs text-[#111111] leading-relaxed">
-                <strong>Requirement Gap:</strong> REQ-84 requires session invalidation on refresh token rotation.
+                <strong>Requirement Gap:</strong> REQ-84 requires session invalidation on refresh token rotation (failing check matches <code>guard.py</code>).
               </p>
               <div className="font-mono text-[11px] text-[#6B7280] bg-white p-2 rounded border border-[#1B2A4A]/10">
                 Fix: Add <code>await session_store.revoke(user_id)</code> on line 18.
@@ -315,16 +320,16 @@ export function CapabilitiesSection() {
                     Pillar 06 // Workspaces &amp; Jira
                   </span>
                 </div>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                  <Kanban className="w-3 h-3" /> Jira Sync
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Kanban className="w-3 h-3" /> OAuth 2.0 (3LO)
                 </span>
               </div>
 
               <h3 className="text-lg sm:text-xl font-serif font-bold text-[#111111] mb-2">
-                Team Workspaces &amp; Jira Kanban Import
+                Team Workspaces &amp; Zero-Click Jira OAuth 2.0
               </h3>
               <p className="text-xs sm:text-sm text-[#6B7280] leading-relaxed mb-3">
-                Multi-tenant RBAC with 1-click tokenized invites, repository transfers, and direct Jira REST API import for Kanban boards and Sprints.
+                Connect Atlassian Jira in one click via OAuth 2.0 (3LO) with Fernet-encrypted rotating tokens, auto-registered HTTPS webhooks, drift alerts, and RBAC invites.
               </p>
             </div>
 
@@ -346,10 +351,92 @@ export function CapabilitiesSection() {
                 ))}
               </div>
               <div className="p-2 rounded-lg bg-[#F8F6F2] border border-[#1B2A4A]/10 flex items-center justify-between text-[11px] font-mono">
-                <span className="text-[#6B7280]">Role Access ({activeWorkspaceRole}):</span>
+                <span className="text-[#6B7280]">Role ({activeWorkspaceRole}) + Jira OAuth:</span>
                 <span className="font-bold text-emerald-700">
-                  {activeWorkspaceRole === "viewer" ? "Read-Only Viewer" : "Full Review & Sync"}
+                  {activeWorkspaceRole === "viewer" ? "Read-Only Viewer" : "Auto-Webhook & Transition"}
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ============================================================
+              PILLAR 7: LangGraph AI Coding Agent (Span 7)
+              ============================================================ */}
+          <div className="lg:col-span-7 rounded-2xl bg-white border border-[#1B2A4A]/15 p-6 shadow-sm flex flex-col justify-between hover:border-[#1B2A4A]/30 transition-all">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <span className="font-mono text-xs font-bold text-[#1B2A4A] uppercase tracking-wider">
+                    Pillar 07 // LangGraph Agent
+                  </span>
+                </div>
+                <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  SSE Live Stream
+                </span>
+              </div>
+
+              <h3 className="text-lg sm:text-xl font-serif font-bold text-[#111111] mb-2">
+                Autonomous AI Coding Agent &amp; @Mention Chat
+              </h3>
+              <p className="text-xs sm:text-sm text-[#6B7280] leading-relaxed mb-3">
+                Tag repositories, Jira issues, or PRs inline with <code>@mentions</code>, inspect live GitHub PR diffs, verify acceptance criteria, and confirm HITL checkpoints before drafting PRs.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+              <div className="p-2.5 rounded-xl bg-[#F8F6F2] border border-[#1B2A4A]/10">
+                <div className="text-[#1B2A4A] font-bold">@repo / @req / @pr</div>
+                <div className="text-[#6B7280] text-[10px] mt-0.5 font-sans">Scoped mention context</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#F8F6F2] border border-[#1B2A4A]/10">
+                <div className="text-[#1B2A4A] font-bold">HITL Checkpoints</div>
+                <div className="text-[#6B7280] text-[10px] mt-0.5 font-sans">Human approval before draft</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#1B2A4A] text-emerald-300">
+                <div className="font-bold">Auto AST Indexing</div>
+                <div className="text-slate-300 text-[10px] mt-0.5 font-sans">Self-hydrating repo context</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ============================================================
+              PILLAR 8: Multi-Provider Failover & Redis Cache (Span 5)
+              ============================================================ */}
+          <div className="lg:col-span-5 rounded-2xl bg-white border border-[#1B2A4A]/15 p-6 shadow-sm flex flex-col justify-between hover:border-[#1B2A4A]/30 transition-all">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <span className="font-mono text-xs font-bold text-[#1B2A4A] uppercase tracking-wider">
+                    Pillar 08 // Resilient AI &amp; Cache
+                  </span>
+                </div>
+                <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
+                  Zero Downtime
+                </span>
+              </div>
+
+              <h3 className="text-lg sm:text-xl font-serif font-bold text-[#111111] mb-2">
+                Multi-Provider AI Router &amp; Redis Cache
+              </h3>
+              <p className="text-xs sm:text-sm text-[#6B7280] leading-relaxed mb-3">
+                Round-robin load balancing and instant automatic failover across Gemini, Groq, and OpenCode Zen paired with multi-tenant Redis cache invalidation.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 text-[11px] font-mono">
+              <div className="p-2 rounded-lg bg-[#F8F6F2] border border-[#1B2A4A]/10 flex items-center justify-between">
+                <span className="text-[#111111]">Gemini ↗ Groq ↗ OpenCode</span>
+                <span className="font-bold text-emerald-700">Auto-Cooldown</span>
+              </div>
+              <div className="p-2 rounded-lg bg-[#F8F6F2] border border-[#1B2A4A]/10 flex items-center justify-between">
+                <span className="text-[#111111]">Multi-Tenant Redis Cache</span>
+                <span className="font-bold text-[#1B2A4A]">Pattern Purge</span>
               </div>
             </div>
           </div>

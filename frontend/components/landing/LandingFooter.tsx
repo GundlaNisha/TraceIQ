@@ -59,13 +59,18 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
+                <Link href="/#agent" className="hover:text-white transition-colors">
+                  AI Coding Agent
+                </Link>
+              </li>
+              <li>
                 <Link href="/#capabilities" className="hover:text-white transition-colors">
                   Hybrid RRF Code Search
                 </Link>
               </li>
               <li>
                 <Link href="/#capabilities" className="hover:text-white transition-colors">
-                  Automated PR Reviews
+                  CI-Correlated PR Reviews
                 </Link>
               </li>
               <li>
@@ -88,24 +93,24 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/#architecture" className="hover:text-white transition-colors">
-                  System Architecture
+                <Link href="/docs?section=ai-agent" className="hover:text-white transition-colors">
+                  AI Agent Guide
                 </Link>
               </li>
               <li>
-                <Link href="/#workflow" className="hover:text-white transition-colors">
-                  Workflow Lifecycle
+                <Link href="/docs?section=jira-integration" className="hover:text-white transition-colors">
+                  Jira OAuth 2.0 Guide
                 </Link>
               </li>
               <li>
-                <Link href="/#stack" className="hover:text-white transition-colors">
-                  Technology Stack
-                </Link>
+                <a href="/sitemap.xml" className="hover:text-white transition-colors">
+                  XML Sitemap
+                </a>
               </li>
               <li>
-                <Link href="/contact" className="hover:text-white transition-colors">
-                  Customer Support
-                </Link>
+                <a href="/rss.xml" className="hover:text-white transition-colors">
+                  RSS Feed
+                </a>
               </li>
             </ul>
           </div>

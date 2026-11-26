@@ -4,7 +4,9 @@ import { LandingNav } from "@/components/landing/LandingNav";
 import { HeroSection } from "@/components/landing/HeroSection";
 import { ProblemSection } from "@/components/landing/ProblemSection";
 import { CapabilitiesSection } from "@/components/landing/CapabilitiesSection";
+import { AgentShowcaseSection } from "@/components/landing/AgentShowcaseSection";
 import { ArchitectureSection } from "@/components/landing/ArchitectureSection";
+import { TaglineRevealSection } from "@/components/landing/TaglineRevealSection";
 import { WorkflowSection } from "@/components/landing/WorkflowSection";
 import { TechCredibilityStrip } from "@/components/landing/TechCredibilityStrip";
 import { FinalCTASection } from "@/components/landing/FinalCTASection";
@@ -33,23 +35,29 @@ export default async function RootPage() {
         {/* Section 2: Editorial Problem Framing Strip */}
         <ProblemSection />
 
-        {/* Section 3: Asymmetric 6-Pillar Capabilities Showcase */}
+        {/* Section 3: Asymmetric Capabilities Showcase */}
         <CapabilitiesSection />
 
-        {/* Section 4: Custom Animated 4-Layer Architecture Canvas */}
+        {/* Section 4: Interactive LangGraph AI Coding Agent Visual */}
+        <AgentShowcaseSection />
+
+        {/* Section 5: Custom Animated 4-Layer Architecture Canvas */}
         <ArchitectureSection />
 
-        {/* Section 5: Step-Synchronized 6-Stage Workflow Rail */}
+        {/* Section 6: Scroll-Activated Tagline Reveal */}
+        <TaglineRevealSection />
+
+        {/* Section 7: Step-Synchronized Workflow Rail */}
         <WorkflowSection />
 
-        {/* Section 6: Engineering Tech Credibility Strip */}
+        {/* Section 8: Engineering Tech Credibility Strip */}
         <TechCredibilityStrip />
 
-        {/* Section 7: Blast Radius Reprise Final CTA */}
+        {/* Section 9: Blast Radius Reprise Final CTA */}
         <FinalCTASection />
       </main>
 
-      {/* Section 8: Product Footer */}
+      {/* Section 10: Product Footer */}
       <LandingFooter />
     </div>
   );

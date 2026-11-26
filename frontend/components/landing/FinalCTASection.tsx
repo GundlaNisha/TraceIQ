@@ -27,7 +27,7 @@ export function FinalCTASection() {
 
         {/* Subhead */}
         <p className="max-w-xl mx-auto text-xs sm:text-sm text-slate-300 font-sans leading-relaxed mb-8">
-          Connect your GitHub repository in 60 seconds. Experience sub-15ms hybrid code search, 2-hop blast radius prediction, and autonomous PR reviews.
+          Connect your GitHub repository and Jira Cloud workspace in 60 seconds. Run sub-15ms hybrid code search, converse with the LangGraph agent, and catch breaking blast radius regressions before merge.
         </p>
 
         {/* CTAs */}
@@ -45,15 +45,15 @@ export function FinalCTASection() {
         <div className="mt-8 pt-5 border-t border-white/10 flex flex-wrap items-center justify-center gap-5 text-xs text-slate-400 font-mono">
           <span className="flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Multi-Tenant RBAC</span>
+            <span>Jira OAuth 2.0 Auto-Webhooks</span>
           </span>
           <span className="flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>0 MB RAM Embeddings</span>
+            <span>Multi-Provider AI Failover</span>
           </span>
           <span className="flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>GitHub &amp; Jira Webhooks</span>
+            <span>CI Blast-Radius Correlation</span>
           </span>
         </div>
 

@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     github_private_key: str = ""
     github_webhook_secret: str = ""
 
+    # Jira OAuth 2.0 (3LO) & Encryption
+    jira_oauth_client_id: str = ""
+    jira_oauth_client_secret: str = ""
+    jira_oauth_redirect_uri: str = ""
+    public_backend_url: str = ""
+    credential_encryption_key: str = ""
+
     # Deployment
     frontend_url: str = ""
     # Comma-separated list or JSON array of allowed CORS origins

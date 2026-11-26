@@ -118,6 +118,60 @@ class CacheService:
             logger.warning(f"Redis cache DELETE failure for key '{full_key}': {e}.")
             return False
 
+    async def pop(self, key: str) -> Any | None:
+        """Atomically retrieve and delete a JSON cache value (single-use consumption)."""
+        full_key = f"{self._prefix}{key}"
+        try:
+            client = self._get_client()
+            raw = await client.getdel(full_key)
+            if raw is None:
+                return None
+            self._is_connected = True
+            return json.loads(raw)
+        except AttributeError:
+            # Older redis-py fallback via pipeline
+            try:
+                async with client.pipeline(transaction=True) as pipe:
+                    pipe.get(full_key)
+                    pipe.delete(full_key)
+                    res = await pipe.execute()
+                raw = res[0] if res else None
+                return json.loads(raw) if raw is not None else None
+            except Exception as e:
+                logger.warning(f"Redis cache POP pipeline failure for '{full_key}': {e}.")
+                return None
+        except Exception as e:
+            logger.warning(f"Redis cache POP failure for key '{full_key}': {e}.")
+            return None
+
+    async def acquire_lock(self, lock_key: str, ttl: int = 15) -> str | None:
+        """Acquire a distributed Redis lock with a unique ownership token."""
+        import secrets
+
+        full_key = f"{self._prefix}lock:{lock_key}"
+        token = secrets.token_urlsafe(16)
+        try:
+            client = self._get_client()
+            acquired = await client.set(full_key, token, nx=True, ex=ttl)
+            self._is_connected = True
+            return token if acquired else None
+        except Exception as e:
+            logger.warning(f"Redis acquire_lock failure for '{full_key}': {e}.")
+            return None
+
+    async def release_lock(self, lock_key: str, lock_token: str) -> None:
+        """Release a distributed lock only if the caller still owns the token."""
+        full_key = f"{self._prefix}lock:{lock_key}"
+        lua = (
+            "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            "return redis.call('del', KEYS[1]) else return 0 end"
+        )
+        try:
+            client = self._get_client()
+            await client.eval(lua, 1, full_key, lock_token)
+        except Exception as e:
+            logger.warning(f"Redis release_lock failure for '{full_key}': {e}.")
+
     async def delete_pattern(self, pattern: str) -> int:
         """Atomically find and delete all keys matching pattern using non-blocking SCAN.
 

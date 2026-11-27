@@ -63,24 +63,41 @@ export function AgentMentionMenu({
     // 2. Requirements / Jira Stories
     for (const req of requirements) {
       const jiraKey = req.jira_issue_key || req.jira_key;
+      const rawTitle = req.title || "Untitled Requirement";
+      const displayLabel =
+        jiraKey && !rawTitle.startsWith(`[${jiraKey}]`)
+          ? `[${jiraKey}] ${rawTitle}`
+          : rawTitle;
       items.push({
         type: "req",
         id: String(req.id || jiraKey || ""),
-        label: jiraKey ? `[${jiraKey}] ${req.title}` : req.title,
+        label: displayLabel,
         subtitle: req.jira_status ? `Status: ${req.jira_status}` : "Requirement Story",
         badge: jiraKey || "BRD",
         raw: req,
       });
     }
 
-    // 3. Pull Requests
+    // 3. Pull Requests (supports both GitHubPullRequest and PRReview objects)
     for (const pr of pullRequests) {
+      const prNum = pr.pr_number ?? pr.number;
+      const prTitle = pr.pr_title || pr.title || "Pull Request";
+      const subtitle = pr.status
+        ? `Review Status: ${pr.status}`
+        : pr.repository_name
+          ? `${pr.repository_name} · ${pr.state || "open"}`
+          : `GitHub PR (${pr.state || "open"})`;
+      const badge = pr.risk_score
+        ? `Risk: ${pr.risk_score}`
+        : pr.status
+          ? pr.status
+          : pr.state || "PR";
       items.push({
         type: "pr",
-        id: String(pr.id || pr.pr_number || ""),
-        label: pr.pr_number ? `PR #${pr.pr_number}: ${pr.pr_title || pr.title || "Pull Request"}` : pr.title || "PR",
-        subtitle: pr.status ? `Review Status: ${pr.status}` : "Pull Request Diff",
-        badge: pr.risk_score ? `Risk: ${pr.risk_score}` : "PR",
+        id: String(pr.id || prNum || ""),
+        label: prNum ? `PR #${prNum}: ${prTitle}` : prTitle,
+        subtitle,
+        badge,
         raw: pr,
       });
     }

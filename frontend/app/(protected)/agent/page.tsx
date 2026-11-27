@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Sparkles,
   Plus,
@@ -26,9 +26,9 @@ import {
   Check,
 } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { useWorkspaces } from "@/features/workspace/api/queries";
 import { useRepositories, useResyncRepository } from "@/features/repositories/api/queries";
 import { useRequirements } from "@/features/requirements/api/queries";
+import { usePullRequests } from "@/features/github/api/queries";
 import { usePRReviews } from "@/features/pr-reviews/api/queries";
 import {
   useAgentSessions,
@@ -75,7 +75,7 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 export default function AgentPage() {
-  const { activeWorkspaceId, activeWorkspaceName, setActiveWorkspace, activeRepositoryId, setActiveRepositoryId } = useWorkspaceStore();
+  const { activeWorkspaceId, activeWorkspaceName, activeRepositoryId, setActiveRepositoryId } = useWorkspaceStore();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
   const [inputContent, setInputContent] = useState("");
@@ -84,22 +84,57 @@ export default function AgentPage() {
   const [sessionSearch, setSessionSearch] = useState("");
   const [optimisticUserMessage, setOptimisticUserMessage] = useState<string | null>(null);
 
-  // Workspaces query to auto-resolve active workspace if unselected
-  const { data: workspaces = [] } = useWorkspaces();
-
-  useEffect(() => {
-    if (!activeWorkspaceId && workspaces.length > 0) {
-      setActiveWorkspace(workspaces[0].id, workspaces[0].name);
-    }
-  }, [activeWorkspaceId, workspaces, setActiveWorkspace]);
-
-  // Queries
-  const { data: repositories = [] } = useRepositories({ workspaceId: activeWorkspaceId });
+  // Queries — respect active workspace (Personal = null -> fetch all accessible repos)
+  const { data: repositories = [], isFetched: reposFetched } = useRepositories(
+    activeWorkspaceId ? { workspaceId: activeWorkspaceId } : { all: true }
+  );
   const { data: requirements = [] } = useRequirements(activeRepositoryId);
-  const { data: pullRequests = [] } = usePRReviews();
+  const { data: githubPullRequests = [] } = usePullRequests(activeRepositoryId);
+  const { data: prReviews = [] } = usePRReviews();
   const { data: sessions = [], isLoading: isLoadingSessions } = useAgentSessions(activeWorkspaceId);
   const { data: sessionDetail, refetch: refetchSessionDetail } = useAgentSession(selectedSessionId);
   const { mutate: resyncRepo, isPending: isResyncPending } = useResyncRepository();
+
+  // Combine live GitHub PRs and TraceIQ PR Reviews, deduplicated by PR number + repo
+  const pullRequests = useMemo(() => {
+    const seen = new Set<string>();
+    const combined: any[] = [];
+    for (const pr of githubPullRequests) {
+      const key = `${pr.repository_id || ""}:${pr.number}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        combined.push(pr);
+      }
+    }
+    for (const rev of prReviews) {
+      if (activeRepositoryId && rev.repository_id !== activeRepositoryId) continue;
+      const key = `${rev.repository_id}:${rev.pr_number}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        combined.push(rev);
+      }
+    }
+    return combined;
+  }, [githubPullRequests, prReviews, activeRepositoryId]);
+
+  // Self-heal stale activeRepositoryId or auto-select when only 1 repository exists
+  useEffect(() => {
+    if (!reposFetched) return;
+    if (activeRepositoryId && !repositories.some((r: any) => r.id === activeRepositoryId)) {
+      setActiveRepositoryId(repositories.length === 1 ? repositories[0].id : null);
+      return;
+    }
+    if (!activeRepositoryId && repositories.length === 1) {
+      setActiveRepositoryId(repositories[0].id);
+    }
+  }, [reposFetched, repositories, activeRepositoryId, setActiveRepositoryId]);
+
+  // Clear selectedReqId if it no longer exists in the active repository's requirements
+  useEffect(() => {
+    if (selectedReqId && requirements.length > 0 && !requirements.some((r: any) => r.id === selectedReqId || r.jira_issue_key === selectedReqId)) {
+      setSelectedReqId(null);
+    }
+  }, [requirements, selectedReqId]);
 
   // Mention & Tagging State
   const [isMentionOpen, setIsMentionOpen] = useState(false);
@@ -142,7 +177,7 @@ export default function AgentPage() {
   }, [sessions, selectedSessionId]);
 
   const handleCreateSession = async () => {
-    const wsId = activeWorkspaceId || (workspaces.length > 0 ? workspaces[0].id : null);
+    const wsId = activeWorkspaceId;
     const activeRepo = repositories.find((r: any) => r.id === activeRepositoryId);
     const activeReq = requirements.find((rq: any) => rq.id === selectedReqId);
 
@@ -286,8 +321,7 @@ export default function AgentPage() {
     if (!currentSessionId) {
       const wsId =
         activeWorkspaceId ||
-        useWorkspaceStore.getState().activeWorkspaceId ||
-        (workspaces.length > 0 ? workspaces[0].id : null);
+        useWorkspaceStore.getState().activeWorkspaceId;
 
       try {
         const newSession = await createSessionMutation.mutateAsync({
@@ -576,7 +610,13 @@ export default function AgentPage() {
                 onChange={(e) => setActiveRepositoryId(e.target.value || null)}
                 className="bg-transparent text-foreground focus:outline-none cursor-pointer font-medium max-w-[120px] sm:max-w-[160px] truncate"
               >
-                <option value="">Repo...</option>
+                <option value="">
+                  {repositories.length > 0
+                    ? "Repo..."
+                    : activeWorkspaceId
+                      ? `No repos in ${activeWorkspaceName || "workspace"}`
+                      : "Repo..."}
+                </option>
                 {repositories.map((repo: any) => (
                   <option key={repo.id} value={repo.id}>
                     {repo.name}
@@ -594,11 +634,65 @@ export default function AgentPage() {
                 className="bg-transparent text-foreground focus:outline-none cursor-pointer max-w-[120px] sm:max-w-[160px] truncate font-medium"
               >
                 <option value="">Story...</option>
-                {requirements.map((req: any) => (
-                  <option key={req.id} value={req.id}>
-                    {req.jira_issue_key ? `[${req.jira_issue_key}] ` : ""}{req.title}
-                  </option>
-                ))}
+                {requirements.map((req: any) => {
+                  const jiraKey = req.jira_issue_key;
+                  const label =
+                    jiraKey && !req.title?.startsWith(`[${jiraKey}]`)
+                      ? `[${jiraKey}] ${req.title}`
+                      : req.title;
+                  return (
+                    <option key={req.id} value={req.id}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Compact PR Selector */}
+            <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-white px-2 py-0.5 text-[11px] text-foreground shadow-2xs hover:border-accent/40 transition">
+              <GitPullRequest className="h-3 w-3 text-emerald-600 shrink-0" />
+              <select
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) return;
+                  const matchedPr = pullRequests.find(
+                    (p: any) => String(p.id || p.pr_number || p.number) === val
+                  );
+                  if (matchedPr) {
+                    const prNum = matchedPr.pr_number ?? matchedPr.number;
+                    const prTitle = matchedPr.pr_title || matchedPr.title || "Pull Request";
+                    const label = prNum ? `PR #${prNum}: ${prTitle}` : prTitle;
+                    const newEntity: TaggedEntity = {
+                      type: "pr",
+                      id: String(matchedPr.id || prNum || ""),
+                      label,
+                      name: label,
+                    };
+                    setTaggedEntities((prev) =>
+                      prev.some((t) => t.type === "pr" && t.id === newEntity.id)
+                        ? prev
+                        : [...prev, newEntity]
+                    );
+                  }
+                }}
+                className="bg-transparent text-foreground focus:outline-none cursor-pointer max-w-[110px] sm:max-w-[150px] truncate font-medium"
+                title="Tag a Pull Request in conversation context"
+              >
+                <option value="">
+                  {pullRequests.length > 0 ? `PR (${pullRequests.length})...` : "PR..."}
+                </option>
+                {pullRequests.map((pr: any) => {
+                  const prNum = pr.pr_number ?? pr.number;
+                  const prTitle = pr.pr_title || pr.title || "Pull Request";
+                  const val = String(pr.id || prNum || "");
+                  return (
+                    <option key={val} value={val}>
+                      {prNum ? `#${prNum}: ${prTitle}` : prTitle}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -644,7 +738,11 @@ export default function AgentPage() {
           optimisticUserMessage={optimisticUserMessage}
           onQuickAction={(prompt) => handleSendMessage(prompt)}
           activeRepoName={activeRepo?.name}
-          activeReqTitle={activeReq?.jira_issue_key ? `[${activeReq.jira_issue_key}] ${activeReq.title}` : activeReq?.title}
+          activeReqTitle={
+            activeReq?.jira_issue_key && !activeReq?.title?.startsWith(`[${activeReq.jira_issue_key}]`)
+              ? `[${activeReq.jira_issue_key}] ${activeReq.title}`
+              : activeReq?.title
+          }
         />
 
         {/* Indexing Required Banner */}

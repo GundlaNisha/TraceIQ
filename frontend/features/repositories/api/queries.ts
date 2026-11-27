@@ -8,6 +8,8 @@ export function useRepositories(options?: { all?: boolean; workspaceId?: string 
 
   return useQuery({
     queryKey: ["repositories", options],
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (options?.all) params.set("all", "true");

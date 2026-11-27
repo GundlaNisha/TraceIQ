@@ -53,6 +53,11 @@ class PRReviewResponse(BaseModel):
     user_id: str
     repository_id: uuid.UUID
     requirement_id: uuid.UUID | None = None
+    requirement_title: str | None = None
+    requirement_jira_issue_key: str | None = None
+    requirement_jira_issue_url: str | None = None
+    requirement_jira_status: str | None = None
+    requirement_version_number: int | None = None
     pr_number: int
     pr_title: str
     pr_html_url: str

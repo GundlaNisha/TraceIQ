@@ -26,6 +26,7 @@ import { formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReviewPRModal } from "@/features/pr-reviews/components/ReviewPRModal";
+import { AttachedRequirementBadge } from "@/features/pr-reviews/components/AttachedRequirementBadge";
 import { CIBadge } from "./CIBadge";
 import Link from "next/link";
 import type { GitHubPullRequest } from "@/lib/types/github";
@@ -549,6 +550,10 @@ export function PullRequestList() {
                             ? "Review Queued"
                             : "Review Failed"}
                         </span>
+                      )}
+
+                      {matchingReview && (
+                        <AttachedRequirementBadge review={matchingReview} />
                       )}
                     </div>
 

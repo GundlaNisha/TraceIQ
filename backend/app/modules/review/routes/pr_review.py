@@ -115,6 +115,36 @@ async def create_pr_review(
     return {"id": str(pr_review.id)}
 
 
+def _build_pr_review_response(
+    pr_review: PRReview,
+    repo_name: str | None,
+    ws_id: uuid.UUID | None,
+    ws_name: str | None,
+    requirement: Requirement | None,
+) -> PRReviewResponse:
+    """Assemble PRReviewResponse with repository, workspace, and attached requirement metadata."""
+    return PRReviewResponse(
+        id=pr_review.id,
+        user_id=pr_review.user_id,
+        repository_id=pr_review.repository_id,
+        requirement_id=pr_review.requirement_id,
+        requirement_title=requirement.title if requirement else None,
+        requirement_jira_issue_key=requirement.jira_issue_key if requirement else None,
+        requirement_jira_issue_url=requirement.jira_issue_url if requirement else None,
+        requirement_jira_status=requirement.jira_status if requirement else None,
+        requirement_version_number=requirement.version_number if requirement else None,
+        pr_number=pr_review.pr_number,
+        pr_title=pr_review.pr_title,
+        pr_html_url=pr_review.pr_html_url,
+        status=pr_review.status,
+        summary=pr_review.summary,
+        created_at=pr_review.created_at,
+        repository_name=repo_name,
+        workspace_id=ws_id,
+        workspace_name=ws_name,
+    )
+
+
 @router.get("", response_model=list[PRReviewResponse])
 async def list_pr_reviews(
     request: Request,
@@ -131,9 +161,11 @@ async def list_pr_reviews(
             Repository.name.label("repository_name"),
             Repository.workspace_id.label("workspace_id"),
             Workspace.name.label("workspace_name"),
+            Requirement,
         )
         .join(Repository, PRReview.repository_id == Repository.id)
         .outerjoin(Workspace, Repository.workspace_id == Workspace.id)
+        .outerjoin(Requirement, PRReview.requirement_id == Requirement.id)
     )
 
     if target_ws:
@@ -170,26 +202,10 @@ async def list_pr_reviews(
         result = await db.execute(stmt)
 
     rows = result.all()
-    reviews = []
-    for r, repo_name, ws_id, ws_name in rows:
-        reviews.append(
-            PRReviewResponse(
-                id=r.id,
-                user_id=r.user_id,
-                repository_id=r.repository_id,
-                requirement_id=r.requirement_id,
-                pr_number=r.pr_number,
-                pr_title=r.pr_title,
-                pr_html_url=r.pr_html_url,
-                status=r.status,
-                summary=r.summary,
-                created_at=r.created_at,
-                repository_name=repo_name,
-                workspace_id=ws_id,
-                workspace_name=ws_name,
-            )
-        )
-    return reviews
+    return [
+        _build_pr_review_response(r, repo_name, ws_id, ws_name, req_obj)
+        for r, repo_name, ws_id, ws_name, req_obj in rows
+    ]
 
 
 @router.get("/{review_id}", response_model=PRReviewResponse)
@@ -198,7 +214,7 @@ async def get_pr_review(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get a single PR review by ID with workspace and repo metadata."""
+    """Get a single PR review by ID with workspace, repo, and requirement metadata."""
     try:
         review_uuid = uuid.UUID(review_id)
     except ValueError:
@@ -210,9 +226,11 @@ async def get_pr_review(
             Repository.name.label("repository_name"),
             Repository.workspace_id.label("workspace_id"),
             Workspace.name.label("workspace_name"),
+            Requirement,
         )
         .join(Repository, PRReview.repository_id == Repository.id)
         .outerjoin(Workspace, Repository.workspace_id == Workspace.id)
+        .outerjoin(Requirement, PRReview.requirement_id == Requirement.id)
         .where(PRReview.id == review_uuid)
     )
     result = await db.execute(stmt)
@@ -220,26 +238,12 @@ async def get_pr_review(
     if not row:
         raise NotFoundError("PR review not found")
 
-    pr_review, repo_name, ws_id, ws_name = row[0], row[1], row[2], row[3]
+    pr_review, repo_name, ws_id, ws_name, req_obj = row[0], row[1], row[2], row[3], row[4]
     repo = await db.get(Repository, pr_review.repository_id)
     if not repo or not await _has_repo_view_access(db, repo, current_user):
         raise ForbiddenError("Not authorized to view this PR review")
 
-    return PRReviewResponse(
-        id=pr_review.id,
-        user_id=pr_review.user_id,
-        repository_id=pr_review.repository_id,
-        requirement_id=pr_review.requirement_id,
-        pr_number=pr_review.pr_number,
-        pr_title=pr_review.pr_title,
-        pr_html_url=pr_review.pr_html_url,
-        status=pr_review.status,
-        summary=pr_review.summary,
-        created_at=pr_review.created_at,
-        repository_name=repo_name,
-        workspace_id=ws_id,
-        workspace_name=ws_name,
-    )
+    return _build_pr_review_response(pr_review, repo_name, ws_id, ws_name, req_obj)
 
 
 @router.get("/{review_id}/findings", response_model=list[PRReviewFindingResponse])

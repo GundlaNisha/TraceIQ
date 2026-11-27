@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AttachedRequirementBadge } from "./AttachedRequirementBadge";
 import type { PRReview } from "@/lib/types/pr-review";
 
 const STATUS_CONFIG = {
@@ -62,7 +63,10 @@ export function PRReviewList() {
         const matchesRepo = (r.repository_name || "").toLowerCase().includes(q);
         const matchesWS = (r.workspace_name || "").toLowerCase().includes(q);
         const matchesNum = `#${r.pr_number}`.includes(q);
-        if (!matchesTitle && !matchesRepo && !matchesWS && !matchesNum) return false;
+        const matchesReq =
+          (r.requirement_title || "").toLowerCase().includes(q) ||
+          (r.requirement_jira_issue_key || "").toLowerCase().includes(q);
+        if (!matchesTitle && !matchesRepo && !matchesWS && !matchesNum && !matchesReq) return false;
       }
 
       // Workspace filter
@@ -222,6 +226,9 @@ export function PRReviewList() {
                           {review.repository_name}
                         </span>
                       )}
+
+                      {/* Attached Requirement Badge */}
+                      <AttachedRequirementBadge review={review} />
                     </div>
 
                     <h3 className="text-lg font-semibold text-foreground truncate group-hover:text-accent transition-colors">

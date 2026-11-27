@@ -66,6 +66,21 @@ export function ReviewPRModal({ pr, onClose }: Props) {
     }
   }, [pr, repos]);
 
+  // Automatically pre-select a matching requirement if PR title or branch mentions its Jira key
+  useEffect(() => {
+    if (!pr || !reqs?.length || requirementId) return;
+    const haystack = (pr.title || "").toUpperCase();
+    const candidates = reqs.filter(
+      (r: any) => (!repositoryId || r.repository_id === repositoryId) && r.jira_issue_key
+    );
+    const matched = candidates.find((r: any) =>
+      haystack.includes(String(r.jira_issue_key).toUpperCase())
+    );
+    if (matched) {
+      setRequirementId(matched.id);
+    }
+  }, [pr, reqs, repositoryId, requirementId]);
+
   if (!pr) return null;
 
   const handleSubmit = (e: React.FormEvent) => {

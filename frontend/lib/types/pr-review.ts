@@ -3,6 +3,11 @@ export interface PRReview {
   user_id: string;
   repository_id: string;
   requirement_id: string | null;
+  requirement_title?: string | null;
+  requirement_jira_issue_key?: string | null;
+  requirement_jira_issue_url?: string | null;
+  requirement_jira_status?: string | null;
+  requirement_version_number?: number | null;
   pr_number: number;
   pr_title: string;
   pr_html_url: string;

@@ -21,6 +21,7 @@ import { formatTimeAgo } from "@/lib/utils";
 import type { PRReviewFinding } from "@/lib/types/pr-review";
 import { CICorrelationPanel } from "./CICorrelationPanel";
 import { DiffFilesTab } from "./DiffFilesTab";
+import { AttachedRequirementBadge } from "./AttachedRequirementBadge";
 
 const STATUS_CONFIG = {
   queued: { label: "Queued", icon: Clock, bar: "bg-slate-300", text: "text-slate-600" },
@@ -239,6 +240,9 @@ export function PRReviewDetail({ reviewId }: Props) {
           </div>
         )}
       </div>
+
+      {/* Attached Requirement Summary */}
+      <AttachedRequirementBadge review={review} variant="panel" />
 
       {/* CI x Blast Radius — live Actions status vs predicted impact */}
       {isCompleted && <CICorrelationPanel reviewId={reviewId} />}

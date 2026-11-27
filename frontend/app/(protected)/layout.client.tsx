@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { GlobalSearchBar } from "@/features/search/components/GlobalSearchBar";
 import { useEnsureBackendUser } from "@/features/auth/api/queries";
 import { UserButton, useUser } from "@clerk/nextjs";
+import { useWorkspaceStore } from "@/stores/workspace";
 import { WorkspaceSwitcher } from "@/features/workspace/components/WorkspaceSwitcher";
 import { NotificationsMenu } from "@/features/notifications/components/NotificationsMenu";
 import { useState, useEffect } from "react";
@@ -47,8 +48,15 @@ export default function ProtectedLayoutClient({
 }) {
   const pathname = usePathname();
   const { user } = useUser();
+  const syncOwnerUser = useWorkspaceStore((s) => s.syncOwnerUser);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      syncOwnerUser(user.id);
+    }
+  }, [user?.id, syncOwnerUser]);
 
   useEffect(() => {
     const saved = localStorage.getItem("traceiq-sidebar-collapsed");

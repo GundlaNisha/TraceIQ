@@ -63,13 +63,22 @@ export function AddRepositoryModal() {
 
   const { activeWorkspaceId } = useWorkspaceStore();
   const { data: workspaces = [] } = useWorkspaces();
-  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>(activeWorkspaceId || "");
+  const validActiveWorkspaceId =
+    activeWorkspaceId && workspaces.some((w) => w.id === activeWorkspaceId)
+      ? activeWorkspaceId
+      : "";
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>(validActiveWorkspaceId);
 
   useEffect(() => {
     if (open) {
-      setTargetWorkspaceId(activeWorkspaceId || "");
+      setTargetWorkspaceId(validActiveWorkspaceId);
     }
-  }, [open, activeWorkspaceId]);
+  }, [open, validActiveWorkspaceId]);
+
+  const effectiveWorkspaceId =
+    targetWorkspaceId && workspaces.some((w) => w.id === targetWorkspaceId)
+      ? targetWorkspaceId
+      : null;
 
   const { data: githubStatus, refetch: refetchStatus } = useGithubStatus();
   const {
@@ -107,7 +116,7 @@ export function AddRepositoryModal() {
       setImportingUrl(repo.html_url);
       await addRepo({
         repo_url: repo.html_url,
-        workspace_id: targetWorkspaceId ? targetWorkspaceId : null,
+        workspace_id: effectiveWorkspaceId,
       });
       await refetchAvailable();
       setOpen(false);
@@ -140,7 +149,7 @@ export function AddRepositoryModal() {
     try {
       await addRepo({
         repo_url: data.repo_url,
-        workspace_id: targetWorkspaceId ? targetWorkspaceId : null,
+        workspace_id: effectiveWorkspaceId,
       });
       reset();
       setOpen(false);

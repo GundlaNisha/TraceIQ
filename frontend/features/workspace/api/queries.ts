@@ -1,6 +1,7 @@
 import { useApiClient } from "@/lib/api/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Repository } from "@/lib/types/api";
+import { useWorkspaceStore } from "@/stores/workspace";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,7 +93,21 @@ export function useWorkspaces() {
     queryFn: async () => {
       const res = await fetchApi("/api/v1/workspaces", {});
       if (!res.ok) throw new Error("Failed to fetch workspaces");
-      return res.json() as Promise<Workspace[]>;
+      const data = (await res.json()) as Workspace[];
+
+      // Self-heal stale persisted workspace IDs (e.g. after DB reset, removal, or deletion)
+      const { activeWorkspaceId, activeWorkspaceName, setActiveWorkspace } =
+        useWorkspaceStore.getState();
+      if (activeWorkspaceId) {
+        const match = data.find((w) => w.id === activeWorkspaceId);
+        if (!match) {
+          setActiveWorkspace(null, null);
+        } else if (match.name !== activeWorkspaceName) {
+          setActiveWorkspace(match.id, match.name);
+        }
+      }
+
+      return data;
     },
   });
 }

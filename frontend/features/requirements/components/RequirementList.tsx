@@ -43,6 +43,8 @@ import { formatTimeAgo, formatDateTime } from "@/lib/utils";
 interface Props {
   repoId?: string | null;
   isViewer?: boolean;
+  isJiraConfigured?: boolean;
+  onOpenJiraImport?: () => void;
 }
 
 function getStatusBadgeStyle(status?: string | null): string {
@@ -57,7 +59,7 @@ function getStatusBadgeStyle(status?: string | null): string {
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
-export function RequirementList({ repoId, isViewer = false }: Props) {
+export function RequirementList({ repoId, isViewer = false, isJiraConfigured = false, onOpenJiraImport }: Props) {
   const { data: requirements, isLoading } = useRequirements(repoId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -138,6 +140,19 @@ export function RequirementList({ repoId, isViewer = false }: Props) {
         <p className="text-sm text-muted max-w-md mx-auto">
           Create a new requirement manually or import issues directly from your connected Jira workspace to begin autonomous code impact analysis.
         </p>
+        {!isViewer && onOpenJiraImport && (
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onOpenJiraImport}
+              className="inline-flex items-center gap-1.5 rounded-xl border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-700 text-xs font-semibold"
+            >
+              <Zap className="w-3.5 h-3.5 text-blue-600" />
+              {isJiraConfigured ? "Auto-Fetch Requirements from Jira" : "Connect Jira & Fetch Requirements"}
+            </Button>
+          </div>
+        )}
       </div>
     );
   }

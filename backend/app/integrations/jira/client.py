@@ -381,13 +381,25 @@ class JiraClient:
             if clauses:
                 final_jql = " AND ".join(clauses) + " ORDER BY updated DESC"
             else:
-                final_jql = "ORDER BY updated DESC"
+                # Jira Cloud /rest/api/3/search/jql rejects unbounded JQL queries.
+                final_jql = "issuetype IS NOT EMPTY ORDER BY updated DESC"
 
-        params = {
-            "jql": final_jql,
-            "startAt": start_at,
-            "maxResults": min(max_results, 100),
-            "fields": [
+        fields_list = [
+            "summary",
+            "description",
+            "status",
+            "issuetype",
+            "priority",
+            "project",
+            "assignee",
+            "updated",
+            "created",
+            "labels",
+        ]
+        clamped_max = min(max_results, 100)
+        data = await self._search_jql_raw(
+            jql=final_jql,
+            fields_list=[
                 "summary",
                 "description",
                 "status",
@@ -399,25 +411,22 @@ class JiraClient:
                 "created",
                 "labels",
             ],
-            "expand": "renderedFields",
-        }
-
-        try:
-            data = await self._request("GET", "/rest/api/3/search", params=params)
-        except JiraApiError as e:
-            if e.status_code in (404, 400, 405):
-                # Try v2 search fallback
-                data = await self._request("GET", "/rest/api/2/search", params=params)
-            else:
-                raise
+            start_at=start_at,
+            max_results=clamped_max,
+            expand="renderedFields",
+        )
 
         issues_raw = data.get("issues", [])
-        total = data.get("total", len(issues_raw))
         items: list[dict[str, Any]] = []
 
         for raw in issues_raw:
             parsed = self._parse_issue_summary(raw)
             items.append(parsed)
+
+        total = data.get("total")
+        if total is None:
+            is_last = data.get("isLast", True)
+            total = start_at + len(items) if is_last else start_at + len(items) + 1
 
         return {
             "total": total,
@@ -425,6 +434,78 @@ class JiraClient:
             "max_results": data.get("maxResults", max_results),
             "issues": items,
         }
+
+    async def _search_jql_raw(
+        self,
+        jql: str,
+        fields_list: list[str],
+        start_at: int = 0,
+        max_results: int = 50,
+        expand: str = "renderedFields",
+    ) -> dict[str, Any]:
+        """Execute a JQL search preferring Jira Cloud /search/jql with Server fallback."""
+        jql_params = {
+            "jql": jql,
+            "maxResults": max_results,
+            "fields": ",".join(fields_list),
+            "expand": expand,
+        }
+        legacy_params = {
+            "jql": jql,
+            "startAt": start_at,
+            "maxResults": max_results,
+            "fields": fields_list,
+            "expand": expand,
+        }
+        try:
+            return await self._request("GET", "/rest/api/3/search/jql", params=jql_params)
+        except JiraApiError as e:
+            if e.status_code in (404, 405, 410):
+                try:
+                    return await self._request("GET", "/rest/api/3/search", params=legacy_params)
+                except JiraApiError as e2:
+                    if e2.status_code in (404, 400, 405, 410):
+                        return await self._request("GET", "/rest/api/2/search", params=legacy_params)
+                    raise
+            raise
+
+    async def get_issues_by_keys(self, issue_keys: list[str]) -> dict[str, dict[str, Any]]:
+        """Batch-fetch full parsed issue details for a list of Jira issue keys."""
+        cleaned = [k.strip() for k in issue_keys if k and k.strip()]
+        if not cleaned:
+            return {}
+
+        fields_list = [
+            "summary",
+            "description",
+            "status",
+            "issuetype",
+            "priority",
+            "project",
+            "assignee",
+            "reporter",
+            "updated",
+            "created",
+            "labels",
+            "components",
+        ]
+        results: dict[str, dict[str, Any]] = {}
+        for i in range(0, len(cleaned), 50):
+            chunk = cleaned[i : i + 50]
+            jql = "key IN (" + ", ".join(f'"{k}"' for k in chunk) + ")"
+            data = await self._search_jql_raw(
+                jql=jql,
+                fields_list=fields_list,
+                start_at=0,
+                max_results=len(chunk),
+                expand="renderedFields,names",
+            )
+            for raw in data.get("issues", []):
+                parsed = self._parse_issue_detail(raw)
+                if parsed.get("key"):
+                    results[parsed["key"]] = parsed
+
+        return results
 
     async def get_issue(self, issue_key_or_id: str) -> dict[str, Any]:
         """Fetch a single Jira issue by key (e.g. PROJ-123) or ID with full markdown conversion."""

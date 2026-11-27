@@ -7,6 +7,8 @@ export function useRequirements(repoId?: string | null) {
 
   return useQuery({
     queryKey: ["requirements", repoId || "all"],
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const url = repoId
         ? `/api/v1/requirements?repo_id=${encodeURIComponent(repoId)}`
@@ -24,6 +26,8 @@ export function useRequirementVersions(id: string | null) {
   return useQuery({
     queryKey: ["requirements", id, "versions"],
     enabled: !!id,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const res = await fetchApi(`/api/v1/requirements/${id}/versions`, {});
       if (!res.ok) throw new Error("Failed to fetch versions");

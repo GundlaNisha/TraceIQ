@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useRepositories } from "@/features/repositories/api/queries";
+import { useRequirements } from "@/features/requirements/api/queries";
 import {
   useJiraConfig,
   useJiraProjects,
@@ -40,8 +41,7 @@ import {
   Tag,
   Sparkles,
   Kanban,
-  CheckSquare,
-  ListFilter,
+  RefreshCw,
 } from "lucide-react";
 
 interface Props {
@@ -63,10 +63,22 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
   const { data: issueTypes } = useJiraIssueTypes(activeWorkspaceId, isConfigured);
   const { data: statuses } = useJiraStatuses(activeWorkspaceId, isConfigured);
 
-  // Active target repository
+  // Active target repository (auto-defaults to workspace active repo or first available repo)
   const [selectedRepoId, setSelectedRepoId] = useState<string>(
     preselectedRepoId || activeRepositoryId || ""
   );
+  const effectiveRepoId =
+    selectedRepoId || preselectedRepoId || activeRepositoryId || repos?.[0]?.id || "";
+
+  // Requirements already imported into the target repository
+  const { data: repoRequirements } = useRequirements(effectiveRepoId || undefined);
+  const importedKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const r of repoRequirements || []) {
+      if (r.jira_issue_key) keys.add(r.jira_issue_key);
+    }
+    return keys;
+  }, [repoRequirements]);
 
   // Active view tab: "browse" | "quick"
   const [activeTab, setActiveTab] = useState<"browse" | "quick">("browse");
@@ -86,8 +98,11 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
   const { data: boards } = useJiraBoards(selectedProject || null, activeWorkspaceId, isConfigured);
   const { data: sprints } = useJiraSprints(selectedBoardId || null, activeWorkspaceId, isConfigured);
 
-  // Selected issues for batch import
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  // Selection mode: by default ALL unimported available Jira issues are auto-selected,
+  // while the user can uncheck specific issues or switch to manual selection.
+  const [autoSelectAll, setAutoSelectAll] = useState(true);
+  const [excludedKeys, setExcludedKeys] = useState<Set<string>>(new Set());
+  const [manualKeys, setManualKeys] = useState<Set<string>>(new Set());
 
   // Active previewed issue
   const [previewKey, setPreviewKey] = useState<string | null>(null);
@@ -115,10 +130,14 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
     null
   );
 
-  // Query issues
+  // Query issues (auto-fetches all available issues up to 100 as soon as Jira is configured)
   const {
     data: searchData,
     isLoading: issuesLoading,
+    isFetching: issuesFetching,
+    isError: issuesIsError,
+    error: issuesError,
+    refetch: refetchIssues,
   } = useJiraIssues({
     q: searchQuery,
     project_key: selectedProject || undefined,
@@ -126,38 +145,87 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
     status_category: selectedStatusCategory || undefined,
     board_id: selectedBoardId || undefined,
     sprint_id: selectedSprintId || undefined,
+    max_results: 100,
     workspaceId: activeWorkspaceId,
     enabled: Boolean(isConfigured && open),
   });
 
   const issues = searchData?.issues || [];
 
+  const selectedKeys = useMemo(() => {
+    const next = new Set<string>();
+    for (const issue of issues) {
+      if (autoSelectAll) {
+        const isAlreadyImported = importedKeys.has(issue.key);
+        const explicitlyIncluded = manualKeys.has(issue.key);
+        const explicitlyExcluded = excludedKeys.has(issue.key);
+        if (!explicitlyExcluded && (!isAlreadyImported || explicitlyIncluded)) {
+          next.add(issue.key);
+        }
+      } else if (manualKeys.has(issue.key)) {
+        next.add(issue.key);
+      }
+    }
+    return next;
+  }, [issues, autoSelectAll, importedKeys, excludedKeys, manualKeys]);
+
   // Toggle single key in batch selection
   function toggleKey(key: string) {
-    setSelectedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
+    const currentlySelected = selectedKeys.has(key);
+    if (autoSelectAll) {
+      if (currentlySelected) {
+        setExcludedKeys((prev) => new Set(prev).add(key));
+        setManualKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
       } else {
-        next.add(key);
+        setExcludedKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        if (importedKeys.has(key)) {
+          setManualKeys((prev) => new Set(prev).add(key));
+        }
       }
-      return next;
-    });
+    } else {
+      setManualKeys((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) {
+          next.delete(key);
+        } else {
+          next.add(key);
+        }
+        return next;
+      });
+    }
+  }
+
+  function handleAutoSelectModeChange(enabled: boolean) {
+    setAutoSelectAll(enabled);
+    setExcludedKeys(new Set());
+    setManualKeys(new Set());
   }
 
   // Toggle all visible keys
   function toggleAllVisible() {
     if (selectedKeys.size >= issues.length && issues.length > 0) {
-      setSelectedKeys(new Set());
+      setAutoSelectAll(false);
+      setExcludedKeys(new Set());
+      setManualKeys(new Set());
     } else {
-      setSelectedKeys(new Set(issues.map((i) => i.key)));
+      setAutoSelectAll(true);
+      setExcludedKeys(new Set());
+      setManualKeys(new Set(issues.filter((i) => importedKeys.has(i.key)).map((i) => i.key)));
     }
   }
 
   // Handle single issue import
   async function handleImportSingle(issueKey: string, customTitle?: string, customText?: string) {
     setFeedback(null);
-    const repoId = selectedRepoId || activeRepositoryId;
+    const repoId = effectiveRepoId;
     if (!repoId) {
       setFeedback({ type: "error", message: "Please select a target repository first." });
       return;
@@ -186,7 +254,7 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
   // Handle batch import
   async function handleImportBatch() {
     setFeedback(null);
-    const repoId = selectedRepoId || activeRepositoryId;
+    const repoId = effectiveRepoId;
     if (!repoId) {
       setFeedback({ type: "error", message: "Please select a target repository first." });
       return;
@@ -208,7 +276,8 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
           type: "success",
           message: `Successfully imported ${res.total_imported} requirement${res.total_imported > 1 ? "s" : ""}!`,
         });
-        setSelectedKeys(new Set());
+        setExcludedKeys(new Set());
+        setManualKeys(new Set());
         onSuccess?.();
       } else if (res.failed.length > 0) {
         setFeedback({
@@ -304,7 +373,7 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                     Target Repo:
                   </span>
                   <select
-                    value={selectedRepoId}
+                    value={effectiveRepoId}
                     onChange={(e) => setSelectedRepoId(e.target.value)}
                     className="text-xs font-semibold bg-white border border-border/60 rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-accent outline-none max-w-[220px]"
                   >
@@ -500,12 +569,70 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                       </div>
                     </div>
 
+                    {/* Auto-Fetch Selection Control Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 shrink-0 bg-blue-50/50 px-3 py-2 rounded-lg border border-blue-200/60 text-xs">
+                      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={autoSelectAll}
+                          onChange={(e) => handleAutoSelectModeChange(e.target.checked)}
+                          className="rounded border-slate-300 text-accent focus:ring-accent cursor-pointer"
+                        />
+                        <span className="font-semibold text-foreground">
+                          Select all available requirements by default
+                        </span>
+                        <span className="text-[11px] text-muted hidden sm:inline">
+                          (uncheck any issue below to skip)
+                        </span>
+                      </label>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => refetchIssues()}
+                          disabled={issuesFetching}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted hover:text-foreground px-2 py-1 rounded hover:bg-white transition-colors"
+                          title="Refresh Jira issues"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${issuesFetching ? "animate-spin" : ""}`} />
+                          Refresh
+                        </button>
+                        {issues.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={toggleAllVisible}
+                            className="text-[11px] font-semibold text-accent hover:underline px-1.5 py-0.5"
+                          >
+                            {selectedKeys.size >= issues.length ? "Deselect All" : "Select All"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Table Container */}
                     <div className="flex-1 border border-border/40 rounded-xl overflow-y-auto bg-white min-h-0">
                       {issuesLoading ? (
                         <div className="flex items-center justify-center py-16 text-xs text-muted">
                           <Loader2 className="w-4 h-4 animate-spin mr-2" />
                           Fetching Jira items...
+                        </div>
+                      ) : issuesIsError ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-center text-xs px-4">
+                          <AlertCircle className="w-8 h-8 text-rose-400 mb-2" />
+                          <p className="font-semibold text-rose-700">Failed to fetch Jira requirements</p>
+                          <p className="text-[11px] text-muted-foreground mt-1 max-w-md">
+                            {(issuesError as Error)?.message || "Could not load issues from Jira."}
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => refetchIssues()}
+                            className="mt-3 text-xs h-7"
+                          >
+                            <RefreshCw className="w-3 h-3 mr-1.5" />
+                            Retry
+                          </Button>
                         </div>
                       ) : issues.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center text-muted text-xs">
@@ -522,6 +649,7 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                               <th className="w-8 px-3 py-2 text-center">
                                 <input
                                   type="checkbox"
+                                  aria-label="Toggle all visible issues"
                                   checked={selectedKeys.size >= issues.length && issues.length > 0}
                                   onChange={toggleAllVisible}
                                   className="rounded border-slate-300 text-accent focus:ring-accent cursor-pointer"
@@ -538,6 +666,7 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                             {issues.map((issue: JiraIssue) => {
                               const isChecked = selectedKeys.has(issue.key);
                               const isPreviewing = previewKey === issue.key;
+                              const isImported = importedKeys.has(issue.key);
                               return (
                                 <tr
                                   key={issue.key}
@@ -549,6 +678,7 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                                   <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                                     <input
                                       type="checkbox"
+                                      aria-label={`Select ${issue.key}`}
                                       checked={isChecked}
                                       onChange={() => toggleKey(issue.key)}
                                       className="rounded border-slate-300 text-accent focus:ring-accent cursor-pointer"
@@ -566,8 +696,15 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                                       <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                                     </a>
                                   </td>
-                                  <td className="px-3 py-2 font-medium text-foreground max-w-[240px] truncate">
-                                    {issue.summary}
+                                  <td className="px-3 py-2 font-medium text-foreground max-w-[240px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="truncate">{issue.summary}</span>
+                                      {isImported && (
+                                        <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                          Imported
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-3 py-2 whitespace-nowrap">
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
@@ -587,7 +724,7 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                                       onClick={() => handleImportSingle(issue.key)}
                                       className="text-[11px] h-7 px-2.5 hover:bg-accent hover:text-white"
                                     >
-                                      Import
+                                      {isImported ? "Re-sync" : "Import"}
                                     </Button>
                                   </td>
                                 </tr>
@@ -601,7 +738,7 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                     {/* Batch Actions Footer */}
                     <div className="flex items-center justify-between pt-1 shrink-0">
                       <span className="text-xs text-muted font-medium">
-                        {selectedKeys.size} issue{selectedKeys.size !== 1 ? "s" : ""} selected
+                        {selectedKeys.size} of {issues.length} issue{issues.length !== 1 ? "s" : ""} selected
                       </span>
                       {selectedKeys.size > 0 && (
                         <Button
@@ -616,7 +753,7 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
                               Importing ({selectedKeys.size})...
                             </>
                           ) : (
-                            `Import Selected (${selectedKeys.size})`
+                            `Fetch & Import Selected (${selectedKeys.size})`
                           )}
                         </Button>
                       )}
@@ -824,6 +961,9 @@ export function JiraImportDialog({ open, onOpenChange, preselectedRepoId, onSucc
         open={configModalOpen}
         onOpenChange={setConfigModalOpen}
         workspaceId={activeWorkspaceId}
+        onSaved={() => {
+          refetchIssues();
+        }}
       />
     </>
   );

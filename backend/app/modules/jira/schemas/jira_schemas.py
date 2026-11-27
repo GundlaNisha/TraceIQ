@@ -193,7 +193,7 @@ class JiraImportRequest(BaseModel):
 
 class JiraBatchImportRequest(BaseModel):
     repository_id: uuid.UUID
-    issue_keys: list[str] = Field(..., min_length=1, max_length=50, description="List of Jira issue keys to import")
+    issue_keys: list[str] = Field(..., min_length=1, max_length=100, description="List of Jira issue keys to import")
 
 
 class JiraImportResult(BaseModel):
@@ -220,6 +220,14 @@ class JiraSyncResponse(BaseModel):
     jira_issue_key: str
     jira_status: str | None = None
     was_updated: bool
+    message: str
+
+
+class JiraSyncAllResponse(BaseModel):
+    checked: int
+    updated: int
+    updated_keys: list[str] = Field(default_factory=list)
+    skipped: bool = False
     message: str
 
 

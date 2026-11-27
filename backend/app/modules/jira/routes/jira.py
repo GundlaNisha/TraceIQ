@@ -40,6 +40,7 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraSearchResponse,
     JiraSprintItem,
     JiraStatusItem,
+    JiraSyncAllResponse,
     JiraSyncResponse,
     JiraTestConnectionRequest,
     JiraTestConnectionResponse,
@@ -76,6 +77,7 @@ from app.modules.jira.services.jira_service import (
     post_jira_comment,
     save_jira_config,
     search_jira_issues,
+    sync_all_jira_requirements,
     sync_jira_requirement,
     test_jira_credentials,
     simulate_jira_webhook_delivery,
@@ -421,6 +423,34 @@ async def import_batch_issues(
 # ---------------------------------------------------------------------------
 # Phase 1 + 2: Requirement-linked operations
 # ---------------------------------------------------------------------------
+
+
+@router.post("/requirements/sync-all", response_model=JiraSyncAllResponse)
+async def sync_all_requirements(
+    request: Request,
+    repo_id: uuid.UUID | None = None,
+    workspace_id: uuid.UUID | None = None,
+    force: bool = Query(False),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Auto-sync all Jira-linked requirements in scope with their upstream Jira issues."""
+    target_ws = workspace_id or get_active_workspace_id(request)
+    res = await sync_all_jira_requirements(
+        db=db,
+        user_id=current_user.id,
+        workspace_id=target_ws,
+        repo_id=repo_id,
+        force=force,
+    )
+    if res.updated > 0:
+        if target_ws:
+            await cache.invalidate_workspace(target_ws, "jira")
+            await cache.invalidate_workspace(target_ws, "requirements")
+        else:
+            await cache.invalidate_user(current_user.id, "jira")
+            await cache.invalidate_user(current_user.id, "requirements")
+    return res
 
 
 @router.post("/requirements/{req_id}/sync", response_model=JiraSyncResponse)

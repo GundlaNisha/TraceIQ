@@ -297,6 +297,14 @@ export interface JiraSyncResult {
   message: string;
 }
 
+export interface JiraSyncAllResult {
+  checked: number;
+  updated: number;
+  updated_keys: string[];
+  skipped: boolean;
+  message: string;
+}
+
 // ---------------------------------------------------------------------------
 // Jira Transitions, Comments, Webhook & Auto-Sync
 // ---------------------------------------------------------------------------

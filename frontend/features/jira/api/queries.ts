@@ -14,6 +14,7 @@ import type {
   JiraImportResult,
   JiraBatchImportResponse,
   JiraTestConnectionResult,
+  JiraSyncAllResult,
   JiraSyncResult,
 } from "@/lib/types/api";
 
@@ -410,6 +411,42 @@ export function useSyncJiraRequirement() {
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["requirements"] });
       qc.invalidateQueries({ queryKey: ["requirements", vars.requirement_id, "versions"] });
+    },
+  });
+}
+
+export function useSyncAllJiraRequirements() {
+  const { fetchApi } = useApiClient();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data?: {
+      repo_id?: string | null;
+      workspace_id?: string | null;
+      force?: boolean;
+    }) => {
+      const params = new URLSearchParams();
+      if (data?.repo_id) params.append("repo_id", data.repo_id);
+      if (data?.workspace_id) params.append("workspace_id", data.workspace_id);
+      if (data?.force) params.append("force", "true");
+      const qs = params.toString();
+      const url = `/api/v1/jira/requirements/sync-all${qs ? `?${qs}` : ""}`;
+      const res = await fetchApi(url, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to auto-sync requirements from Jira");
+      }
+      return res.json() as Promise<JiraSyncAllResult>;
+    },
+    onSuccess: async (res) => {
+      if (res.updated > 0) {
+        await qc.invalidateQueries({ queryKey: ["requirements"] });
+        await qc.refetchQueries({ queryKey: ["requirements"] });
+        qc.invalidateQueries({ queryKey: ["jira_issues"] });
+        qc.invalidateQueries({ queryKey: ["workspace_summary"] });
+      }
     },
   });
 }

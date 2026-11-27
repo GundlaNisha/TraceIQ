@@ -6,6 +6,9 @@ import logging
 import secrets as _secrets
 import uuid
 from datetime import UTC, datetime
+from typing import Any
+from typing import Any
+from typing import Any
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
@@ -34,6 +37,7 @@ from app.modules.jira.schemas.jira_schemas import (
     JiraSearchResponse,
     JiraSprintItem,
     JiraStatusItem,
+    JiraSyncAllResponse,
     JiraSyncResponse,
     JiraTestConnectionResponse,
     JiraTransitionResponse,
@@ -482,6 +486,73 @@ async def get_jira_issue_detail(
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
 
+async def _upsert_jira_requirement(
+    db: AsyncSession,
+    user_id: str,
+    repo: Repository,
+    workspace_id: uuid.UUID | None,
+    issue: dict[str, Any],
+    custom_title: str | None = None,
+    custom_text: str | None = None,
+) -> Requirement:
+    """Create or update a TraceIQ Requirement from a fetched Jira issue without duplicating."""
+    final_title = (custom_title or f"[{issue['key']}] {issue['summary']}").strip()
+    final_text = (custom_text or issue["description_markdown"]).strip()
+    if not final_text:
+        final_text = (
+            f"Requirement imported from Jira issue [{issue['key']}]({issue['url']}): {issue['summary']}"
+        )
+
+    existing_res = await db.execute(
+        select(Requirement).where(
+            Requirement.repository_id == repo.id,
+            Requirement.jira_issue_key == issue["key"],
+        )
+    )
+    existing = existing_res.scalars().first()
+    now_naive = datetime.now(UTC).replace(tzinfo=None)
+
+    if existing:
+        existing.jira_issue_id = issue.get("id") or existing.jira_issue_id
+        existing.jira_issue_url = issue.get("url") or existing.jira_issue_url
+        existing.jira_status = issue.get("status")
+        existing.jira_priority = issue.get("priority")
+        existing.jira_issue_type = issue.get("issue_type")
+        existing.jira_synced_at = now_naive
+
+        if existing.title != final_title or existing.text != final_text:
+            existing.title = final_title
+            existing.text = final_text
+            existing.version_number += 1
+            db.add(
+                RequirementVersion(
+                    requirement_id=existing.id,
+                    version_number=existing.version_number,
+                    title=final_title,
+                    text=final_text,
+                )
+            )
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
+    return await create_requirement(
+        db=db,
+        user_id=user_id,
+        repository_id=repo.id,
+        title=final_title,
+        text=final_text,
+        workspace_id=repo.workspace_id or workspace_id,
+        jira_issue_key=issue["key"],
+        jira_issue_id=issue["id"],
+        jira_issue_url=issue["url"],
+        jira_status=issue["status"],
+        jira_priority=issue["priority"],
+        jira_issue_type=issue["issue_type"],
+        jira_synced_at=now_naive,
+    )
+
+
 async def import_jira_issue(
     db: AsyncSession,
     user_id: str,
@@ -492,7 +563,6 @@ async def import_jira_issue(
     custom_text: str | None = None,
 ) -> JiraImportResult:
     """Import a single Jira issue as a TraceIQ requirement."""
-    # Verify repository access
     repo = await db.get(Repository, repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
@@ -503,25 +573,14 @@ async def import_jira_issue(
     except JiraApiError as e:
         raise HTTPException(status_code=e.status_code, detail=f"Failed to fetch Jira issue {issue_key}: {e.message}")
 
-    final_title = (custom_title or f"[{issue['key']}] {issue['summary']}").strip()
-    final_text = (custom_text or issue['description_markdown']).strip()
-    if not final_text:
-        final_text = f"Requirement imported from Jira issue [{issue['key']}]({issue['url']}): {issue['summary']}"
-
-    req = await create_requirement(
+    req = await _upsert_jira_requirement(
         db=db,
         user_id=user_id,
-        repository_id=repo_id,
-        title=final_title,
-        text=final_text,
-        workspace_id=repo.workspace_id or workspace_id,
-        jira_issue_key=issue["key"],
-        jira_issue_id=issue["id"],
-        jira_issue_url=issue["url"],
-        jira_status=issue["status"],
-        jira_priority=issue["priority"],
-        jira_issue_type=issue["issue_type"],
-        jira_synced_at=datetime.now(UTC).replace(tzinfo=None),
+        repo=repo,
+        workspace_id=workspace_id,
+        issue=issue,
+        custom_title=custom_title,
+        custom_text=custom_text,
     )
 
     audit = AuditLog(
@@ -567,25 +626,12 @@ async def batch_import_jira_issues(
             continue
         try:
             issue = await client.get_issue(key)
-            final_title = f"[{issue['key']}] {issue['summary']}".strip()
-            final_text = issue['description_markdown'].strip()
-            if not final_text:
-                final_text = f"Requirement imported from Jira issue [{issue['key']}]({issue['url']}): {issue['summary']}"
-
-            req = await create_requirement(
+            req = await _upsert_jira_requirement(
                 db=db,
                 user_id=user_id,
-                repository_id=repo_id,
-                title=final_title,
-                text=final_text,
-                workspace_id=repo.workspace_id or workspace_id,
-                jira_issue_key=issue["key"],
-                jira_issue_id=issue["id"],
-                jira_issue_url=issue["url"],
-                jira_status=issue["status"],
-                jira_priority=issue["priority"],
-                jira_issue_type=issue["issue_type"],
-                jira_synced_at=datetime.now(UTC).replace(tzinfo=None),
+                repo=repo,
+                workspace_id=workspace_id,
+                issue=issue,
             )
             imported.append(
                 JiraImportResult(
@@ -610,6 +656,59 @@ async def batch_import_jira_issues(
     )
 
 
+def _apply_jira_issue_update(
+    db: AsyncSession,
+    req: Requirement,
+    *,
+    new_title: str | None = None,
+    new_text: str | None = None,
+    new_status: str | None = None,
+    new_priority: str | None = None,
+    new_type: str | None = None,
+    now_naive: datetime | None = None,
+) -> tuple[bool, bool]:
+    """Apply upstream Jira metadata/content updates to a Requirement.
+
+    Returns (content_updated, any_updated). Appends a new RequirementVersion row
+    whenever title or text changed so full specification history is preserved.
+    """
+    ts = now_naive or datetime.now(UTC).replace(tzinfo=None)
+    any_updated = False
+
+    if new_status and req.jira_status != new_status:
+        req.jira_status = new_status
+        any_updated = True
+    if new_priority and req.jira_priority != new_priority:
+        req.jira_priority = new_priority
+        any_updated = True
+    if new_type and req.jira_issue_type != new_type:
+        req.jira_issue_type = new_type
+        any_updated = True
+
+    title_candidate = new_title.strip() if isinstance(new_title, str) and new_title.strip() else req.title
+    text_candidate = new_text.strip() if isinstance(new_text, str) and new_text.strip() else req.text
+
+    content_updated = (title_candidate != req.title) or (text_candidate != req.text)
+    if content_updated:
+        req.title = title_candidate
+        req.text = text_candidate
+        req.version_number = (req.version_number or 1) + 1
+        db.add(
+            RequirementVersion(
+                requirement_id=req.id,
+                version_number=req.version_number,
+                title=title_candidate,
+                text=text_candidate,
+            )
+        )
+        any_updated = True
+
+    if any_updated:
+        req.jira_synced_at = ts
+
+    return content_updated, any_updated
+
+
 async def sync_jira_requirement(
     db: AsyncSession,
     user_id: str,
@@ -631,34 +730,19 @@ async def sync_jira_requirement(
         raise HTTPException(status_code=e.status_code, detail=f"Failed to fetch updated issue from Jira: {e.message}")
 
     jira_title = f"[{issue['key']}] {issue['summary']}".strip()
-    jira_text = issue['description_markdown'].strip()
-    jira_status = issue.get("status")
-    jira_priority = issue.get("priority")
-    jira_type = issue.get("issue_type")
+    jira_text = issue["description_markdown"].strip()
 
-    # Check if anything changed
-    has_text_or_title_changed = (req.text != jira_text) or (req.title != jira_title)
-    has_status_changed = (req.jira_status != jira_status) or (req.jira_priority != jira_priority)
-
-    req.jira_status = jira_status
-    req.jira_priority = jira_priority
-    req.jira_issue_type = jira_type
-    req.jira_synced_at = datetime.now(UTC).replace(tzinfo=None)
-
-    was_updated = False
-    if has_text_or_title_changed:
-        req.title = jira_title
-        req.text = jira_text
-        req.version_number += 1
-
-        new_version = RequirementVersion(
-            requirement_id=req.id,
-            version_number=req.version_number,
-            title=jira_title,
-            text=jira_text,
-        )
-        db.add(new_version)
-        was_updated = True
+    was_updated, any_updated = _apply_jira_issue_update(
+        db,
+        req,
+        new_title=jira_title,
+        new_text=jira_text,
+        new_status=issue.get("status"),
+        new_priority=issue.get("priority"),
+        new_type=issue.get("issue_type"),
+    )
+    if not any_updated:
+        req.jira_synced_at = datetime.now(UTC).replace(tzinfo=None)
 
     audit = AuditLog(
         user_id=str(user_id),
@@ -670,7 +754,7 @@ async def sync_jira_requirement(
     await db.commit()
     await db.refresh(req)
 
-    msg = "Requirement successfully updated with latest Jira changes." if was_updated else "Requirement is already up-to-date with Jira."
+    msg = "Requirement successfully updated with latest Jira changes." if (was_updated or any_updated) else "Requirement is already up-to-date with Jira."
     return JiraSyncResponse(
         requirement_id=req.id,
         title=req.title,
@@ -679,6 +763,112 @@ async def sync_jira_requirement(
         jira_status=req.jira_status,
         was_updated=was_updated,
         message=msg,
+    )
+
+
+async def sync_all_jira_requirements(
+    db: AsyncSession,
+    user_id: str,
+    workspace_id: uuid.UUID | None = None,
+    repo_id: uuid.UUID | None = None,
+    force: bool = False,
+) -> "JiraSyncAllResponse":
+    """Batch re-sync all Jira-linked requirements in scope in one upstream query."""
+    from app.core.cache import cache
+
+    integration = await get_jira_integration(db, user_id, workspace_id)
+    if not integration or not integration.is_active:
+        return JiraSyncAllResponse(
+            checked=0,
+            updated=0,
+            skipped=True,
+            message="Jira is not configured for this workspace.",
+        )
+
+    scope_key = f"{workspace_id or user_id}:{repo_id or 'all'}"
+    cooldown_key = f"jira:autosync_cooldown:{scope_key}"
+    if not force:
+        recently_synced = await cache.get(cooldown_key)
+        if recently_synced:
+            return JiraSyncAllResponse(
+                checked=0,
+                updated=0,
+                skipped=True,
+                message="Skipped auto-sync (recently checked).",
+            )
+
+    stmt = select(Requirement).where(Requirement.jira_issue_key.is_not(None))
+    if workspace_id:
+        stmt = stmt.where(Requirement.workspace_id == workspace_id)
+    else:
+        stmt = stmt.where(Requirement.user_id == user_id)
+    if repo_id:
+        stmt = stmt.where(Requirement.repository_id == repo_id)
+
+    reqs = list((await db.execute(stmt)).scalars().all())
+    if not reqs:
+        return JiraSyncAllResponse(
+            checked=0,
+            updated=0,
+            skipped=False,
+            message="No Jira-linked requirements to sync.",
+        )
+
+    await cache.set(cooldown_key, True, ttl=10)
+
+    client, _ = await get_active_jira_client(db, user_id, workspace_id)
+    unique_keys = sorted({r.jira_issue_key for r in reqs if r.jira_issue_key})
+    try:
+        upstream_map = await client.get_issues_by_keys(unique_keys)
+    except JiraApiError as e:
+        raise HTTPException(status_code=e.status_code, detail=f"Auto-sync failed: {e.message}") from e
+
+    now_naive = datetime.now(UTC).replace(tzinfo=None)
+    updated_keys: list[str] = []
+    for req in reqs:
+        if not req.jira_issue_key or req.jira_issue_key not in upstream_map:
+            continue
+        issue = upstream_map[req.jira_issue_key]
+        jira_title = f"[{issue['key']}] {issue['summary']}".strip()
+        jira_text = issue["description_markdown"].strip()
+
+        content_changed, any_changed = _apply_jira_issue_update(
+            db,
+            req,
+            new_title=jira_title,
+            new_text=jira_text,
+            new_status=issue.get("status"),
+            new_priority=issue.get("priority"),
+            new_type=issue.get("issue_type"),
+            now_naive=now_naive,
+        )
+        if any_changed:
+            updated_keys.append(req.jira_issue_key)
+            if content_changed:
+                db.add(
+                    AuditLog(
+                        user_id=str(req.user_id or user_id),
+                        action="jira.auto_sync",
+                        resource_type="requirement",
+                        resource_id=str(req.id),
+                    )
+                )
+
+    if updated_keys:
+        await db.commit()
+    else:
+        await db.flush()
+
+    return JiraSyncAllResponse(
+        checked=len(reqs),
+        updated=len(updated_keys),
+        updated_keys=updated_keys,
+        skipped=False,
+        message=(
+            f"Auto-synced {len(updated_keys)} updated requirement(s) from Jira."
+            if updated_keys
+            else "All Jira requirements are up-to-date."
+        ),
     )
 
 
@@ -973,11 +1163,13 @@ async def handle_jira_webhook(
             if isinstance(item, dict):
                 changed_fields.add(item.get("field", "").lower())
 
-    # Extract updated status and other fields from issue fields
+    # Extract updated status, content, and metadata from issue fields
     fields = issue_data.get("fields", {})
     new_status: str | None = None
     new_priority: str | None = None
     new_type: str | None = None
+    new_summary: str | None = None
+    new_description_md: str | None = None
 
     if fields:
         status_obj = fields.get("status") or {}
@@ -989,36 +1181,71 @@ async def handle_jira_webhook(
         type_obj = fields.get("issuetype") or {}
         new_type = type_obj.get("name") if isinstance(type_obj, dict) else None
 
+        raw_summary = fields.get("summary")
+        if isinstance(raw_summary, str) and raw_summary.strip():
+            new_summary = raw_summary.strip()
+
+        if "description" in fields:
+            from app.integrations.jira.adf_converter import adf_to_markdown
+
+            converted = adf_to_markdown(fields.get("description")).strip()
+            if converted:
+                new_description_md = converted
+
+    # If description changed in changelog but wasn't included in webhook payload, fetch fresh via API
+    if (
+        ("description" in changed_fields or "summary" in changed_fields)
+        and new_description_md is None
+        and integration is not None
+    ):
+        try:
+            client, _ = await get_active_jira_client(
+                db,
+                actor_user_id or integration.user_id,
+                integration.workspace_id,
+            )
+            fetched = await client.get_issue(issue_key)
+            if fetched.get("summary"):
+                new_summary = fetched["summary"]
+            if fetched.get("description_markdown"):
+                new_description_md = fetched["description_markdown"]
+        except Exception as fetch_err:
+            logger.debug(f"Webhook fallback fetch for {issue_key} skipped: {fetch_err}")
+
     drift_detected = False
     now_utc = datetime.now(UTC).replace(tzinfo=None)
+    has_explicit_changelog = bool(changelog and changelog.get("items"))
 
-    # Update each linked requirement
+    # Auto-resync each linked requirement (metadata + title/description with new RequirementVersion)
     for req in requirements:
-        was_updated = False
+        summary_matches = bool(new_summary and req.title in (new_summary, f"[{issue_key}] {new_summary}"))
+        should_sync_title = bool(
+            new_summary
+            and ("summary" in changed_fields or (not has_explicit_changelog and not summary_matches))
+        )
+        should_sync_desc = bool(
+            new_description_md
+            and ("description" in changed_fields or new_description_md != req.text)
+        )
+        candidate_title = f"[{issue_key}] {new_summary}" if should_sync_title else None
+        candidate_text = new_description_md if should_sync_desc else None
 
-        # Update jira_status if it changed
-        if new_status and req.jira_status != new_status:
-            req.jira_status = new_status
-            req.jira_synced_at = now_utc
-            was_updated = True
-
-        # Update priority if changed
-        if new_priority and req.jira_priority != new_priority:
-            req.jira_priority = new_priority
-            req.jira_synced_at = now_utc
-            was_updated = True
-
-        # Update issue type if changed
-        if new_type and req.jira_issue_type != new_type:
-            req.jira_issue_type = new_type
-            req.jira_synced_at = now_utc
-            was_updated = True
+        content_updated, was_updated = _apply_jira_issue_update(
+            db,
+            req,
+            new_title=candidate_title,
+            new_text=candidate_text,
+            new_status=new_status,
+            new_priority=new_priority,
+            new_type=new_type,
+            now_naive=now_utc,
+        )
 
         # Resolve a valid users.id FK for AuditLog entries (never use a dummy string like "system").
         audit_user_id = str(req.user_id) if req.user_id else actor_user_id
 
-        # If description or summary changed, log as drift (do NOT auto-overwrite requirement text)
-        if "description" in changed_fields or "summary" in changed_fields:
+        # Log upstream content change as drift while keeping TraceIQ auto-synced
+        if "description" in changed_fields or "summary" in changed_fields or content_updated:
             if audit_user_id:
                 audit = AuditLog(
                     user_id=audit_user_id,
@@ -1041,7 +1268,7 @@ async def handle_jira_webhook(
 
         logger.info(
             f"Jira webhook: processed {event_type} for {issue_key} "
-            f"→ requirement {req.id} (updated={was_updated})"
+            f"→ requirement {req.id} (updated={was_updated}, content_resynced={content_updated})"
         )
 
     await db.commit()

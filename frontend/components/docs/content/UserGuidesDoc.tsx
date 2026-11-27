@@ -69,10 +69,10 @@ export function UserGuidesDoc() {
           Before writing code, analyze your product requirement:
         </p>
         <ol className="list-decimal pl-5 space-y-1.5 text-xs text-[#111111]">
-          <li>Navigate to <strong>Requirements</strong> &rarr; <strong>New Requirement</strong> (or click <strong>Import from Jira</strong>).</li>
-          <li>Enter your requirement title and acceptance criteria in plain Markdown.</li>
-          <li>Click <strong>&quot;Analyze Blast Radius&quot;</strong> in the requirements table.</li>
-          <li>Review the <strong>Impact Summary</strong>: predicted risk level, impacted files (seed, 1-hop, 2-hop), and missing test file checklist.</li>
+          <li>Navigate to <strong>Requirements</strong> &rarr; <strong>New Requirement</strong> (or connect Jira to auto-open <strong>Import from Jira</strong>).</li>
+          <li>When Jira is connected, TraceIQ auto-fetches available issues and pre-selects all unimported items by default—uncheck any issue you want to skip before clicking <strong>Fetch &amp; Import Selected</strong>.</li>
+          <li>Linked requirements stay updated automatically via Jira webhooks (or on tab return / <strong>Sync Jira</strong> locally), preserving version history (<code className="font-mono">v1</code>, <code className="font-mono">v2</code>, ...).</li>
+          <li>Click <strong>&quot;Analyze Blast Radius&quot;</strong> in the requirements table to review predicted risk, impacted files (seed, 1-hop, 2-hop), and missing test checklists.</li>
         </ol>
       </section>
 
@@ -86,8 +86,8 @@ export function UserGuidesDoc() {
           When pull requests are opened on GitHub:
         </p>
         <ul className="space-y-1.5 text-xs text-[#111111]">
-          <li>• TraceIQ automatically conducts a multi-pass code review against active product requirements.</li>
-          <li>• Open <strong>PR Reviews</strong> in TraceIQ to view side-by-side diff chunks, severity badges, and identified requirement gaps.</li>
+          <li>• TraceIQ automatically resolves matching Jira/requirement specs (and auto-preselects matching Jira keys in the <strong>Review PR</strong> modal).</li>
+          <li>• Open <strong>PR Reviews</strong>, <strong>Pull Requests</strong>, or any review detail page to inspect the <strong>Attached Requirement</strong> badge/banner alongside side-by-side diffs, severity verdicts, and requirement gaps.</li>
           <li>• Click <strong>&quot;Rerun Review&quot;</strong> on demand to re-evaluate after pushing new commits.</li>
         </ul>
       </section>
@@ -136,7 +136,7 @@ export function UserGuidesDoc() {
           Open the <strong>AI Agent</strong> view in the navigation sidebar to converse directly with your indexed repositories, requirements, and open PRs:
         </p>
         <ol className="list-decimal pl-5 space-y-1.5 text-xs text-[#111111]">
-          <li>Type <code className="font-mono">@</code> in the prompt composer to attach <code className="font-mono">@repo:owner/name</code>, <code className="font-mono">@req:ISSUE-KEY</code>, or <code className="font-mono">@pr:#number</code> entities.</li>
+          <li>Use the top-bar <strong>Repo</strong>, <strong>Story</strong>, and <strong>PR</strong> selectors—or type <code className="font-mono">@</code> in the prompt composer—to bind repositories, requirements, live GitHub PRs, or TraceIQ PR reviews within your active workspace.</li>
           <li>Ask TraceIQ to trace callers, audit missing unit tests, or verify acceptance criteria against a live GitHub PR diff.</li>
           <li>When the agent proposes a starting-point audit or PR draft, review the inline <strong>HITL Approval Card</strong> and click <strong>Approve</strong> to resume execution.</li>
           <li>Follow real-time tool logs, GFM tables, and syntax-highlighted diffs streamed over SSE as sessions auto-title and index.</li>

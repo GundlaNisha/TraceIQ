@@ -79,10 +79,10 @@ export function AiAgentDoc() {
       {/* @Mentions & Live SSE Streaming */}
       <section className="space-y-4 pt-2">
         <h2 id="mentions-and-streaming" className="text-2xl sm:text-3xl font-serif font-bold text-[#111111] pb-2 border-b border-[#1B2A4A]/10">
-          Inline @Mentions &amp; Live SSE Streaming
+          Workspace Context Selectors, @Mentions &amp; Live SSE Streaming
         </h2>
         <p>
-          Typing <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">@</code> in the agent composer triggers <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">AgentMentionMenu</code> to bind exact tenant entities (<code className="font-mono text-xs">@repo:owner/name</code>, <code className="font-mono text-xs">@req:KEY</code>, <code className="font-mono text-xs">@pr:#142</code>) rather than relying on ambiguous text queries.
+          The Agent workspace honors your active <strong>Personal</strong> or <strong>Team Workspace</strong> selection and provides top-bar <strong>Repo</strong>, <strong>Story</strong>, and <strong>PR</strong> selectors alongside inline <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">@</code> mentions (<code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">AgentMentionMenu</code>). Both live GitHub Pull Requests (<code className="font-mono text-xs">GET /api/v1/github/pull-requests</code>) and TraceIQ PR reviews appear together for instant context tagging (<code className="font-mono text-xs">@repo</code>, <code className="font-mono text-xs">@req</code>, <code className="font-mono text-xs">@pr</code>).
         </p>
 
         <DocsCodeBlock

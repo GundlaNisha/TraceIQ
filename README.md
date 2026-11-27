@@ -40,7 +40,7 @@ TraceIQ ingests your Git repositories, generates Abstract Syntax Tree (AST) code
 | **API Gateway Concurrency** | **`1,200+` req/sec** | Fully asynchronous FastAPI gateway with Pydantic v2 schemas and connection-pooled SQLAlchemy asyncpg/psycopg engines |
 | **Client Render Speed** | **`< 24ms` First Paint** | Next.js 16 App Router with React 19 Server Components and TanStack Query v5 optimistic hydration |
 | **Requirement Traceability** | **`94%+` Verified Coverage** | Real-time cross-referencing between Jira acceptance criteria, expected blast radius, and GitHub PR diffs |
-| **Requirement Drift Window** | **`0 ms` Drift Latency** | Inbound HMAC-SHA256 verified Jira webhooks detect ticket mutations during sprints without overwriting active specs |
+| **Requirement Sync Latency** | **`0 ms` Webhook / Batch Sync** | Inbound HMAC-SHA256 verified Jira webhooks auto-resync issue mutations into versioned `RequirementVersion` snapshots (`v1 -> v2`), with tab-return batch sync fallback on localhost |
 
 ---
 
@@ -77,19 +77,20 @@ $$RRF(d) = \sum_{m \in M} \frac{1}{k + r_m(d)} \quad (k = 60)$$
 - **1-Click Atlassian OAuth 2.0 (3LO)**: Authorize Jira Cloud with single-use Redis CSRF `state`, automatic `cloud_id` discovery, and Fernet (`enc:v1:`) AES encryption at rest (`CREDENTIAL_ENCRYPTION_KEY`)—never exposing OAuth tokens or webhook secrets to client responses.
 - **Rotating Refresh Token Safety**: Serializes Atlassian OAuth token rotation behind a Redis single-flight distributed lock (`acquire_lock` / `release_lock`) with double-checked expiry so concurrent requests never invalidate active grants.
 - **Auto-Registered Dynamic Webhooks**: Registers scoped HTTPS Jira Cloud dynamic webhooks automatically on OAuth callback (`PUBLIC_BACKEND_URL`) with 30-day lease renewal (`POST /api/v1/jira/oauth/webhook/sync`) and per-tenant routing, plus optional Manual API Token fallback.
-- **Kanban & Sprint Issue Browser**: Filter Jira issues by project, board, sprint, status category, or sanitized JQL, and batch import them directly as linked TraceIQ requirements.
-- **Atlassian Document Format (ADF) Parser**: Recursive parser (`app/modules/jira/services/adf_converter.py`) converting complex nested Atlassian JSON trees (headings, tables, callout panels, code blocks) into clean GitHub-Flavored Markdown.
-- **In-App Webhook Simulator & Status Transitions**: Simulate delivery pings (`POST /api/v1/jira/webhook/test`), transition Jira issue workflow statuses dynamically with Markdown-to-ADF audit comments, and protect active specs via `jira.drift_detected` non-destructive alerts.
+- **Auto-Fetch & Default-All Import (`/rest/api/3/search/jql`)**: Automatically opens after connecting Jira and queries up to 100 issues via Jira Cloud's bounded `/rest/api/3/search/jql` API (with Server `/search` fallback), pre-selecting all unimported issues by default while letting engineers uncheck items or toggle manual selection—backed by idempotent `(repository_id, jira_issue_key)` upserts.
+- **Atlassian Document Format (ADF) Parser**: Recursive parser (`app/integrations/jira/adf_converter.py`) converting complex nested Atlassian JSON trees (headings, tables, callout panels, code blocks) into clean GitHub-Flavored Markdown.
+- **Webhook-First Versioned Auto-Sync & Status Transitions**: Inbound Jira webhooks auto-resync summary, Markdown description, status, priority, and issue type into new `RequirementVersion` snapshots while logging `jira.drift_detected`; when running on localhost without HTTPS webhooks, `POST /api/v1/jira/requirements/sync-all` batch-checks linked keys on tab return.
 
 ### 5. Autonomous Pull Request Review Engine
 - **GitHub App Webhook Ingestion**: Automatically triggered when PRs are opened or new commits are pushed (`pull_request.opened`, `pull_request.synchronize`).
+- **Attached Requirement Traceability**: Surfaces `requirement_title`, `requirement_jira_issue_key`, `requirement_jira_status`, and `requirement_version_number` across `/pr-reviews`, `/pr-reviews/[id]`, and `/pull-requests`, with automatic Jira key matching in the **Review PR** modal.
 - **Per-File AST Patch Chunking**: Deconstructs raw unified diffs into syntax-aware per-file modifications and displays them in an interactive side-by-side diff viewer.
 - **Requirement Gap & Regression Detection**: Compares code modifications against the linked requirement's acceptance criteria, flagging missing unit tests, omitted error handling, and security oversights.
 - **Automated GitHub PR Timeline Comments**: Publishes structured review summaries with severity badges directly to the GitHub PR conversation timeline.
 - **On-Demand Reruns**: Re-evaluate PRs with updated criteria or custom prompts in place.
 
 ### 6. Multi-Tenant Team Workspaces & RBAC
-- **Workspace Scoping (`X-Workspace-Id`)**: Seamlessly toggle between a private Personal Workspace and collaborative Team Workspaces.
+- **Workspace Scoping (`X-Workspace-Id`)**: Seamlessly toggle between a private Personal Workspace and collaborative Team Workspaces with automatic self-healing if a persisted workspace becomes stale across resets or user switches.
 - **Role-Based Access Control**: Strict permissions enforced across `Owner`, `Admin`, `Member`, and `Viewer`.
 - **Tokenized Invite Links**: 1-click team member onboarding via cryptographically secure expiring URLs (`/join/[token]`).
 - **Repository Mobility**: Seamlessly transfer repositories and their pre-computed AST indexes between personal and team workspaces.
@@ -115,7 +116,7 @@ $$RRF(d) = \sum_{m \in M} \frac{1}{k + r_m(d)} \quad (k = 60)$$
 
 ### 10. Autonomous LangGraph AI Coding Agent (Chatbot)
 - **Stateful Multi-Agent Orchestration**: LangGraph workflow (`app/modules/agent/graphs/workflow.py`) routing across `supervisor`, `conversational_chat`, `code_explorer`, `verify_implementation`, `pre_review`, and `pr_drafter`.
-- **Natural `@Mention` Context Binding**: Type `@` in the agent composer (`AgentMentionMenu`) to bind exact `@repo`, `@req`, and `@pr` workspace entities; fetches live GitHub PR diffs (`pr_fetch.py`) and auto-indexes bound repositories lacking AST indexes.
+- **Workspace Context & `@Mention` Binding**: Preserves your Personal or Team Workspace selection, provides top-bar **Repo**, **Story**, and **PR** quick-tag selectors, and opens `AgentMentionMenu` on `@` backed by live GitHub Pull Requests (`GET /api/v1/github/pull-requests`) and TraceIQ PR reviews; auto-indexes bound repositories lacking AST indexes.
 - **Human-in-the-Loop (HITL) Approval Gates**: Pauses cleanly before starting-point audits or PR draft generation until an engineer approves or rejects via `AgentActionApproval` and `Command(resume=...)`.
 - **Real-Time SSE Streaming & Dynamic Titling**: Streams tokens, structured GFM tables, syntax-highlighted code blocks, and tool execution logs over Server-Sent Events (`/api/v1/agent/sessions/{id}/stream`) with automated session titles (`title_generator.py`) and inline renaming.
 
@@ -527,16 +528,18 @@ Interactive OpenAPI Swagger UI is available at **`http://localhost:8000/docs`**.
 | `POST` | `/api/v1/jira/oauth/webhook/sync` | `X-Workspace-Id` | Register or renew 30-day Jira Cloud dynamic webhook |
 | `GET` | `/api/v1/jira/config` | `X-Workspace-Id` | Fetch Jira integration status (never leaks OAuth tokens/secrets) |
 | `POST` | `/api/v1/jira/config` | `X-Workspace-Id` | Save Jira domain, email, and Fernet-encrypted manual API token |
-| `POST` | `/api/v1/jira/import` | `X-Workspace-Id` | Import Jira issue as a requirement with ADF conversion |
+| `POST` | `/api/v1/jira/import` | `X-Workspace-Id` | Import/upsert Jira issue as a requirement with ADF conversion |
+| `POST` | `/api/v1/jira/requirements/{id}/sync` | `X-Workspace-Id` | Re-sync a single requirement with upstream Jira issue |
+| `POST` | `/api/v1/jira/requirements/sync-all` | `X-Workspace-Id` | Batch-sync all Jira-linked requirements in one `key IN (...)` query |
 | `POST` | `/api/v1/jira/requirements/{id}/transition` | `X-Workspace-Id` | Transition Jira issue workflow status with audit comment |
-| `POST` | `/api/v1/jira/webhook` | — | Inbound Jira webhook endpoint (HMAC-SHA256 / per-tenant secret) |
+| `POST` | `/api/v1/jira/webhook` | — | Inbound Jira webhook listener (HMAC-SHA256, versioned auto-resync) |
 | `POST` | `/api/v1/jira/webhook/test` | `X-Workspace-Id` | Simulate inbound Jira webhook delivery & invalidate caches |
 | `POST` | `/api/v1/agent/sessions` | `X-Workspace-Id` | Create stateful LangGraph AI coding agent session |
 | `POST` | `/api/v1/agent/sessions/{id}/messages` | `X-Workspace-Id` | Run agent with `@repo` / `@req` / `@pr` mentions |
 | `GET` | `/api/v1/agent/sessions/{id}/stream` | — | Subscribe to real-time SSE agent tokens & HITL events |
 | `POST` | `/api/v1/agent/sessions/{id}/approvals/{aid}` | — | Approve or reject a paused HITL checkpoint |
 | `GET` | `/api/v1/health/ai` | — | Multi-provider AI router status & cooldown telemetry |
-| `GET` | `/api/v1/pr-reviews` | `X-Workspace-Id` | List automated AI PR reviews and severity verdicts |
+| `GET` | `/api/v1/pr-reviews` | `X-Workspace-Id` | List AI PR reviews with severity verdicts and attached requirement metadata |
 | `POST` | `/api/v1/pr-reviews/{id}/rerun` | `X-Workspace-Id` | Re-evaluate PR review against updated requirement rules |
 | `GET` | `/api/v1/traceability` | `X-Workspace-Id` | Retrieve end-to-end traceability compliance matrix |
 
@@ -548,7 +551,7 @@ Interactive OpenAPI Swagger UI is available at **`http://localhost:8000/docs`**.
 - **CSRF Protection & Distributed Token Locks**: Jira OAuth 2.0 (3LO) enforces single-use Redis CSRF states (`cache.pop`) and Redis single-flight locks (`acquire_lock` / `release_lock`) for safe rotating refresh token exchanges.
 - **HMAC-SHA256 Signature Verification**: Inbound Jira and GitHub webhooks validate cryptographic signatures and isolate processing per matched tenant.
 - **Isolated Multi-Tenant Access**: Every database query verifies workspace ownership via foreign key scoping (`user_id`, `workspace_id`), strictly preventing cross-tenant data leaks.
-- **Non-Destructive Synchronization**: Requirement drift protection (`jira.drift_detected`) prevents external webhook events from destructively overwriting in-flight specifications.
+- **Versioned Synchronization**: Upstream Jira updates create new `RequirementVersion` snapshots (`v1 -> v2`) while logging `jira.drift_detected`, preserving prior specification history without data loss.
 
 ---
 

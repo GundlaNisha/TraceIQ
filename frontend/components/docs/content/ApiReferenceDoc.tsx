@@ -88,25 +88,31 @@ export function ApiReferenceDoc() {
     {
       method: "GET",
       path: "/api/v1/jira/issues",
-      desc: "Search Jira issues by keyword, project, board ID, sprint, or status category.",
+      desc: "Search Jira issues via /rest/api/3/search/jql (Server fallback) by keyword, project, board, sprint, or status.",
       auth: true,
     },
     {
       method: "POST",
       path: "/api/v1/jira/import",
-      desc: "Import a single Jira issue as a requirement with ADF conversion.",
+      desc: "Import or upsert a Jira issue as a versioned requirement with ADF conversion.",
       auth: true,
     },
     {
       method: "POST",
       path: "/api/v1/jira/import-batch",
-      desc: "Batch import multiple Jira issues into a repository.",
+      desc: "Batch import/upsert up to 100 Jira issues into a repository.",
       auth: true,
     },
     {
       method: "POST",
       path: "/api/v1/jira/requirements/{id}/sync",
       desc: "Re-sync requirement with latest upstream Jira issue changes.",
+      auth: true,
+    },
+    {
+      method: "POST",
+      path: "/api/v1/jira/requirements/sync-all",
+      desc: "Batch auto-sync all Jira-linked requirements in scope in one upstream JQL query.",
       auth: true,
     },
     {
@@ -118,7 +124,7 @@ export function ApiReferenceDoc() {
     {
       method: "GET",
       path: "/api/v1/pr-reviews",
-      desc: "List AI PR reviews and severity verdicts.",
+      desc: "List AI PR reviews with severity verdicts and attached requirement metadata.",
       auth: true,
     },
     {

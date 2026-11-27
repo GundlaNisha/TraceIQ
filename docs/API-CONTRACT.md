@@ -259,6 +259,10 @@ Lists automated PR reviews for connected repositories.
     "verdict": "changes_requested",
     "summary": "PR modifies token format but fails to invoke Redis revocation store.",
     "requirement_id": "req_84",
+    "requirement_title": "[PROD-104] Migrate Token Claims to v2 RS256",
+    "requirement_jira_issue_key": "PROD-104",
+    "requirement_jira_status": "In Review",
+    "requirement_version_number": 2,
     "created_at": "2026-09-20T14:30:00Z"
   }
 ]
@@ -431,7 +435,16 @@ Check whether Jira Cloud is connected to the active workspace (token is masked).
 ### `POST /api/v1/jira/config`
 Save Jira Cloud connection (`host`, `email`, `api_token`). Validates credentials against Jira REST API v3 before persisting.
 
-### `POST /api/v1/jira/webhook/test-ping`
+### `GET /api/v1/jira/issues`
+Search and list Jira issues using `/rest/api/3/search/jql` (with automatic Server `/search` fallback), up to `100` items per query.
+
+### `POST /api/v1/jira/import-batch`
+Batch-import and deduplicate (`repository_id`, `jira_issue_key`) up to `100` Jira issues cleanly.
+
+### `POST /api/v1/jira/requirements/sync-all`
+Batch auto-sync all Jira-linked requirements in the active workspace in one upstream `key IN (...)` query, appending new `RequirementVersion` snapshots when titles or descriptions change.
+
+### `POST /api/v1/jira/webhook/test`
 Test inbound webhook delivery and status transitions.
 * **Body:** `{ "issue_key": "PROD-104", "target_status": "In Progress" }`
 * **Response:** `{ "status": "delivered", "verified": true, "signature_algorithm": "HMAC-SHA256" }`

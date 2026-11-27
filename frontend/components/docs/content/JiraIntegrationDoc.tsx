@@ -18,7 +18,7 @@ export function JiraIntegrationDoc() {
           Atlassian Jira OAuth 2.0 (3LO) &amp; Bidirectional Sync
         </h1>
         <p className="mt-4 text-base sm:text-lg text-[#555E6D] leading-relaxed">
-          TraceIQ connects seamlessly with Atlassian Jira Cloud via <strong>zero-click OAuth 2.0 (3LO) with Auto-Registered Webhooks</strong> or optional Manual API Tokens. Teams can import Kanban boards and Scrum sprints, convert Atlassian Document Format (ADF) into clean Markdown, transition issue statuses, and detect mid-sprint requirement drift.
+          TraceIQ connects seamlessly with Atlassian Jira Cloud via <strong>zero-click OAuth 2.0 (3LO) with Auto-Registered Webhooks</strong> or optional Manual API Tokens. Immediately after connecting, TraceIQ auto-fetches issues via <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">/rest/api/3/search/jql</code> with default-all preselection and selective opt-out, converts Atlassian Document Format (ADF) into Markdown, transitions workflow statuses, and keeps linked requirements auto-synced via webhooks or batch fallback.
         </p>
       </div>
 
@@ -76,6 +76,10 @@ export function JiraIntegrationDoc() {
             </ol>
           </div>
         </div>
+
+        <DocsCallout type="tip" title="Auto-Fetch, Default-All Preselection & Idempotent Import">
+          Upon connecting Jira, TraceIQ automatically opens the import browser and loads up to 100 accessible issues using Jira Cloud&apos;s bounded <code className="font-mono">GET /rest/api/3/search/jql</code> endpoint (with automatic Server <code className="font-mono">/search</code> fallback). All unimported issues are pre-selected by default while letting you uncheck any issue or switch to manual selection, and re-imports upsert safely by <code className="font-mono">(repository_id, jira_issue_key)</code>.
+        </DocsCallout>
 
         <DocsCallout type="tip" title="Zero Plaintext Secrets & Rotating Token Safety">
           OAuth access tokens, rotating refresh tokens, and manual API tokens are encrypted at rest with <code className="font-mono">Fernet (enc:v1:)</code> via <code className="font-mono">CREDENTIAL_ENCRYPTION_KEY</code>. <code className="font-mono">GET /api/v1/jira/config</code> never exposes OAuth tokens or OAuth-managed webhook secrets to clients, and concurrent refresh attempts serialize behind a Redis distributed lock.
@@ -142,14 +146,14 @@ X-Workspace-Id: <workspace_uuid>
       {/* Webhooks, Auto-Registration, and Test Simulation */}
       <section className="space-y-4 pt-2">
         <h2 id="jira-webhooks" className="text-2xl sm:text-3xl font-serif font-bold text-[#111111] pb-2 border-b border-[#1B2A4A]/10">
-          Auto-Registered Webhooks, Localhost Tunnels &amp; Test Simulation
+          Webhook-First Auto-Resync, Localhost Fallback &amp; Test Simulation
         </h2>
         <p>
-          In OAuth 2.0 mode, TraceIQ automatically registers a dynamic webhook with Jira Cloud whenever <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">PUBLIC_BACKEND_URL</code> is a public <code className="font-mono text-xs bg-slate-100 px-1">https://</code> URL and refreshes its 30-day lease on demand via <code className="font-mono text-xs bg-slate-100 px-1">POST /api/v1/jira/oauth/webhook/sync</code>.
+          In OAuth 2.0 mode, TraceIQ automatically registers a dynamic webhook with Jira Cloud whenever <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-xs">PUBLIC_BACKEND_URL</code> is a public <code className="font-mono text-xs bg-slate-100 px-1">https://</code> URL and refreshes its 30-day lease via <code className="font-mono text-xs bg-slate-100 px-1">POST /api/v1/jira/oauth/webhook/sync</code>. Inbound updates auto-resync summary, Markdown description, status, priority, and issue type into new <code className="font-mono text-xs bg-slate-100 px-1">RequirementVersion</code> rows while preserving history.
         </p>
 
-        <DocsCallout type="note" title="Testing Webhooks on Localhost (ngrok)">
-          Jira Cloud refuses private <code className="font-mono">http://localhost</code> webhook callbacks. For local end-to-end live sync, expose port 8000 with <code className="font-mono">ngrok http 8000</code>, set <code className="font-mono">PUBLIC_BACKEND_URL=https://&lt;your-id&gt;.ngrok-free.app</code>, and click <strong>Register Webhook</strong> inside the Jira modal.
+        <DocsCallout type="note" title="Localhost Batch Fallback & ngrok Live Webhooks">
+          Jira Cloud refuses private <code className="font-mono">http://localhost</code> webhook callbacks. Without a public URL, Requirements runs a quiet one-shot check on mount and tab return via <code className="font-mono">POST /api/v1/jira/requirements/sync-all</code> (or on click via <strong>Sync Jira</strong>). For real-time push webhooks locally, run <code className="font-mono">ngrok http 8000</code>, set <code className="font-mono">PUBLIC_BACKEND_URL=https://&lt;your-id&gt;.ngrok-free.app</code>, and click <strong>Register Webhook</strong>.
         </DocsCallout>
 
         <div className="space-y-3 pt-2">

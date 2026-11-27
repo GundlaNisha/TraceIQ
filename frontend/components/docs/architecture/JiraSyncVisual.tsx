@@ -30,13 +30,13 @@ export function JiraSyncVisual() {
       color: "border-emerald-500 bg-emerald-500/10 text-emerald-400",
     },
     {
-      title: "3. Drift Detection & ADF Parse",
-      badge: "Non-Destructive",
+      title: "3. Versioned Auto-Sync & ADF Parse",
+      badge: "Webhook-First",
       description:
-        "Inbound issue updates convert nested Atlassian Document Format JSON into Markdown and raise jira.drift_detected audit events if specs diverge mid-sprint.",
-      detailTitle: "Requirement Drift Guardrail",
+        "Inbound issue updates convert ADF JSON into Markdown, bump RequirementVersion snapshots (v1 -> v2), and log jira.drift_detected audit events.",
+      detailTitle: "Preserved Version History & Localhost Fallback",
       detailBody:
-        "Updates requirement status live without blindly overwriting active engineering acceptance criteria, recording attribution safely.",
+        "Updates requirement specs, status, priority, and type cleanly without losing prior versions, falling back to POST /api/v1/jira/requirements/sync-all on localhost tab return.",
       endpoint: "POST /api/v1/jira/webhook",
       color: "border-amber-500 bg-amber-500/10 text-amber-400",
     },
